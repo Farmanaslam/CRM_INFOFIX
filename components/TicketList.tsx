@@ -1,0 +1,714 @@
+import React, { useState, useMemo, useEffect } from "react";
+import {
+  Plus,
+  Search,
+  MapPin,
+  Phone,
+  User,
+  LayoutGrid,
+  List as ListIcon,
+  Edit,
+  Trash2,
+  Check,
+  AlertTriangle,
+  Laptop,
+  Smartphone,
+  Printer,
+} from "lucide-react";
+import {
+  Ticket,
+  Customer,
+  AppSettings,
+  User as AppUser,
+  Store,
+} from "../types";
+import { TicketFormModal } from "./TicketFormModal";
+import { jsPDF } from "jspdf";
+import { supabase } from "@/supabaseClient";
+
+interface TicketListProps {
+  tickets: Ticket[];
+  setTickets: (tickets: Ticket[]) => void;
+  customers: Customer[];
+  setCustomers: (customers: Customer[]) => void;
+  settings: AppSettings;
+  currentUser: AppUser;
+  selectedZoneId: string;
+}
+
+// --- Receipt Generation Logic ---
+export const generateTicketReceipt = (
+  ticket: Ticket,
+  settings: AppSettings
+) => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  // Find Store Details
+  const storeData = settings.stores.find((s) => s.name === ticket.store);
+  const storeAddress =
+    storeData?.address || "BENACHTY DURGAPUR KAMLPUR PLOT NEAR BINA INDIAN GAS";
+  const storePhone = storeData?.phone || "+91 93829 79780";
+
+  // Header
+  doc.setFillColor(79, 70, 229); // Indigo-600
+  doc.rect(0, 0, pageWidth, 40, "F");
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(24);
+  doc.setFont("helvetica", "bold");
+  doc.text("INFOFIX SERVICES", 15, 20);
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text("Professional IT & Device Repair Solutions", 15, 28);
+  doc.text("Receipt of Device Acknowledgement", 15, 33);
+
+  // Ticket Info Header
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text(`TICKET ID: ${ticket.ticketId}`, 15, 55);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Date: ${ticket.date}`, pageWidth - 60, 55);
+
+  doc.setDrawColor(230, 230, 230);
+  doc.line(15, 60, pageWidth - 15, 60);
+
+  // Section: Customer Info
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("Customer Information", 15, 72);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Name: ${ticket.name}`, 15, 80);
+  doc.text(`Mobile: ${ticket.number}`, 15, 86);
+  doc.text(`Email: ${ticket.email}`, 15, 92);
+
+  // Section: Device Info
+  doc.setFont("helvetica", "bold");
+  doc.text("Device Details", 100, 72);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Type: ${ticket.deviceType}`, 100, 80);
+  doc.text(`Brand/Model: ${ticket.brand} ${ticket.model}`, 100, 86);
+  doc.text(`Serial No: ${ticket.serial || "N/A"}`, 100, 92);
+
+  // Section: Problem Description
+  doc.setFillColor(248, 250, 252);
+  doc.rect(15, 100, pageWidth - 30, 30, "F");
+  doc.setFont("helvetica", "bold");
+  doc.text("Issue Reported:", 20, 108);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  const issueLines = doc.splitTextToSize(
+    ticket.issueDescription,
+    pageWidth - 40
+  );
+  doc.text(issueLines, 20, 115);
+
+  // --- LOGIN CREDENTIALS SECTION ---
+  doc.setFillColor(238, 242, 255); // Indigo-50
+  doc.setDrawColor(199, 210, 254); // Indigo-200
+  doc.roundedRect(15, 140, pageWidth - 30, 45, 3, 3, "FD");
+
+  doc.setTextColor(67, 56, 202); // Indigo-700
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("TRACK YOUR REPAIR ONLINE", pageWidth / 2, 150, { align: "center" });
+
+  doc.setFontSize(10);
+  doc.setTextColor(71, 85, 105);
+  doc.text(
+    "Log in to our portal to check your work status, history, and more.",
+    pageWidth / 2,
+    157,
+    { align: "center" }
+  );
+
+  doc.setFontSize(11);
+  doc.setTextColor(30, 41, 59);
+  doc.text(`Portal Login ID: ${ticket.email}`, 25, 168);
+  doc.text(`Default Password: ${ticket.number}`, 25, 175);
+  doc.setFontSize(8);
+  doc.text("(Password is your registered mobile number)", 25, 180);
+
+  // Footer / Terms
+  doc.setTextColor(148, 163, 184);
+  doc.setFontSize(8);
+  doc.text("Terms & Conditions:", 15, 200);
+  doc.text(
+    "1. Devices not collected within 30 days of resolution may incur storage fees.",
+    15,
+    205
+  );
+  doc.text(
+    "2. Please backup all data before submission. We are not responsible for data loss.",
+    15,
+    210
+  );
+  doc.text(
+    "3. Minimum inspection charge applicable if repair is rejected.",
+    15,
+    215
+  );
+
+  doc.setDrawColor(200);
+  doc.line(15, 250, 80, 250);
+  doc.text("Customer Signature", 30, 255);
+
+  doc.line(pageWidth - 80, 250, pageWidth - 15, 250);
+  doc.text("Authorized Signatory", pageWidth - 60, 255);
+
+  doc.text(`Branch: ${ticket.store}`, pageWidth / 2, 275, { align: "center" });
+  doc.text(`${storeAddress} • Tel: ${storePhone}`, pageWidth / 2, 280, {
+    align: "center",
+  });
+
+  doc.save(`Receipt_${ticket.ticketId}.pdf`);
+};
+
+// --- Delete Confirmation Modal ---
+const DeleteConfirmationModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}> = ({ isOpen, onClose, onConfirm }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white rounded-xl max-w-sm w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
+        <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 mb-4 mx-auto">
+          <Trash2 size={24} />
+        </div>
+        <h3 className="text-lg font-bold text-center text-slate-800 mb-2">
+          Delete Ticket?
+        </h3>
+        <p className="text-center text-slate-500 mb-6 text-sm">
+          Are you sure you want to delete this ticket? This action cannot be
+          undone.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg text-sm"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- MAIN COMPONENT ---
+
+const TicketList: React.FC<TicketListProps> = ({
+  tickets,
+  setTickets,
+  customers,
+  setCustomers,
+  settings,
+  currentUser,
+  selectedZoneId,
+}) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+
+  // Edit & Delete State
+  const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
+  const [ticketToDelete, setTicketToDelete] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false); // Add loading state
+  useEffect(() => {
+    fetchTicketsFromSupabase();
+  }, []);
+  const fetchTicketsFromSupabase = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("tickets")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      // Transform Supabase data to match your Ticket type
+      const transformedTickets: Ticket[] = data.map((ticket) => ({
+        id: ticket.id,
+        ticketId: ticket.id,
+        customerId: ticket.customer_id,
+        name: ticket.name || "", // You might need to fetch this from customers table
+        email: ticket.email || "",
+        number: ticket.mobile || "",
+        address: ticket.address || "",
+        deviceType: ticket.device_type,
+        brand: ticket.device_brand,
+        model: ticket.device_model,
+        serial: ticket.device_serial_number,
+        deviceDescription: ticket.device_description || "",
+        chargerIncluded: ticket.charger_status === "INCLUDED",
+        issueDescription: ticket.subject,
+        store: ticket.store,
+        estimatedAmount: ticket.amount_estimate
+          ? parseFloat(ticket.amount_estimate)
+          : undefined,
+        warranty: ticket.warranty === "YES",
+        billNumber: ticket.bill_number,
+        priority: ticket.priority,
+        status: ticket.status,
+        holdReason: ticket.hold_reason,
+        progressReason: ticket.internal_progress_reason,
+        progressNote: ticket.internal_progress_note,
+        scheduledDate: ticket.scheduled_date,
+        assignedToId: ticket.assigned_to_id || "",
+        date: new Date(ticket.created_at).toLocaleDateString(),
+        zoneId: ticket.zone_id || "",
+        history: [], // You might want to create a separate history table
+      }));
+
+      setTickets(transformedTickets);
+    } catch (error) {
+      console.error("Error fetching tickets:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- FILTERING LOGIC ---
+  const zoneFilteredTickets = useMemo(() => {
+    let result = tickets.filter((t) => t.status !== "Pending Approval");
+
+    // Zone Filter
+    if (selectedZoneId !== "all") {
+      const zoneStoreNames = settings.stores
+        .filter((s) => s.zoneId === selectedZoneId)
+        .map((s) => s.name);
+      result = result.filter((t) => zoneStoreNames.includes(t.store));
+    }
+
+    // Role Specific Filter
+    if (currentUser.role === "TECHNICIAN") {
+      result = result.filter((t) => t.assignedToId === currentUser.id);
+    }
+
+    return result;
+  }, [tickets, selectedZoneId, settings.stores, currentUser]);
+
+  const filteredTickets = zoneFilteredTickets.filter(
+    (ticket) =>
+      ticket.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ticket.number.includes(searchTerm) ||
+      ticket.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ticket.ticketId.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleEdit = (ticket: Ticket) => {
+    setEditingTicket(ticket);
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN") {
+      setTicketToDelete(id);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (ticketToDelete) {
+      try {
+        const { error } = await supabase
+          .from("tickets")
+          .delete()
+          .eq("id", ticketToDelete);
+
+        if (error) throw error;
+
+        // Update local state
+        setTickets(tickets.filter((t) => t.id !== ticketToDelete));
+      } catch (error) {
+        console.error("Error deleting ticket:", error);
+        alert("Failed to delete ticket. Please try again.");
+      } finally {
+        setTicketToDelete(null);
+      }
+    }
+  };
+
+  {
+    /*} const confirmDelete = () => {
+    if (ticketToDelete) {
+      setTickets(tickets.filter(t => t.id !== ticketToDelete));
+      setTicketToDelete(null);
+    }
+  };*/
+  }
+
+  const handleOpenNew = () => {
+    setEditingTicket(null);
+    setIsModalOpen(true);
+  };
+
+  const handleTicketCreated = () => {
+    setSearchTerm("");
+    fetchTicketsFromSupabase(); // Refresh tickets after creation
+  };
+
+  const canDelete =
+    currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN";
+
+  return (
+    <div className="relative h-full min-h-[calc(100vh-140px)] flex flex-col">
+      {/* Header Actions */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-center">
+        {/* Search */}
+        <div className="relative flex-1 w-full">
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            size={20}
+          />
+          <input
+            type="text"
+            placeholder="Search tickets in this zone..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none shadow-sm text-slate-700"
+          />
+        </div>
+
+        {/* View Toggle */}
+        <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
+          <button
+            onClick={() => setViewMode("grid")}
+            className={`p-2 rounded-lg transition-colors ${
+              viewMode === "grid"
+                ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                : "text-slate-400 hover:text-slate-600"
+            }`}
+            title="Grid View"
+          >
+            <LayoutGrid size={20} />
+          </button>
+          <button
+            onClick={() => setViewMode("list")}
+            className={`p-2 rounded-lg transition-colors ${
+              viewMode === "list"
+                ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                : "text-slate-400 hover:text-slate-600"
+            }`}
+            title="List View"
+          >
+            <ListIcon size={20} />
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="pb-20 flex-1">
+        {filteredTickets.length > 0 ? (
+          viewMode === "grid" ? (
+            // GRID VIEW
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredTickets.map((ticket) => (
+                <div
+                  key={ticket.id}
+                  className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group relative"
+                >
+                  {/* Card Actions (Hover) */}
+                  <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => generateTicketReceipt(ticket, settings)}
+                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                      title="Print Receipt"
+                    >
+                      <Printer size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleEdit(ticket)}
+                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                      title="Edit"
+                    >
+                      <Edit size={16} />
+                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={() => handleDelete(ticket.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          ticket.priority === "High"
+                            ? "bg-red-100 text-red-600"
+                            : "bg-indigo-100 text-indigo-600"
+                        }`}
+                      >
+                        {ticket.deviceType === "Laptop" ? (
+                          <Laptop size={20} />
+                        ) : ticket.deviceType === "Smartphone" ? (
+                          <Smartphone size={20} />
+                        ) : (
+                          <User size={20} />
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                          {ticket.ticketId}
+                          {ticket.priority === "High" && (
+                            <span
+                              className="w-2 h-2 rounded-full bg-red-500"
+                              title="High Priority"
+                            />
+                          )}
+                        </h3>
+                        <p className="text-xs text-slate-400 font-medium">
+                          {ticket.name}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between mb-4">
+                    <span
+                      className={`px-2 py-1 text-xs rounded font-bold uppercase tracking-wider ${
+                        ticket.status === "New"
+                          ? "bg-blue-100 text-blue-700"
+                          : ticket.status === "Resolved"
+                          ? "bg-green-100 text-green-700"
+                          : ticket.status === "Rejected"
+                          ? "bg-red-100 text-red-700"
+                          : ticket.status === "On Hold"
+                          ? "bg-orange-100 text-orange-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {ticket.status}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-sm text-slate-600 mb-4">
+                    <p className="line-clamp-2 text-slate-800 font-medium italic">
+                      "{ticket.issueDescription}"
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs text-slate-500 mt-2">
+                      <div className="flex items-center gap-1">
+                        <Phone size={12} /> {ticket.number}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <MapPin size={12} /> {ticket.store}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                    <span>{ticket.date}</span>
+                    {ticket.warranty && (
+                      <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+                        <AlertTriangle size={10} /> Warranty
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            // LIST VIEW
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-6 py-4 font-semibold text-slate-600">
+                        ID
+                      </th>
+                      <th className="px-6 py-4 font-semibold text-slate-600">
+                        Customer
+                      </th>
+                      <th className="px-6 py-4 font-semibold text-slate-600">
+                        Device
+                      </th>
+                      <th className="px-6 py-4 font-semibold text-slate-600">
+                        Issue
+                      </th>
+                      <th className="px-6 py-4 font-semibold text-slate-600">
+                        Status
+                      </th>
+                      <th className="px-6 py-4 font-semibold text-slate-600">
+                        Priority
+                      </th>
+                      <th className="px-6 py-4 font-semibold text-slate-600">
+                        Store
+                      </th>
+                      <th className="px-6 py-4 font-semibold text-slate-600 text-right">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredTickets.map((ticket) => (
+                      <tr
+                        key={ticket.id}
+                        className="hover:bg-slate-50 transition-colors group"
+                      >
+                        <td className="px-6 py-4 font-medium text-indigo-600">
+                          {ticket.ticketId}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-slate-800">
+                            {ticket.name}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {ticket.number}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-slate-800">
+                            {ticket.deviceType}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {ticket.brand} {ticket.model}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div
+                            className="max-w-xs truncate text-slate-600"
+                            title={ticket.issueDescription}
+                          >
+                            {ticket.issueDescription}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold uppercase ${
+                              ticket.status === "New"
+                                ? "bg-blue-100 text-blue-700"
+                                : ticket.status === "Resolved"
+                                ? "bg-green-100 text-green-700"
+                                : ticket.status === "Rejected"
+                                ? "bg-red-100 text-red-700"
+                                : ticket.status === "On Hold"
+                                ? "bg-orange-100 text-orange-700"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {ticket.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                              ticket.priority === "High"
+                                ? "bg-red-50 text-red-700 border-red-100"
+                                : ticket.priority === "Medium"
+                                ? "bg-yellow-50 text-yellow-700 border-yellow-100"
+                                : "bg-green-50 text-green-700 border-green-100"
+                            }`}
+                          >
+                            {ticket.priority === "High" && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                            )}
+                            {ticket.priority}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-slate-500">
+                          {ticket.store}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() =>
+                                generateTicketReceipt(ticket, settings)
+                              }
+                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="Print Receipt"
+                            >
+                              <Printer size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleEdit(ticket)}
+                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="Edit"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            {canDelete && (
+                              <button
+                                onClick={() => handleDelete(ticket.id)}
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        ) : (
+          <div className="text-center py-20 text-slate-500 bg-white rounded-xl border border-slate-200 border-dashed">
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Search size={24} className="text-slate-400" />
+            </div>
+            <p className="text-lg font-medium text-slate-700">
+              No tickets found
+            </p>
+            <p className="text-sm">
+              Try adjusting your search terms or zone selection.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Floating Action Button */}
+      {(currentUser.role === "SUPER_ADMIN" ||
+        currentUser.role === "ADMIN" ||
+        currentUser.role === "MANAGER") && (
+        <button
+          onClick={handleOpenNew}
+          className="fixed bottom-8 right-8 lg:bottom-10 lg:right-10 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center transition-all transform hover:scale-105 z-40"
+        >
+          <Plus size={28} />
+        </button>
+      )}
+
+      {/* New Ticket Modal */}
+      <TicketFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        customers={customers}
+        setCustomers={setCustomers}
+        tickets={tickets}
+        setTickets={setTickets}
+        settings={settings}
+        currentUser={currentUser}
+        editingTicket={editingTicket}
+        onSuccess={handleTicketCreated}
+      />
+
+      <DeleteConfirmationModal
+        isOpen={!!ticketToDelete}
+        onClose={() => setTicketToDelete(null)}
+        onConfirm={confirmDelete}
+      />
+    </div>
+  );
+};
+
+export default TicketList;

@@ -1,0 +1,8 @@
+{
+  "name": "TheCubeFactory Service CRM",
+  "description": "Enterprise-grade Service Management CRM with immersive login and AI integration.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
