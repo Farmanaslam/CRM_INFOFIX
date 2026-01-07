@@ -271,26 +271,26 @@ function App() {
     }
   }, [supabase]); // Add supabase as dependency
 
-useEffect(() => {
-  if (!supabase) return;
+  useEffect(() => {
+    if (!supabase) return;
 
-  if (currentUser) {
-    fetchTickets();
-  }
+    if (currentUser) {
+      fetchTickets();
+    }
 
-  const channel = supabase
-    .channel("tickets-realtime")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "tickets" },
-      fetchTickets
-    )
-    .subscribe();
+    const channel = supabase
+      .channel("tickets-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tickets" },
+        fetchTickets
+      )
+      .subscribe();
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, [currentUser, supabase, fetchTickets]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, supabase, fetchTickets]);
 
   const [tasks, setTasks] = useSmartSync<Task[]>(
     "tasks",
