@@ -1994,6 +1994,7 @@ export default function Settings({
       console.error("Error creating staff:", err);
       alert(`Failed to create staff: ${err.message}`);
     }
+    setIsTeamModalOpen(false)
   };
 
   const handleDeleteMember = async (id: string) => {

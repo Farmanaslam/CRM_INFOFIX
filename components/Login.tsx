@@ -148,6 +148,47 @@ export default function Login({
   };*/
   }
 
+  // Load cached credentials on component mount AND when tab changes
+
+  // Load cached credentials on component mount AND when tab changes
+  useEffect(() => {
+    const loadCachedCredentials = () => {
+      try {
+        // Load based on active tab
+        const cacheKey =
+          activeTab === "staff" ? "staff_auth_cache" : "customer_auth_cache";
+        const cached = localStorage.getItem(cacheKey);
+
+        if (cached) {
+          const { u: cachedEmail, p: cachedPassword } = JSON.parse(cached);
+          setEmail(cachedEmail || "");
+          setPassword(cachedPassword || "");
+        } else {
+          // Clear fields if no cache exists for this tab
+          if (activeTab === "customer") {
+            setEmail("user@infofix.com");
+            setPassword("");
+          } else {
+            setEmail("");
+            setPassword("");
+          }
+        }
+      } catch (err) {
+        console.error("Error loading cached credentials:", err);
+        // Set defaults on error
+        if (activeTab === "customer") {
+          setEmail("user@infofix.com");
+          setPassword("");
+        } else {
+          setEmail("");
+          setPassword("");
+        }
+      }
+    };
+
+    loadCachedCredentials();
+  }, [activeTab]);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -171,6 +212,13 @@ export default function Login({
     }
   };
   const handleStaffLogin = async (email: string, password: string) => {
+    localStorage.setItem(
+      "staff_auth_cache",
+      JSON.stringify({
+        u: email,
+        p: password,
+      })
+    );
     // 1️⃣ Auth login
     const { data: authData, error: authError } =
       await supabase.auth.signInWithPassword({
@@ -179,28 +227,68 @@ export default function Login({
       });
 
     if (authError) throw authError;
+    if (!authData.user) throw new Error("Auth user missing");
 
-    if (!authData.user) {
-      throw new Error("Authentication failed: user missing");
-    }
+    const authUser = authData.user;
 
-    // 2️⃣ Fetch staff USING auth_id (NOT email)
-    const { data: staff, error: staffErr } = await supabase
-      .from("users") // ✅ CORRECT TABLE
+    // 2️⃣ Try to fetch staff profile
+    let { data: staff, error: staffErr } = await supabase
+      .from("users") // your staff table
       .select("*")
-      .eq("auth_id", authData.user.id)
-      .maybeSingle(); // ✅ SAFE
+      .eq("auth_id", authUser.id)
+      .maybeSingle();
 
     if (staffErr) {
       console.error("Staff fetch error:", staffErr);
-      throw new Error("Staff profile query failed");
+      throw new Error("Failed to fetch staff profile");
     }
 
+    // 3️⃣ AUTO-CREATE STAFF PROFILE IF NOT FOUND ✅
     if (!staff) {
-      throw new Error("Staff profile not found. Contact admin.");
+      // 🔍 Check if staff exists by EMAIL
+      const { data: existingByEmail, error: emailErr } = await supabase
+        .from("users")
+        .select("*")
+        .eq("email", authUser.email)
+        .maybeSingle();
+
+      if (emailErr) throw emailErr;
+
+      if (existingByEmail) {
+        // ✅ LINK auth_id to existing staff
+        const { data: updatedStaff, error: updateErr } = await supabase
+          .from("users")
+          .update({ auth_id: authUser.id })
+          .eq("id", existingByEmail.id)
+          .select()
+          .single();
+
+        if (updateErr) throw updateErr;
+
+        staff = updatedStaff;
+      } else {
+        // ✅ CREATE brand new staff
+        const roleFromAuth =
+          (authUser.user_metadata?.role as string) || "STAFF";
+
+        const { data: newStaff, error: insertErr } = await supabase
+          .from("users")
+          .insert({
+            auth_id: authUser.id,
+            email: authUser.email,
+            name: authUser.user_metadata?.name || authUser.email,
+            role: roleFromAuth,
+          })
+          .select()
+          .single();
+
+        if (insertErr) throw insertErr;
+
+        staff = newStaff;
+      }
     }
 
-    // 3️⃣ Pass clean user to app
+    // 4️⃣ Login success
     onLogin({
       id: staff.id,
       name: staff.name,
@@ -214,6 +302,14 @@ export default function Login({
   };
 
   const handleCustomerLogin = async () => {
+    // Save credentials to localStorage
+    localStorage.setItem(
+      "customer_auth_cache",
+      JSON.stringify({
+        u: email,
+        p: password,
+      })
+    );
     const { data: authData, error } = await supabase.auth.signInWithPassword({
       email,
       password,

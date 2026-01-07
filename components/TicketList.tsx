@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Plus,
   Search,
@@ -223,61 +223,6 @@ const TicketList: React.FC<TicketListProps> = ({
   // Edit & Delete State
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [ticketToDelete, setTicketToDelete] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false); // Add loading state
-  useEffect(() => {
-    fetchTicketsFromSupabase();
-  }, []);
-  const fetchTicketsFromSupabase = async () => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("tickets")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      // Transform Supabase data to match your Ticket type
-      const transformedTickets: Ticket[] = data.map((ticket) => ({
-        id: ticket.id,
-        ticketId: ticket.id,
-        customerId: ticket.customer_id,
-        name: ticket.name || "", // You might need to fetch this from customers table
-        email: ticket.email || "",
-        number: ticket.mobile || "",
-        address: ticket.address || "",
-        deviceType: ticket.device_type,
-        brand: ticket.device_brand,
-        model: ticket.device_model,
-        serial: ticket.device_serial_number,
-        deviceDescription: ticket.device_description || "",
-        chargerIncluded: ticket.charger_status === "INCLUDED",
-        issueDescription: ticket.subject,
-        store: ticket.store,
-        estimatedAmount: ticket.amount_estimate
-          ? parseFloat(ticket.amount_estimate)
-          : undefined,
-        warranty: ticket.warranty === "YES",
-        billNumber: ticket.bill_number,
-        priority: ticket.priority,
-        status: ticket.status,
-        holdReason: ticket.hold_reason,
-        progressReason: ticket.internal_progress_reason,
-        progressNote: ticket.internal_progress_note,
-        scheduledDate: ticket.scheduled_date,
-        assignedToId: ticket.assigned_to_id || "",
-        date: new Date(ticket.created_at).toLocaleDateString(),
-        zoneId: ticket.zone_id || "",
-        history: [], // You might want to create a separate history table
-      }));
-
-      setTickets(transformedTickets);
-    } catch (error) {
-      console.error("Error fetching tickets:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // --- FILTERING LOGIC ---
   const zoneFilteredTickets = useMemo(() => {
@@ -355,7 +300,6 @@ const TicketList: React.FC<TicketListProps> = ({
 
   const handleTicketCreated = () => {
     setSearchTerm("");
-    fetchTicketsFromSupabase(); // Refresh tickets after creation
   };
 
   const canDelete =

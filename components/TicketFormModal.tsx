@@ -66,6 +66,21 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
   const [activeTab, setActiveTab] = useState<"details" | "history">("details");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [technicians, setTechnicians] = useState<AppUser[]>([]);
+
+  useEffect(() => {
+    const fetchTechnicians = async () => {
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, name, role")
+        .eq("role", "TECHNICIAN");
+
+      if (!error && data) setTechnicians(data);
+    };
+
+    fetchTechnicians();
+  }, []);
+
   // --- FILTERED STORES LOGIC ---
   const availableStores = useMemo(() => {
     // Super Admin can see every store in the system
@@ -303,6 +318,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           device_type: formData.deviceType,
           device_brand: formData.brand || null,
           device_model: formData.model || null,
+          assigned_to: formData.assignedToId || null,
           device_serial_number: formData.serial || null,
           device_description: formData.deviceDescription || null,
           charger_status:
@@ -405,6 +421,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           priority: formData.priority,
           device_type: formData.deviceType,
           store: formData.store,
+          assigned_to: formData.assignedToId || null, // <-- new field
           created_at: currentTimestamp,
           // Optional fields
           name: formData.name || null,
@@ -659,6 +676,26 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                     </select>
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Assign To
+                  </label>
+                  <select
+                    value={formData.assignedToId || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, assignedToId: e.target.value })
+                    }
+                    className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="">Choose Technician</option>
+                    {technicians.map((tech) => (
+                      <option key={tech.id} value={tech.id}>
+                        {tech.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* ONLY SHOW ZONE SELECTION INFO TO SUPER ADMIN */}
                 {currentUser.role === "SUPER_ADMIN" && selectedStoreZone && (
                   <div className="bg-slate-50 p-4 rounded-2xl border border-indigo-100 flex items-center gap-3 text-xs font-black text-indigo-600">

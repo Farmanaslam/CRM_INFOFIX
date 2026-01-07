@@ -96,66 +96,6 @@ function useSmartSync<T>(
     }
   });
 
-  useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) {
-      onStatusChange?.("local");
-      return;
-    }
-
-    const fetchInitialData = async () => {
-      try {
-        const { data: remoteData, error } = await supabase
-          .from("app_data")
-          .select("data")
-          .eq("key", docName)
-          .eq("zone_id", activeZoneId)
-          .maybeSingle();
-
-        if (!error && remoteData?.data) {
-          setData(remoteData.data);
-          localStorage.setItem(
-            `${docName}_${activeZoneId}`,
-            safeStringify(remoteData.data)
-          );
-        }
-        onStatusChange?.("connected");
-      } catch {
-        onStatusChange?.("local");
-      }
-    };
-
-    fetchInitialData();
-
-    const channel = supabase
-      .channel(`public:app_data:key=eq.${docName}:zone=eq.${activeZoneId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "app_data",
-          filter: `key=eq.${docName}`,
-        },
-        (payload) => {
-          if (
-            payload.new &&
-            (payload.new as any).data &&
-            (payload.new as any).zone_id === activeZoneId
-          ) {
-            const newData = (payload.new as any).data;
-            setData(newData);
-            onStatusChange?.("connected");
-            if (onUpdateReceived) onUpdateReceived(newData);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [docName, activeZoneId]);
-
   const updateData = (newValue: T) => {
     setData(newValue);
     localStorage.setItem(`${docName}_${activeZoneId}`, safeStringify(newValue));
@@ -246,19 +186,6 @@ function App() {
   >(notificationKey, []);
   const [selectedZoneId, setSelectedZoneId] = useState<string>("all");
 
-  useEffect(() => {
-    if (currentUser) {
-      if (currentUser.role !== "SUPER_ADMIN" && currentUser.zoneId) {
-        setSelectedZoneId(currentUser.zoneId);
-      } else if (
-        currentUser.role === "SUPER_ADMIN" &&
-        selectedZoneId === "all"
-      ) {
-        setSelectedZoneId("all");
-      }
-    }
-  }, [currentUser]);
-
   const pushNotification = (
     notif: Omit<AppNotification, "id" | "timestamp" | "read" | "userId">
   ) => {
@@ -286,67 +213,101 @@ function App() {
     syncZone,
     setSyncStatus
   );
-  const [tickets, setTickets] = useSmartSync<Ticket[]>(
-    "tickets",
-    [],
-    syncZone,
-    setSyncStatus,
-    (newData) => {
-      if (!currentUser) return;
-      const unreadTickets = newData.filter(
-        (nt) => !tickets.some((ot) => ot.id === nt.id)
-      );
 
-      unreadTickets.forEach((t) => {
-        // Logic to determine if "his notification only" applies
-        const isRelevance = () => {
-          if (currentUser.role === "SUPER_ADMIN") return true;
-          if (currentUser.role === "ADMIN" || currentUser.role === "MANAGER") {
-            return t.zoneId === currentUser.zoneId;
-          }
-          if (currentUser.role === "TECHNICIAN") {
-            return t.assignedToId === currentUser.id;
-          }
-          if (currentUser.role === "CUSTOMER") {
-            return t.email.toLowerCase() === currentUser.email.toLowerCase();
-          }
-          return false;
-        };
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const fetchTickets = useCallback(async () => {
+    if (!supabase) return;
 
-        if (isRelevance()) {
-          pushNotification({
-            title: "New Service Node",
-            message: `Ticket ${t.ticketId} raised for ${t.name}.`,
-            type: t.priority === "High" ? "urgent" : "info",
-            link:
-              currentUser.role === "CUSTOMER"
-                ? "customer_dashboard"
-                : "tickets",
-          });
-        }
-      });
+    try {
+      const { data, error } = await supabase
+        .from("tickets")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Ticket fetch error:", error);
+        setSyncStatus("error");
+        return;
+      }
+
+      const mapped: Ticket[] = data.map((t) => ({
+        id: t.id,
+        ticketId: t.id,
+        customerId: t.customer_id,
+        name: t.name ?? "",
+        email: t.email ?? "",
+        number: t.mobile ?? "",
+        address: t.address ?? "",
+        deviceType: t.device_type,
+        brand: t.device_brand,
+        model: t.device_model,
+        serial: t.device_serial_number,
+        deviceDescription: t.device_description ?? "",
+        chargerIncluded: t.charger_status === "INCLUDED",
+        issueDescription: t.subject,
+        store: t.store,
+        estimatedAmount: t.amount_estimate
+          ? Number(t.amount_estimate)
+          : undefined,
+        warranty: t.warranty === "YES",
+        billNumber: t.bill_number,
+        priority: t.priority,
+        status: t.status,
+        holdReason: t.hold_reason,
+        progressReason: t.internal_progress_reason,
+        progressNote: t.internal_progress_note,
+        scheduledDate: t.scheduled_date,
+        assignedToId: t.assigned_to_id ?? "",
+        date: new Date(t.created_at).toLocaleDateString(),
+        zoneId: t.zone_id ?? "",
+        history: [],
+      }));
+
+      setTickets(mapped);
+      setSyncStatus("connected");
+    } catch (err) {
+      console.error("Error fetching tickets:", err);
+      setSyncStatus("error");
     }
-  );
+  }, [supabase]); // Add supabase as dependency
+
+useEffect(() => {
+  if (!supabase) return;
+
+  if (currentUser) {
+    fetchTickets();
+  }
+
+  const channel = supabase
+    .channel("tickets-realtime")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "tickets" },
+      fetchTickets
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [currentUser, supabase, fetchTickets]);
+
   const [tasks, setTasks] = useSmartSync<Task[]>(
     "tasks",
     [],
     syncZone,
     setSyncStatus
   );
-  const [laptopReports, setLaptopReports] = useSmartSync<Report[]>(
-    "laptop_reports",
-    [],
-    syncZone,
-    setSyncStatus
-  );
+  const [laptopReports, setLaptopReports] = useState<Report[]>([]);
 
-  const handleLogin = (user: User) => {
+  const handleLogin = async (user: User) => {
     setCurrentUser(user);
     if (user.role !== "SUPER_ADMIN" && user.zoneId)
       setSelectedZoneId(user.zoneId);
     setCurrentView(
       user.role === "CUSTOMER" ? "customer_dashboard" : "dashboard"
     );
+
     // We don't push a notification here because the notificationKey will change immediately and wipe context,
     // plus it's redundant to notify someone they just logged in.
   };

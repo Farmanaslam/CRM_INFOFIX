@@ -155,7 +155,7 @@ export interface Report {
   };
   checklist: ChecklistState;
   battery: BatteryStats;
-  actionRequired: string | null;
+ actionRequired: string | null;  
   notes: string;
   status: 'Draft' | 'Completed';
   progress: number;
