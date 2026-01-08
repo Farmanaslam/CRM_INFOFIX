@@ -493,51 +493,58 @@ const ZoneManager: React.FC<{
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
-    if (!formData.name) return;
+const handleSave = async () => {
+ if (!formData.name) return;
 
-    const zoneId = editingZone ? editingZone.id : `zone-${Date.now()}`;
-    const newZone: OperationalZone = {
-      ...formData,
-      id: zoneId,
-    } as OperationalZone;
+  const zoneId = editingZone ? editingZone.id : crypto.randomUUID();
 
-    let updatedZones;
-    if (editingZone) {
-      updatedZones = zones.map((z) => (z.id === editingZone.id ? newZone : z));
-    } else {
-      updatedZones = [...zones, newZone];
-    }
+  const newZone: OperationalZone = {
+    ...formData,
+    id: zoneId,
+  } as OperationalZone;
 
-    const updatedStores = stores.map((s) => {
-      const isNowSelected = selectedStoreIds.includes(s.id);
-      const wasPreviouslyInThisZone = s.zoneId === zoneId;
+  const updatedZones = editingZone
+    ? zones.map((z) => (z.id === zoneId ? newZone : z))
+    : [...zones, newZone];
 
-      if (isNowSelected) {
-        return { ...s, zoneId };
-      } else if (wasPreviouslyInThisZone) {
-        return { ...s, zoneId: undefined };
-      }
-      return s;
-    });
+  // 🔥 Update store assignments in Supabase store_locations table
+  for (const store of stores) {
+    const shouldBeAssigned = selectedStoreIds.includes(store.id);
 
-    onUpdate(updatedZones, updatedStores);
-    setIsModalOpen(false);
-  };
+    await supabase
+      .from("store_locations")
+      .update({ 
+        zone_id: shouldBeAssigned ? zoneId : null,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", store.id);
+  }
 
-  const handleDelete = (id: string) => {
-    if (stores.some((s) => s.zoneId === id)) {
-      alert("Please unassign all stores from this zone before deleting it.");
-      return;
-    }
-    if (confirm("Delete this operational zone?")) {
-      const updatedZones = zones.filter((z) => z.id !== id);
-      const updatedStores = stores.map((s) =>
-        s.zoneId === id ? { ...s, zoneId: undefined } : s
-      );
-      onUpdate(updatedZones, updatedStores);
-    }
-  };
+  onUpdate(updatedZones, stores);
+  setIsModalOpen(false);
+};
+
+const deleteStore = async (id: string) => {
+  const confirmDelete = confirm("Delete this store permanently?");
+  if (!confirmDelete) return;
+
+  const { error } = await supabase
+    .from("store_locations")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    alert("Failed to delete store");
+    return;
+  }
+
+  // Refresh stores from database
+  // You might want to call fetchStores here if available
+  alert("Store deleted successfully");
+  window.location.reload(); // Simple refresh to get updated data
+ 
+};
+ 
 
   const toggleStoreSelection = (id: string) => {
     setSelectedStoreIds((prev) =>
@@ -609,7 +616,7 @@ const ZoneManager: React.FC<{
                       <Edit2 size={16} />
                     </button>
                     <button
-                      onClick={() => handleDelete(zone.id)}
+                      onClick={() => deleteStore(zone.id)}
                       className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <Trash2 size={16} />
@@ -886,6 +893,8 @@ const SimpleListManager: React.FC<SimpleListManagerProps> = ({
   const [editValue, setEditValue] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+
+  
   const handleAdd = () => {
     if (!newItemName.trim()) return;
     if (
@@ -1025,7 +1034,6 @@ const SimpleListManager: React.FC<SimpleListManagerProps> = ({
     </div>
   );
 };
-
 const StoreManager: React.FC<{
   stores: Store[];
   zones: OperationalZone[];
@@ -1036,10 +1044,43 @@ const StoreManager: React.FC<{
 }> = ({ stores, zones, onUpdate, tickets, onUpdateTickets, currentUser }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
-
+  const [isLoading, setIsLoading] = useState(false);
   const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
 
-  // --- FILTERED STORES LOGIC ---
+  // Fetch stores from Supabase
+  const fetchStores = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("store_locations")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      // Transform data to match Store type
+      const transformedStores: Store[] = data.map(store => ({
+        id: store.id,
+        name: store.name,
+        address: store.address || "",
+        phone: store.phone || "",
+        zoneId: store.zone_id || "",
+      }));
+
+      onUpdate(transformedStores);
+    } catch (error) {
+      console.error("Error fetching stores:", error);
+      alert("Failed to load stores from database");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch stores on component mount
+  useEffect(() => {
+    fetchStores();
+  }, []);
+
   const visibleStores = useMemo(() => {
     if (isSuperAdmin) return stores;
     return stores.filter((s) => s.zoneId === currentUser.zoneId);
@@ -1049,16 +1090,20 @@ const StoreManager: React.FC<{
     name: "",
     address: "",
     phone: "",
-    zoneId: "",
+    zoneId: isSuperAdmin ? zones[0]?.id || "" : currentUser.zoneId,
   });
 
   const handleOpen = (store?: Store) => {
     if (store) {
       setEditingStore(store);
-      setFormData({ ...store });
+      setFormData({ 
+        name: store.name,
+        address: store.address,
+        phone: store.phone,
+        zoneId: store.zoneId
+      });
     } else {
       setEditingStore(null);
-      // Default zone for non-super admins is their own
       setFormData({
         name: "",
         address: "",
@@ -1069,41 +1114,87 @@ const StoreManager: React.FC<{
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
-    if (!formData.name) return;
-
-    let updatedStores;
-    if (editingStore) {
-      updatedStores = stores.map((s) =>
-        s.id === editingStore.id ? ({ ...s, ...formData } as Store) : s
-      );
-      if (editingStore.name !== formData.name) {
-        const updatedTickets = tickets.map((t) =>
-          t.store === editingStore.name ? { ...t, store: formData.name! } : t
-        );
-        onUpdateTickets(updatedTickets);
-      }
-    } else {
-      updatedStores = [
-        ...stores,
-        { ...formData, id: Date.now().toString() } as Store,
-      ];
+  const handleSaveStore = async () => {
+    if (!formData.name?.trim()) {
+      alert("Store name is required");
+      return;
     }
 
-    onUpdate(updatedStores);
-    setIsModalOpen(false);
+    setIsLoading(true);
+    try {
+      if (editingStore) {
+        // Update existing store
+        const { error } = await supabase
+          .from("store_locations")
+          .update({
+            name: formData.name.trim(),
+            address: formData.address,
+            phone: formData.phone,
+            zone_id: formData.zoneId || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", editingStore.id);
+
+        if (error) throw error;
+        alert("Store updated successfully");
+      } else {
+        // Create new store
+        const { data, error } = await supabase
+          .from("store_locations")
+          .insert({
+            name: formData.name.trim(),
+            address: formData.address,
+            phone: formData.phone,
+            zone_id: formData.zoneId || null,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        alert("Store created successfully");
+      }
+
+      // Refresh the stores list
+      await fetchStores();
+      setIsModalOpen(false);
+    } catch (error: any) {
+      console.error("Error saving store:", error);
+      alert(`Failed to save store: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
+    // Check if store is being used in tickets
     if (tickets.some((t) => t.store === name)) {
       alert("Cannot delete store while tickets are assigned to it.");
       return;
     }
-    if (confirm("Delete this store?")) {
-      onUpdate(stores.filter((s) => s.id !== id));
+
+    if (!confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from("store_locations")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      alert("Store deleted successfully");
+      // Refresh the stores list
+      await fetchStores();
+    } catch (error: any) {
+      console.error("Error deleting store:", error);
+      alert(`Failed to delete store: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
-
   return (
     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-full">
       <div className="flex justify-between items-center mb-6">
@@ -1256,7 +1347,7 @@ const StoreManager: React.FC<{
                 Cancel
               </button>
               <button
-                onClick={handleSave}
+                onClick={handleSaveStore}
                 className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl"
               >
                 Save Store

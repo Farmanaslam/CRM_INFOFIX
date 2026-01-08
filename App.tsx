@@ -215,6 +215,8 @@ function App() {
   );
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  
+  // Fetch tickets function - stable reference (supabase is constant)
   const fetchTickets = useCallback(async () => {
     if (!supabase) return;
 
@@ -257,7 +259,9 @@ function App() {
         progressReason: t.internal_progress_reason,
         progressNote: t.internal_progress_note,
         scheduledDate: t.scheduled_date,
-        assignedToId: t.assigned_to_id ?? "",
+        // NOTE: In Supabase the column is named `assigned_to` (not `assigned_to_id`)
+        // TicketFormModal writes to `assigned_to`, so we must read from the same field
+        assignedToId: t.assigned_to ?? "",
         date: new Date(t.created_at).toLocaleDateString(),
         zoneId: t.zone_id ?? "",
         history: [],
@@ -269,28 +273,36 @@ function App() {
       console.error("Error fetching tickets:", err);
       setSyncStatus("error");
     }
-  }, [supabase]); // Add supabase as dependency
+  }, []); // No dependencies needed - supabase is constant
 
+  // Fetch tickets immediately when user logs in or changes
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || !currentUser) return;
+    
+    // Fetch tickets immediately when user is set
+    fetchTickets();
+  }, [currentUser, fetchTickets]);
 
-    if (currentUser) {
-      fetchTickets();
-    }
+  // Set up realtime subscription (separate effect to avoid re-subscribing on every fetch)
+  useEffect(() => {
+    if (!supabase || !currentUser) return;
 
     const channel = supabase
       .channel("tickets-realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "tickets" },
-        fetchTickets
+        () => {
+          // Use the latest fetchTickets function
+          fetchTickets();
+        }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser, supabase, fetchTickets]);
+  }, [currentUser, fetchTickets]);
 
   const [tasks, setTasks] = useSmartSync<Task[]>(
     "tasks",
@@ -307,6 +319,9 @@ function App() {
     setCurrentView(
       user.role === "CUSTOMER" ? "customer_dashboard" : "dashboard"
     );
+
+    // Tickets will be fetched automatically by the useEffect when currentUser changes
+    // No need to call fetchTickets here - the useEffect handles it
 
     // We don't push a notification here because the notificationKey will change immediately and wipe context,
     // plus it's redundant to notify someone they just logged in.
