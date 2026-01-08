@@ -249,6 +249,14 @@ function App() {
     "global",
     setSyncStatus
   );
+  // ✅ GLOBAL customers (used ONLY for Dashboard KPIs)
+  const [globalCustomers, setGlobalCustomers] = useSmartSync<Customer[]>(
+    "customers",
+    [],
+    "global",
+    setSyncStatus
+  );
+
   const [customers, setCustomers] = useSmartSync<Customer[]>(
     "customers",
     [],
@@ -371,23 +379,23 @@ function App() {
   const [laptopReports, setLaptopReports] = useState<Report[]>([]);
 
   // 🔥 FIX: handleLogin now properly triggers ticket fetch
- const handleLogin = async (user: User) => {
-  console.log("🔐 Login initiated for:", user.email);
-  
-  setCurrentUser(user);
-  
-  // Removed: Zone filtering on login - keeps selectedZoneId as "all" to show all tickets
-  // if (user.role !== "SUPER_ADMIN" && user.zoneId) {
-  //   setSelectedZoneId(user.zoneId);
-  // }
-  
-  setCurrentView(
-    user.role === "CUSTOMER" ? "customer_dashboard" : "dashboard"
-  );
-  
-  // 🔥 FIX: Clear any stale tickets before fetching fresh data from Supabase
-  setTickets([]);
-};
+  const handleLogin = async (user: User) => {
+    console.log("🔐 Login initiated for:", user.email);
+
+    setCurrentUser(user);
+
+    // Removed: Zone filtering on login - keeps selectedZoneId as "all" to show all tickets
+    // if (user.role !== "SUPER_ADMIN" && user.zoneId) {
+    //   setSelectedZoneId(user.zoneId);
+    // }
+
+    setCurrentView(
+      user.role === "CUSTOMER" ? "customer_dashboard" : "dashboard"
+    );
+
+    // 🔥 FIX: Clear any stale tickets before fetching fresh data from Supabase
+    setTickets([]);
+  };
 
   // 🔥 FIX: Fetch tickets IMMEDIATELY when currentUser changes (on login) - no delay
 
@@ -463,7 +471,7 @@ function App() {
         return (
           <Dashboard
             tickets={tickets}
-            customers={customers}
+            customers={globalCustomers}
             settings={appSettings}
             currentUser={currentUser}
             onNavigate={setCurrentView}

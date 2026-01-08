@@ -86,19 +86,19 @@ const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'tasks_group',
-      label: 'Operations',
+      label: 'Team Tasks',
       icon: CheckSquare,
       allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN'],
       children: [
         { id: 'task_dashboard', label: 'Task Dashboard', icon: LayoutDashboard, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
-        { id: 'task_my_works', label: 'My Work Log', icon: Briefcase, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN'] },
+        { id: 'task_my_works', label: 'My Work', icon: Briefcase, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN'] },
         { id: 'task_schedule', label: 'Schedule', icon: Calendar, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN'] },
         { id: 'task_reports', label: 'Task Reports', icon: FileText, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] }
       ]
     },
     { 
       id: 'laptop_reports_group', 
-      label: 'Quality Control', 
+      label: 'Laptop Checking', 
       icon: ClipboardCheck,
       allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN'],
       children: [
@@ -119,7 +119,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     },
     { 
       id: 'customers', 
-      label: 'Client Registry', 
+      label: 'Customers', 
       icon: Users,
       allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER']
     },
@@ -135,7 +135,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     },
     { 
       id: 'reports', 
-      label: 'Business Intelligence', 
+      label: 'Reports', 
       icon: BarChart3,
       allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER']
     },
