@@ -107,7 +107,9 @@ const Dashboard: React.FC<DashboardProps> = ({ tickets, customers, settings, cur
 
     // Strict Zonal Customer Filter: Identify unique customers present in the current zone's ticket list
     const customerEmailsInZone = new Set(zoneFilteredTickets.map(t => t.email.toLowerCase()));
-    const totalCustomersInZone = customers.filter(c => customerEmailsInZone.has(c.email.toLowerCase())).length;
+    const totalCustomersInZone =   selectedZoneId === 'all'
+    ? customers.length
+    : customers.filter(c => c.zoneId === selectedZoneId).length;;
 
     return {
       openJobs: activeTickets.length,
@@ -123,19 +125,30 @@ const Dashboard: React.FC<DashboardProps> = ({ tickets, customers, settings, cur
   }, [zoneFilteredTickets, customers, settings.sla]);
 
   // --- LOAD TRACKING ---
-  const storeLoads = useMemo(() => {
-    const activeTotal = metrics.openJobs || 1;
-    const loadMap: Record<string, number> = {};
-    zoneFilteredTickets.filter(t => t.status !== 'Resolved' && t.status !== 'Rejected')
-      .forEach(t => loadMap[t.store] = (loadMap[t.store] || 0) + 1);
+const storeLoads = useMemo(() => {
+  const loadMap: Record<string, number> = {};
 
-    const relevantStores = selectedZoneId === 'all' ? settings.stores : settings.stores.filter(s => s.zoneId === selectedZoneId);
-    return relevantStores.map(s => ({
-      name: s.name,
-      count: loadMap[s.name] || 0,
-      percent: Math.round(((loadMap[s.name] || 0) / activeTotal) * 100)
-    })).sort((a,b) => b.count - a.count);
-  }, [zoneFilteredTickets, settings.stores, selectedZoneId, metrics.openJobs]);
+  zoneFilteredTickets.forEach(t => {
+    if (!t.storeId) return;
+    loadMap[t.storeId] = (loadMap[t.storeId] || 0) + 1;
+  });
+
+  const relevantStores =
+    selectedZoneId === 'all'
+      ? settings.stores
+      : settings.stores.filter(s => s.zoneId === selectedZoneId);
+
+  const totalTickets = Math.max(zoneFilteredTickets.length, 1);
+
+  return relevantStores
+    .map(store => ({
+      name: store.name,
+      count: loadMap[store.id] || 0,
+      percent: Math.round(((loadMap[store.id] || 0) / totalTickets) * 100),
+    }))
+    .sort((a, b) => b.count - a.count);
+}, [zoneFilteredTickets, settings.stores, selectedZoneId]);
+
 
   const technicianLoads = useMemo(() => {
     const activeTotal = metrics.openJobs || 1;

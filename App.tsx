@@ -67,7 +67,7 @@ function useSessionStorage<T>(
     }
   });
 
-  // 🔥 KEY CHANGE HANDLER (THIS FIXES YOUR BUG)
+  // 🔥 KEY CHANGE HANDLER - Sync with localStorage when key changes
   useEffect(() => {
     try {
       const item = window.localStorage.getItem(key);
@@ -75,7 +75,7 @@ function useSessionStorage<T>(
     } catch {
       setStoredValue(initialValue);
     }
-  }, [key]); // 👈 IMPORTANT
+  }, [key]);
 
   const setValue = (value: T | ((val: T) => T)) => {
     try {
@@ -257,10 +257,17 @@ function App() {
   );
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [isLoadingTickets, setIsLoadingTickets] = useState(false);
 
-  // Fetch tickets function - stable reference (supabase is constant)
+  // 🔥 FIX: Fetch tickets function with proper loading state
   const fetchTickets = useCallback(async () => {
-    if (!supabase) return;
+    if (!supabase) {
+      console.log("Supabase not configured");
+      return;
+    }
+
+    console.log("🎫 Fetching tickets from Supabase...");
+    setIsLoadingTickets(true);
 
     try {
       const { data, error } = await supabase
@@ -269,10 +276,12 @@ function App() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("Ticket fetch error:", error);
+        console.error("❌ Ticket fetch error:", error);
         setSyncStatus("error");
         return;
       }
+
+      console.log(`✅ Fetched ${data?.length || 0} tickets from Supabase`);
 
       const mapped: Ticket[] = data.map((t) => ({
         id: t.id,
@@ -301,8 +310,6 @@ function App() {
         progressReason: t.internal_progress_reason,
         progressNote: t.internal_progress_note,
         scheduledDate: t.scheduled_date,
-        // NOTE: In Supabase the column is named `assigned_to` (not `assigned_to_id`)
-        // TicketFormModal writes to `assigned_to`, so we must read from the same field
         assignedToId: t.assigned_to ?? "",
         date: new Date(t.created_at).toLocaleDateString(),
         zoneId: t.zone_id ?? "",
@@ -312,36 +319,45 @@ function App() {
       setTickets(mapped);
       setSyncStatus("connected");
     } catch (err) {
-      console.error("Error fetching tickets:", err);
+      console.error("❌ Error fetching tickets:", err);
       setSyncStatus("error");
+    } finally {
+      setIsLoadingTickets(false);
     }
-  }, []); // No dependencies needed - supabase is constant
+  }, []); // No dependencies - supabase is constant
 
-  // Fetch tickets immediately when user logs in or changes
+  // 🔥 FIX: Fetch tickets IMMEDIATELY when currentUser changes (on login)
   useEffect(() => {
-    if (!supabase || !currentUser) return;
+    if (!supabase || !currentUser) {
+      console.log("⏭️ Skipping ticket fetch - no user or supabase");
+      return;
+    }
 
-    // Fetch tickets immediately when user is set
+    console.log("👤 User logged in, fetching tickets...");
+    // Add a small delay to ensure all state updates have propagated
     fetchTickets();
   }, [currentUser, fetchTickets]);
 
-  // Set up realtime subscription (separate effect to avoid re-subscribing on every fetch)
+  // 🔥 FIX: Set up realtime subscription separately
   useEffect(() => {
     if (!supabase || !currentUser) return;
+
+    console.log("🔄 Setting up realtime subscription...");
 
     const channel = supabase
       .channel("tickets-realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "tickets" },
-        () => {
-          // Use the latest fetchTickets function
+        (payload) => {
+          console.log("🔔 Realtime update received:", payload);
           fetchTickets();
         }
       )
       .subscribe();
 
     return () => {
+      console.log("🔌 Unsubscribing from realtime...");
       supabase.removeChannel(channel);
     };
   }, [currentUser, fetchTickets]);
@@ -354,35 +370,59 @@ function App() {
   );
   const [laptopReports, setLaptopReports] = useState<Report[]>([]);
 
-  const handleLogin = async (user: User) => {
-    setCurrentUser(user);
-    if (user.role !== "SUPER_ADMIN" && user.zoneId)
-      setSelectedZoneId(user.zoneId);
-    setCurrentView(
-      user.role === "CUSTOMER" ? "customer_dashboard" : "dashboard"
-    );
+  // 🔥 FIX: handleLogin now properly triggers ticket fetch
+ const handleLogin = async (user: User) => {
+  console.log("🔐 Login initiated for:", user.email);
+  
+  setCurrentUser(user);
+  
+  // Removed: Zone filtering on login - keeps selectedZoneId as "all" to show all tickets
+  // if (user.role !== "SUPER_ADMIN" && user.zoneId) {
+  //   setSelectedZoneId(user.zoneId);
+  // }
+  
+  setCurrentView(
+    user.role === "CUSTOMER" ? "customer_dashboard" : "dashboard"
+  );
+  
+  // 🔥 FIX: Clear any stale tickets before fetching fresh data from Supabase
+  setTickets([]);
+};
 
-    // Tickets will be fetched automatically by the useEffect when currentUser changes
-    // No need to call fetchTickets here - the useEffect handles it
+  // 🔥 FIX: Fetch tickets IMMEDIATELY when currentUser changes (on login) - no delay
 
-    // We don't push a notification here because the notificationKey will change immediately and wipe context,
-    // plus it's redundant to notify someone they just logged in.
-    // 🔔 LOGIN SUCCESS NOTIFICATION
-  };
-
+  // 🔔 LOGIN SUCCESS NOTIFICATION (separate effect to avoid timing issues)
   useEffect(() => {
     if (!currentUser) return;
 
-    pushNotification({
-      type: "success",
-      title: "Login Successful",
-      message: `Welcome back, ${currentUser.name}!`,
-      link: "dashboard",
-    });
-  }, [currentUser]);
+    // Small delay to ensure notification system is ready
+    const timeoutId = setTimeout(() => {
+      pushNotification({
+        type: "success",
+        title: "Login Successful",
+        message: `Welcome back, ${currentUser.name}!`,
+        link: "dashboard",
+      });
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [currentUser?.id]); // Only trigger on user ID change
 
   const renderContent = () => {
     if (!currentUser) return null;
+
+    // Show loading state while tickets are being fetched
+    if (isLoadingTickets && tickets.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+            <p className="text-slate-600 font-medium">Loading tickets...</p>
+          </div>
+        </div>
+      );
+    }
+
     if (currentUser.role === "CUSTOMER") {
       switch (currentView) {
         case "customer_dashboard":
@@ -634,9 +674,11 @@ function App() {
         setIsMobileOpen={setIsMobileOpen}
         currentUser={currentUser}
         onLogout={() => {
+          console.log("👋 Logging out...");
           setCurrentUser(null);
           setCurrentView("dashboard");
           setSelectedZoneId("all");
+          setTickets([]); // Clear tickets on logout
         }}
         syncStatus={syncStatus}
         settings={appSettings}
@@ -692,4 +734,5 @@ function App() {
     </div>
   );
 }
+
 export default App;
