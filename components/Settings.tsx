@@ -493,58 +493,49 @@ const ZoneManager: React.FC<{
     setIsModalOpen(true);
   };
 
-const handleSave = async () => {
- if (!formData.name) return;
+  const handleSave = async () => {
+    if (!formData.name) return;
 
-  const zoneId = editingZone ? editingZone.id : crypto.randomUUID();
+    const zoneId = editingZone ? editingZone.id : crypto.randomUUID();
 
-  const newZone: OperationalZone = {
-    ...formData,
-    id: zoneId,
-  } as OperationalZone;
+    const newZone: OperationalZone = {
+      ...formData,
+      id: zoneId,
+    } as OperationalZone;
 
-  const updatedZones = editingZone
-    ? zones.map((z) => (z.id === zoneId ? newZone : z))
-    : [...zones, newZone];
+    const updatedZones = editingZone
+      ? zones.map((z) => (z.id === zoneId ? newZone : z))
+      : [...zones, newZone];
 
-  // 🔥 Update store assignments in Supabase store_locations table
-  for (const store of stores) {
-    const shouldBeAssigned = selectedStoreIds.includes(store.id);
+    // 🔥 Update store assignments in Supabase store_locations table
+    const updatedStores: Store[] = stores.map((store) => ({
+      ...store,
+      zoneId: selectedStoreIds.includes(store.id) ? zoneId : null,
+    }));
 
-    await supabase
+    onUpdate(updatedZones, updatedStores);
+    setIsModalOpen(false);
+  };
+
+  const deleteStore = async (id: string) => {
+    const confirmDelete = confirm("Delete this store permanently?");
+    if (!confirmDelete) return;
+
+    const { error } = await supabase
       .from("store_locations")
-      .update({ 
-        zone_id: shouldBeAssigned ? zoneId : null,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", store.id);
-  }
+      .delete()
+      .eq("id", id);
 
-  onUpdate(updatedZones, stores);
-  setIsModalOpen(false);
-};
+    if (error) {
+      alert("Failed to delete store");
+      return;
+    }
 
-const deleteStore = async (id: string) => {
-  const confirmDelete = confirm("Delete this store permanently?");
-  if (!confirmDelete) return;
-
-  const { error } = await supabase
-    .from("store_locations")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    alert("Failed to delete store");
-    return;
-  }
-
-  // Refresh stores from database
-  // You might want to call fetchStores here if available
-  alert("Store deleted successfully");
-  window.location.reload(); // Simple refresh to get updated data
- 
-};
- 
+    // Refresh stores from database
+    // You might want to call fetchStores here if available
+    alert("Store deleted successfully");
+    window.location.reload(); // Simple refresh to get updated data
+  };
 
   const toggleStoreSelection = (id: string) => {
     setSelectedStoreIds((prev) =>
@@ -893,8 +884,6 @@ const SimpleListManager: React.FC<SimpleListManagerProps> = ({
   const [editValue, setEditValue] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-
-  
   const handleAdd = () => {
     if (!newItemName.trim()) return;
     if (
@@ -1045,11 +1034,15 @@ const StoreManager: React.FC<{
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [localStores, setLocalStores] = useState<Store[]>(stores);
   const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
 
-  // Fetch stores from Supabase
+  // Fetch stores from Supabase on mount
+  useEffect(() => {
+    fetchStores();
+  }, []);
+
   const fetchStores = async () => {
-    setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from("store_locations")
@@ -1058,34 +1051,25 @@ const StoreManager: React.FC<{
 
       if (error) throw error;
 
-      // Transform data to match Store type
-      const transformedStores: Store[] = data.map(store => ({
-        id: store.id,
-        name: store.name,
-        address: store.address || "",
-        phone: store.phone || "",
-        zoneId: store.zone_id || "",
+      const transformedStores: Store[] = data.map((s) => ({
+        id: s.id,
+        name: s.name,
+        address: s.address || "",
+        phone: s.phone || "",
+        zoneId: s.zone_id || null,
       }));
 
+      setLocalStores(transformedStores);
       onUpdate(transformedStores);
     } catch (error) {
       console.error("Error fetching stores:", error);
-      alert("Failed to load stores from database");
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  // Fetch stores on component mount
-  useEffect(() => {
-    fetchStores();
-  }, []);
-
   const visibleStores = useMemo(() => {
-    if (isSuperAdmin) return stores;
-    return stores.filter((s) => s.zoneId === currentUser.zoneId);
-  }, [stores, isSuperAdmin, currentUser.zoneId]);
-
+    if (isSuperAdmin) return localStores;
+    return localStores.filter((s) => s.zoneId === currentUser.zoneId);
+  }, [localStores, isSuperAdmin, currentUser.zoneId]);
   const [formData, setFormData] = useState<Partial<Store>>({
     name: "",
     address: "",
@@ -1096,11 +1080,11 @@ const StoreManager: React.FC<{
   const handleOpen = (store?: Store) => {
     if (store) {
       setEditingStore(store);
-      setFormData({ 
+      setFormData({
         name: store.name,
         address: store.address,
         phone: store.phone,
-        zoneId: store.zoneId
+        zoneId: store.zoneId,
       });
     } else {
       setEditingStore(null);
@@ -1154,8 +1138,6 @@ const StoreManager: React.FC<{
         alert("Store created successfully");
       }
 
-      // Refresh the stores list
-      await fetchStores();
       setIsModalOpen(false);
     } catch (error: any) {
       console.error("Error saving store:", error);
@@ -1172,7 +1154,11 @@ const StoreManager: React.FC<{
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to delete "${name}"? This action cannot be undone.`
+      )
+    ) {
       return;
     }
 
@@ -1186,8 +1172,7 @@ const StoreManager: React.FC<{
       if (error) throw error;
 
       alert("Store deleted successfully");
-      // Refresh the stores list
-      await fetchStores();
+      // Refresh the st
     } catch (error: any) {
       console.error("Error deleting store:", error);
       alert(`Failed to delete store: ${error.message}`);
@@ -2085,7 +2070,7 @@ export default function Settings({
       console.error("Error creating staff:", err);
       alert(`Failed to create staff: ${err.message}`);
     }
-    setIsTeamModalOpen(false)
+    setIsTeamModalOpen(false);
   };
 
   const handleDeleteMember = async (id: string) => {

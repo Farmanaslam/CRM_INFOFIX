@@ -43,9 +43,10 @@ export interface AppNotification {
 export interface OperationalZone {
   id: string;
   name: string;
-  color: string;
+  
   headBranchId?: string;
   address?: string;
+  phone?:String |null;
 }
 
 export interface User {
