@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { User, Role, Customer } from "../types";
+import { User, Role, Customer, AppNotification } from "../types";
 import {
   LogIn,
   UserPlus,
@@ -23,11 +23,16 @@ import {
   Snowflake,
 } from "lucide-react";
 import { supabase } from "@/supabaseClient";
+import NotificationHub from "./NotificationHub";
+
 interface LoginProps {
   onLogin: (user: User) => void;
   teamMembers: User[];
   customers: Customer[];
   setCustomers: (customers: Customer[]) => void;
+  pushNotification: (
+    notif: Omit<AppNotification, "id" | "timestamp" | "read" | "userId">
+  ) => void;
 }
 
 export default function Login({
@@ -35,6 +40,7 @@ export default function Login({
   teamMembers,
   customers,
   setCustomers,
+  pushNotification,
 }: LoginProps) {
   const [activeTab, setActiveTab] = useState<"staff" | "customer">("customer");
   const [isSignUp, setIsSignUp] = useState(false);

@@ -67,6 +67,16 @@ function useSessionStorage<T>(
     }
   });
 
+  // 🔥 KEY CHANGE HANDLER (THIS FIXES YOUR BUG)
+  useEffect(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      setStoredValue(item ? safeParse(item, initialValue) : initialValue);
+    } catch {
+      setStoredValue(initialValue);
+    }
+  }, [key]); // 👈 IMPORTANT
+
   const setValue = (value: T | ((val: T) => T)) => {
     try {
       const valueToStore =
@@ -75,6 +85,7 @@ function useSessionStorage<T>(
       window.localStorage.setItem(key, safeStringify(valueToStore));
     } catch {}
   };
+
   return [storedValue, setValue];
 }
 
@@ -121,37 +132,39 @@ function useSmartSync<T>(
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  zones: [ ],
-  stores: [{
-    id: "store-1",
-    name: "DGP SHOP",
-    address: "",
-    phone: "",
-  },
-  {
-    id: "store-2",
-    name: "DGP SHOWROOM",
-    address: "",
-    phone: "",
-  },
-  {
-    id: "store-3",
-    name: "DGP STORE",
-    address: "",
-    phone: "",
-  },
-  {
-    id: "store-4",
-    name: "ASANSOL",
-    address: "",
-    phone: "",
-  },
-  {
-    id: "store-5",
-    name: "UKHRA",
-    address: "",
-    phone: "",
-  },],
+  zones: [],
+  stores: [
+    {
+      id: "store-1",
+      name: "DGP SHOP",
+      address: "",
+      phone: "",
+    },
+    {
+      id: "store-2",
+      name: "DGP SHOWROOM",
+      address: "",
+      phone: "",
+    },
+    {
+      id: "store-3",
+      name: "DGP STORE",
+      address: "",
+      phone: "",
+    },
+    {
+      id: "store-4",
+      name: "ASANSOL",
+      address: "",
+      phone: "",
+    },
+    {
+      id: "store-5",
+      name: "UKHRA",
+      address: "",
+      phone: "",
+    },
+  ],
   deviceTypes: [
     { id: "d1", name: "Smartphone" },
     { id: "d2", name: "Laptop" },
@@ -244,7 +257,7 @@ function App() {
   );
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  
+
   // Fetch tickets function - stable reference (supabase is constant)
   const fetchTickets = useCallback(async () => {
     if (!supabase) return;
@@ -307,7 +320,7 @@ function App() {
   // Fetch tickets immediately when user logs in or changes
   useEffect(() => {
     if (!supabase || !currentUser) return;
-    
+
     // Fetch tickets immediately when user is set
     fetchTickets();
   }, [currentUser, fetchTickets]);
@@ -354,7 +367,19 @@ function App() {
 
     // We don't push a notification here because the notificationKey will change immediately and wipe context,
     // plus it's redundant to notify someone they just logged in.
+    // 🔔 LOGIN SUCCESS NOTIFICATION
   };
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    pushNotification({
+      type: "success",
+      title: "Login Successful",
+      message: `Welcome back, ${currentUser.name}!`,
+      link: "dashboard",
+    });
+  }, [currentUser]);
 
   const renderContent = () => {
     if (!currentUser) return null;
@@ -596,6 +621,7 @@ function App() {
         teamMembers={appSettings.teamMembers}
         customers={customers}
         setCustomers={setCustomers}
+        pushNotification={pushNotification}
       />
     );
 
