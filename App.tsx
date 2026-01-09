@@ -54,6 +54,8 @@ const safeParse = <T,>(json: string | null, fallback: T): T => {
   }
 };
 
+
+
 function useSessionStorage<T>(
   key: string,
   initialValue: T
@@ -396,10 +398,6 @@ function App() {
     // 🔥 FIX: Clear any stale tickets before fetching fresh data from Supabase
     setTickets([]);
   };
-
-  // 🔥 FIX: Fetch tickets IMMEDIATELY when currentUser changes (on login) - no delay
-
-  // 🔔 LOGIN SUCCESS NOTIFICATION (separate effect to avoid timing issues)
   useEffect(() => {
     if (!currentUser) return;
 
