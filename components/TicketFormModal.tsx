@@ -265,7 +265,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             subject: formData.issueDescription,
             status: formData.status,
             priority: formData.priority,
-            assigned_to: formData.assignedToId,
+            assigned_to: formData.assignedToId || null,
             device_type: formData.deviceType,
             device_brand: formData.brand,
             device_model: formData.model,
@@ -273,21 +273,39 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             store: formData.store,
             amount_estimate: parseFloat(formData.estimatedAmount || "0"),
             warranty: formData.warranty === "Yes",
-            bill_number: formData.billNumber,
+            bill_number: formData.billNumber || null,
             scheduled_date: formData.scheduledDate || null,
           })
           .eq("id", editingTicket.id);
+
         if (updateError) throw updateError;
 
-        // Refresh tickets after update
-        const { data: updatedTickets } = await supabase
-          .from("tickets")
-          .select("*")
-          .order("created_at", { ascending: false });
+        // ✅ UPDATE ONLY THE EDITED TICKET IN STATE
+        setTickets((prev) =>
+          prev.map((t) =>
+            t.id === editingTicket.id
+              ? {
+                  ...t,
+                  customer_id: customerId,
+                  issueDescription: formData.issueDescription,
+                  status: formData.status,
+                  priority: formData.priority,
+                  assignedToId: formData.assignedToId || "",
+                  deviceType: formData.deviceType,
+                  brand: formData.brand,
+                  model: formData.model,
+                  deviceDescription: formData.deviceDescription,
+                  store: formData.store,
+                  estimatedAmount: parseFloat(formData.estimatedAmount || "0"),
+                  warranty: formData.warranty === "Yes",
+                  billNumber: formData.billNumber || "",
+                  scheduledDate: formData.scheduledDate || "",
+                }
+              : t
+          )
+        );
 
-        if (updatedTickets) {
-          setTickets(updatedTickets as Ticket[]);
-        }
+        if (onSuccess) onSuccess();
       } else {
         // Insert new ticket
         const { data: newTicket, error: insertError } = await supabase
