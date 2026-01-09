@@ -1,21 +1,29 @@
-
-import React, { useState, useEffect } from 'react';
-import { 
-  Bell, 
-  X, 
-  CheckCircle2, 
-  AlertCircle, 
-  Clock, 
-  Zap, 
-  Trash2, 
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import {
+  Bell,
+  X,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Zap,
+  Trash2,
   CheckCheck,
   ChevronRight,
   Info,
   Flame,
   User,
-  Ticket as TicketIcon
-} from 'lucide-react';
-import { AppNotification, View } from '../types';
+  Ticket as TicketIcon,
+  Filter,
+  Volume2,
+  VolumeX,
+  Settings,
+  Megaphone,
+  ArrowUpDown,
+  SortDesc,
+  Shield,
+  UserCheck,
+} from "lucide-react";
+import { AppNotification, View, User as AppUser, Role } from "../types";
 
 interface NotificationHubProps {
   notifications: AppNotification[];
@@ -23,42 +31,162 @@ interface NotificationHubProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigate: (view: View) => void;
+  currentUser: AppUser | null;
 }
 
-export default function NotificationHub({ 
-  notifications, 
-  setNotifications, 
-  isOpen, 
-  onClose, 
-  onNavigate 
-}: NotificationHubProps) {
-  const [activeToasts, setActiveToasts] = useState<AppNotification[]>([]);
+// A short, valid base64 MP3 "ping" sound
+const NOTIFICATION_SOUND =
+  "data:audio/mp3;base64,//uQRAAAAWMSLwUIYAAsYkXgoQwAEaYLWfkWgAI0wWs/ItAAAGDgYtAgAyN+QWaAAihwMWm4G8QQRDiMcCBcH3Cc+CDv/7kVAAAAARIHRJqWAABiBCiTXAAACqgCZYourAAcABWOkXmpf725LLeSNwjah4L/2oZ/MFmkB+at8A+GF1JaaNgVqAvGz/l75D9x8//7kVAAAAAAAoaJTwAAAEwKJPAAAAG175D9x8/9+M2//5feD78/7/9/4f/8A8//7kVAAAAAAAoaJTwAAAEwKJPAAAAG175D9x8/9+M2//5feD78/7/9/4f/8A8//7kVAAAAAAAoaJTwAAAEwKJPAAAAG175D9x8/9+M2//5feD78/7/9/4f/8A8";
 
-  // Monitor for new notifications to show toasts
+export default function NotificationHub({
+  notifications,
+  setNotifications,
+  isOpen,
+  onClose,
+  onNavigate,
+  currentUser,
+}: NotificationHubProps) {
+  const [activeFilter, setActiveFilter] = useState<"all" | "urgent" | "system">(
+    "all"
+  );
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [userRoleFilter, setUserRoleFilter] = useState<Role | "ALL">("ALL");
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [permissionStatus, setPermissionStatus] =
+    useState<NotificationPermission>(Notification.permission);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const prevCount = useRef(notifications.length);
+
+  const isAdmin =
+    currentUser?.role === "SUPER_ADMIN" || currentUser?.role === "ADMIN";
+
+  // Initialize Audio
   useEffect(() => {
-    const unread = notifications.filter(n => !n.read && (Date.now() - n.timestamp < 10000));
-    if (unread.length > 0) {
-      const latest = unread[unread.length - 1];
-      if (!activeToasts.find(t => t.id === latest.id)) {
-        setActiveToasts(prev => [...prev, latest]);
-        // Auto remove toast after 5 seconds
-        setTimeout(() => {
-          setActiveToasts(prev => prev.filter(t => t.id !== latest.id));
-        }, 5000);
+    audioRef.current = new Audio(NOTIFICATION_SOUND);
+    audioRef.current.volume = 0.5;
+  }, []);
+
+  // Request Permissions
+  const requestPermissions = async () => {
+    const perm = await Notification.requestPermission();
+    setPermissionStatus(perm);
+  };
+
+  // Handle New Notifications (Sound & Vibration)
+  useEffect(() => {
+    if (notifications.length > prevCount.current) {
+      // New notification arrived
+      const latest = notifications[0];
+
+      // 1. Play Sound
+      if (soundEnabled && audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current
+          .play()
+          .catch((e) => console.log("Audio play failed", e));
+      }
+
+      // 2. Vibrate
+      if (navigator.vibrate) {
+        if (latest.type === "urgent") navigator.vibrate([200, 100, 200]);
+        else navigator.vibrate(200);
+      }
+
+      // 3. System Notification (if backgrounded)
+      if (document.hidden && permissionStatus === "granted") {
+        new Notification(latest.title, {
+          body: latest.message,
+          icon: "/vite.svg",
+        });
       }
     }
-  }, [notifications]);
+    prevCount.current = notifications.length;
+  }, [notifications, soundEnabled, permissionStatus]);
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
+  // Filtering & Sorting
+  const filteredNotifications = useMemo(() => {
+    if (!currentUser) return [];
+
+    let result = notifications.filter((n) => {
+      // 1. Access Control
+      if (currentUser.role === "TECHNICIAN") {
+        // Techs only see their own
+        if (n.userId !== currentUser.id) return false;
+      }
+
+      if (currentUser.role === "MANAGER") {
+        // Managers see Techs and Managers (assuming same zone logic handled upstream or globally here)
+        // Since notifications are global list, we filter by role
+        if (n.userRole === "SUPER_ADMIN" || n.userRole === "ADMIN")
+          return false;
+        if (n.userRole === "CUSTOMER") return false;
+      }
+
+      // Admins see everything (no early return needed)
+
+      // 2. Type Filtering
+      if (
+        activeFilter === "urgent" &&
+        n.type !== "urgent" &&
+        n.type !== "warning"
+      )
+        return false;
+      if (
+        activeFilter === "system" &&
+        n.type !== "info" &&
+        n.type !== "success"
+      )
+        return false;
+
+      // 3. Admin User Role Filtering
+      if (isAdmin && userRoleFilter !== "ALL" && n.userRole !== userRoleFilter)
+        return false;
+
+      return true;
+    });
+
+    // 4. Sorting
+    result = result.sort((a, b) => {
+      if (sortOrder === "newest") return b.timestamp - a.timestamp;
+      return a.timestamp - b.timestamp;
+    });
+
+    return result;
+  }, [
+    notifications,
+    activeFilter,
+    sortOrder,
+    isAdmin,
+    currentUser,
+    userRoleFilter,
+  ]);
+
+  const markAllRead = () => {
+    // Only mark visible notifications as read to avoid messing up others' status if sharing data structure (though ideally separated)
+    const visibleIds = new Set(filteredNotifications.map((n) => n.id));
+    setNotifications(
+      notifications.map((n) =>
+        visibleIds.has(n.id) ? { ...n, read: true } : n
+      )
+    );
   };
 
-  const deleteNotification = (id: string) => {
-    setNotifications(notifications.filter(n => n.id !== id));
+  const clearAll = () => {
+    if (confirm("Clear currently visible notifications?")) {
+      const visibleIds = new Set(filteredNotifications.map((n) => n.id));
+      setNotifications(notifications.filter((n) => !visibleIds.has(n.id)));
+    }
   };
 
-  const handleNotificationClick = (n: AppNotification) => {
-    setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true } : item));
+  const handleItemClick = (n: AppNotification) => {
+    // Mark as read
+    const updated = notifications.map((item) =>
+      item.id === n.id ? { ...item, read: true } : item
+    );
+    setNotifications(updated);
+
+    // Navigate
     if (n.link) {
       onNavigate(n.link);
       onClose();
@@ -67,127 +195,235 @@ export default function NotificationHub({
 
   const getIcon = (type: string) => {
     switch (type) {
-      case 'success': return <CheckCircle2 className="text-emerald-500" size={18} />;
-      case 'warning': return <AlertCircle className="text-amber-500" size={18} />;
-      case 'urgent': return <Flame className="text-rose-500" size={18} />;
-      default: return <Info className="text-blue-500" size={18} />;
+      case "urgent":
+        return <Flame size={18} className="text-white" />;
+      case "warning":
+        return <AlertCircle size={18} className="text-white" />;
+      case "success":
+        return <CheckCircle2 size={18} className="text-white" />;
+      default:
+        return <Info size={18} className="text-white" />;
     }
   };
 
+  const getColor = (type: string) => {
+    switch (type) {
+      case "urgent":
+        return "bg-rose-500 shadow-rose-200";
+      case "warning":
+        return "bg-amber-500 shadow-amber-200";
+      case "success":
+        return "bg-emerald-500 shadow-emerald-200";
+      default:
+        return "bg-indigo-500 shadow-indigo-200";
+    }
+  };
+
+  if (!isOpen) return null;
+
   return (
-    <>
-      {/* TOAST OVERLAY (Visible even when hub is closed) */}
-      <div className="fixed top-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none max-w-sm w-full">
-        {activeToasts.map(toast => (
-          <div 
-            key={toast.id} 
-            className="pointer-events-auto bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl animate-in slide-in-from-right fade-in duration-500 flex gap-4"
-          >
-            <div className={`p-2 rounded-xl bg-white/10 shrink-0`}>
-              {getIcon(toast.type)}
+    <div className="fixed inset-0 z-[100] flex justify-end">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm transition-opacity"
+        onClick={onClose}
+      />
+
+      {/* Drawer */}
+      <div className="relative w-full max-w-md h-full bg-white shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
+        {/* Header */}
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white z-10">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Bell size={24} className="text-indigo-600" />
+              {filteredNotifications.some((n) => !n.read) && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white"></span>
+              )}
             </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-black text-white leading-none mb-1">{toast.title}</h4>
-              <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">{toast.message}</p>
-            </div>
-            <button 
-              onClick={() => setActiveToasts(prev => prev.filter(t => t.id !== toast.id))}
-              className="text-slate-500 hover:text-white shrink-0"
-            >
-              <X size={14} />
-            </button>
+            <h2 className="text-xl font-bold text-slate-800">Notifications</h2>
           </div>
-        ))}
-      </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
 
-      {/* DRAWER HUB */}
-      {isOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={onClose} />
-          <div className="absolute inset-y-0 right-0 w-full sm:w-[420px] bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-500">
-            
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
-               <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg">
-                    <Bell size={20} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-black text-slate-800 tracking-tight">Notification Center</h2>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Personal Activity Stream</p>
-                  </div>
-               </div>
-               <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"><X size={24} /></button>
+        {/* Controls */}
+        <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200">
+              {["all", "urgent", "system"].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setActiveFilter(f as any)}
+                  className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${
+                    activeFilter === f
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-500 hover:bg-slate-50"
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
             </div>
 
-            <div className="p-4 bg-slate-50 flex justify-between items-center shrink-0 border-b border-slate-100">
-               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                  {notifications.filter(n => !n.read).length} Unread Updates
-               </span>
-               <button 
-                 onClick={markAllAsRead}
-                 className="flex items-center gap-1.5 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-black transition-colors"
-               >
-                 <CheckCheck size={14} /> Mark all read
-               </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                className={`p-2 rounded-lg border transition-colors ${
+                  soundEnabled
+                    ? "bg-indigo-50 border-indigo-200 text-indigo-600"
+                    : "bg-white border-slate-200 text-slate-400"
+                }`}
+                title="Toggle Sound"
+              >
+                {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              </button>
+              {permissionStatus !== "granted" && (
+                <button
+                  onClick={requestPermissions}
+                  className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors"
+                  title="Enable Desktop Notifications"
+                >
+                  <Megaphone size={16} />
+                </button>
+              )}
             </div>
+          </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-white">
-               {notifications.length > 0 ? (
-                 notifications.sort((a,b) => b.timestamp - a.timestamp).map(n => (
-                   <div 
-                     key={n.id}
-                     onClick={() => handleNotificationClick(n)}
-                     className={`p-4 rounded-2xl border transition-all cursor-pointer group relative ${n.read ? 'bg-white border-slate-100 opacity-60' : 'bg-slate-50 border-indigo-100 shadow-sm ring-1 ring-indigo-50'}`}
-                   >
-                     {!n.read && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-indigo-600 rounded-r-full"></div>}
-                     
-                     <div className="flex gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${n.read ? 'bg-slate-100 text-slate-400' : 'bg-white text-indigo-600 border border-indigo-50'}`}>
-                           {getIcon(n.type)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                           <div className="flex justify-between items-start mb-1">
-                              <h4 className={`text-sm font-black tracking-tight ${n.read ? 'text-slate-600' : 'text-slate-800'}`}>{n.title}</h4>
-                              <span className="text-[9px] font-bold text-slate-400 tabular-nums">
-                                {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                           </div>
-                           <p className={`text-xs leading-relaxed ${n.read ? 'text-slate-400' : 'text-slate-500'}`}>{n.message}</p>
-                           
-                           {n.link && (
-                              <div className="mt-3 flex items-center gap-1 text-[9px] font-black uppercase text-indigo-600 tracking-widest group-hover:gap-2 transition-all">
-                                 View Details <ChevronRight size={10} />
-                              </div>
-                           )}
-                        </div>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); deleteNotification(n.id); }}
-                          className="text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100 p-1"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                     </div>
-                   </div>
-                 ))
-               ) : (
-                 <div className="h-full flex flex-col items-center justify-center text-center p-10 text-slate-300 opacity-50">
-                    <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                       <Bell size={40} />
-                    </div>
-                    <p className="font-black text-xs uppercase tracking-[0.2em]">Zero Notifications</p>
-                    <p className="text-[10px] mt-2 max-w-[180px]">Your personal activity stream is clear.</p>
-                 </div>
-               )}
+          {isAdmin && (
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+              <div className="relative flex-1">
+                <Filter
+                  size={12}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <select
+                  value={userRoleFilter}
+                  onChange={(e) => setUserRoleFilter(e.target.value as any)}
+                  className="w-full pl-6 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 outline-none appearance-none"
+                >
+                  <option value="ALL">All Roles</option>
+                  <option value="TECHNICIAN">Technicians</option>
+                  <option value="MANAGER">Managers</option>
+                  <option value="ADMIN">Admins</option>
+                  <option value="CUSTOMER">Customers</option>
+                </select>
+              </div>
+              <button
+                onClick={() =>
+                  setSortOrder((prev) =>
+                    prev === "newest" ? "oldest" : "newest"
+                  )
+                }
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-indigo-600 transition-colors"
+              >
+                <ArrowUpDown size={12} />
+                {sortOrder === "newest" ? "Newest" : "Oldest"}
+              </button>
             </div>
+          )}
 
-            <div className="p-6 border-t border-slate-100 text-center shrink-0">
-               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">
-                  Encryption Layer Active • Personal Node V3.5
-               </p>
+          <div className="flex justify-between items-center text-xs pt-1">
+            <span className="font-bold text-slate-500">
+              {filteredNotifications.length} Messages
+            </span>
+            <div className="flex gap-3">
+              <button
+                onClick={markAllRead}
+                className="text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1"
+              >
+                <CheckCheck size={14} /> Mark Read
+              </button>
+              <button
+                onClick={clearAll}
+                className="text-slate-400 hover:text-rose-500 font-bold flex items-center gap-1 transition-colors"
+              >
+                <Trash2 size={14} /> Clear
+              </button>
             </div>
           </div>
         </div>
-      )}
-    </>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2 bg-slate-50/50">
+          {filteredNotifications.length > 0 ? (
+            filteredNotifications.map((note) => (
+              <div
+                key={note.id}
+                onClick={() => handleItemClick(note)}
+                className={`relative p-4 rounded-xl border transition-all cursor-pointer group hover:shadow-md ${
+                  note.read
+                    ? "bg-white border-slate-100 opacity-70 hover:opacity-100"
+                    : "bg-white border-indigo-100 shadow-sm ring-1 ring-indigo-50"
+                }`}
+              >
+                {!note.read && (
+                  <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+                )}
+
+                <div className="flex gap-4">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg shrink-0 ${getColor(
+                      note.type
+                    )}`}
+                  >
+                    {getIcon(note.type)}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start mb-1">
+                      <h4
+                        className={`text-sm font-bold truncate ${
+                          note.read ? "text-slate-600" : "text-slate-900"
+                        }`}
+                      >
+                        {note.title}
+                      </h4>
+                      {isAdmin && note.userName && (
+                        <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
+                          <User size={8} /> {note.userName.split(" ")[0]}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 mb-2">
+                      {note.message}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                        <Clock size={10} />
+                        {new Date(note.timestamp).toLocaleString([], {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      {note.link && (
+                        <span className="text-[10px] font-bold text-indigo-600 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          View <ChevronRight size={10} />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4">
+              <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center">
+                <Bell size={32} className="opacity-20" />
+              </div>
+              <p className="text-sm font-bold uppercase tracking-widest opacity-50">
+                All caught up
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

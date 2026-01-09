@@ -30,12 +30,14 @@ export type Role =
   | "CUSTOMER";
 
 export interface AppNotification {
-  id: string;
-  userId: string; // The specific owner of this notification
+id: string;
+  userId: string; // The specific owner/triggerer of this notification
+  userName?: string; // Display name of the user who triggered it
+  userRole?: Role;   // Role of the user who triggered it
   title: string;
   message: string;
   timestamp: number;
-  type: "info" | "success" | "warning" | "urgent";
+  type: 'info' | 'success' | 'warning' | 'urgent';
   read: boolean;
   link?: View;
 }

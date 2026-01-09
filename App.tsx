@@ -54,8 +54,6 @@ const safeParse = <T,>(json: string | null, fallback: T): T => {
   }
 };
 
-
-
 function useSessionStorage<T>(
   key: string,
   initialValue: T
@@ -735,6 +733,7 @@ function App() {
           notifications={notifications}
           setNotifications={setNotifications}
           onNavigate={setCurrentView}
+          currentUser={currentUser}
         />
       </div>
     </div>

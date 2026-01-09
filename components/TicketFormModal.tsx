@@ -37,14 +37,6 @@ import {
 } from "../types";
 import { supabase } from "../supabaseClient";
 
-// Helper to generate IDs
-const generateId = (prefix: string, list: any[]) => {
-  const safeList = list || [];
-  const count = safeList.length + 1;
-  const padded = count.toString().padStart(3, "0");
-  return `${prefix}-${padded}`;
-};
-
 interface TicketFormModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -107,6 +99,12 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     currentUser.role === "SUPER_ADMIN" ||
     currentUser.role === "ADMIN" ||
     currentUser.role === "MANAGER";
+
+  const technicians = useMemo(() => {
+    return settings.teamMembers.filter(
+      (member) => member.role === "TECHNICIAN"
+    );
+  }, [settings.teamMembers]);
 
   // Quick Issue Chips
   const commonIssues = [
@@ -184,6 +182,9 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     action,
     details,
   });
+  const isValidPhone = (phone: string) => {
+    return /^\d{10}$/.test(phone);
+  };
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
@@ -194,6 +195,11 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
       !formData.store
     ) {
       setError("Please fill in all mandatory fields.");
+      return;
+    }
+
+    if (!isValidPhone(formData.mobile)) {
+      setError("Please enter a valid 10-digit phone number.");
       return;
     }
 
@@ -229,8 +235,28 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         setCustomers([...customers, newCustomer as Customer]);
       }
 
-      // 2️⃣ Create / Update Ticket
-      // Create / Update Ticket
+      const { data: lastTicket, error: lastErr } = await supabase
+        .from("tickets")
+        .select("id")
+        .like("id", "TKT-IF-%")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (lastErr && lastErr.code !== "PGRST116") throw lastErr;
+
+      // 🔹 Generate next TKT-IF ID
+      let nextNumber = 1;
+
+      if (lastTicket?.id) {
+        const match = lastTicket.id.match(/TKT-IF-(\d+)/);
+        if (match) nextNumber = parseInt(match[1], 10) + 1;
+      }
+
+      const ticketId = `TKT-IF-${nextNumber.toString().padStart(3, "0")}`;
+      console.log("Generated Ticket ID:", ticketId);
+
+      // 3️⃣ Create / Update Ticket
       if (editingTicket) {
         const { error: updateError } = await supabase
           .from("tickets")
@@ -246,50 +272,60 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             device_description: formData.deviceDescription,
             store: formData.store,
             amount_estimate: parseFloat(formData.estimatedAmount || "0"),
-            warranty: formData.warranty,
+            warranty: formData.warranty === "Yes",
             bill_number: formData.billNumber,
-            scheduled_date: formData.scheduledDate || null, // ✅ here
+            scheduled_date: formData.scheduledDate || null,
           })
           .eq("id", editingTicket.id);
         if (updateError) throw updateError;
-      } else {
-        const ticketId = generateId("TKT-IF", tickets);
-       const { data: newTicket, error: insertError } = await supabase
-  .from("tickets")
-  .insert([
-    {
-      user_id: currentUser?.id,
-      customer_id: customerId,
-      subject: formData.issueDescription,
-      status: formData.status,
-      priority: formData.priority,
-      assigned_to: formData.assignedToId || null,
-      device_type: formData.deviceType,
-      device_brand: formData.brand,
-      device_model: formData.model,
-      device_description: formData.deviceDescription,
-      store: formData.store,
-      amount_estimate: parseFloat(formData.estimatedAmount || "0"),
-      warranty: formData.warranty === "Yes",
-      bill_number: formData.billNumber || null,
-      scheduled_date: formData.scheduledDate || null,
-    },
-  ])
-  .select()
-  .single();
 
-if (insertError) throw insertError;
+        // Refresh tickets after update
+        const { data: updatedTickets } = await supabase
+          .from("tickets")
+          .select("*")
+          .order("created_at", { ascending: false });
 
-setTickets([...(tickets || []), newTicket as Ticket]);
-        if (newTicket && Array.isArray(newTicket) && newTicket.length > 0) {
-          setTickets([...(tickets || []), newTicket[0] as Ticket]);
+        if (updatedTickets) {
+          setTickets(updatedTickets as Ticket[]);
         }
+      } else {
+        // Insert new ticket
+        const { data: newTicket, error: insertError } = await supabase
+          .from("tickets")
+          .insert([
+            {
+              id: ticketId, // ✅ THIS IS THE ONLY ID
+              customer_id: customerId,
+              subject: formData.issueDescription,
+              status: formData.status,
+              priority: formData.priority,
+              assigned_to: formData.assignedToId || null,
+              device_type: formData.deviceType,
+              device_brand: formData.brand,
+              device_model: formData.model,
+              device_description: formData.deviceDescription,
+              store: formData.store,
+              amount_estimate: parseFloat(formData.estimatedAmount || "0"),
+              warranty: formData.warranty === "Yes",
+              bill_number: formData.billNumber || null,
+              scheduled_date: formData.scheduledDate || null,
+              user_id: currentUser.id,
+              created_at: new Date().toISOString(),
+            },
+          ])
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+
+        setTickets([...(tickets || []), newTicket as Ticket]);
+        if (onSuccess) onSuccess();
       }
 
       onClose();
     } catch (err: any) {
-      console.error(err);
-      setError("Error saving ticket.");
+      console.error("Error saving ticket:", err);
+      setError(`Error saving ticket: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -825,7 +861,7 @@ setTickets([...(tickets || []), newTicket as Ticket]);
                                 className="w-full pl-11 pr-10 py-3.5 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer focus:bg-white"
                               >
                                 <option value="">Unassigned</option>
-                                {settings.teamMembers.map((m) => (
+                                {technicians.map((m) => (
                                   <option key={m.id} value={m.id}>
                                     {m.name}
                                   </option>

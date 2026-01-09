@@ -38,6 +38,8 @@ import {
   ClipboardList,
   Activity,
   Layers,
+  Shield,
+  User,
 } from "lucide-react";
 import { Ticket, AppSettings } from "../types";
 import html2canvas from "html2canvas";
@@ -74,6 +76,8 @@ export default function Reports({ tickets, settings }: ReportsProps) {
     "30d"
   );
   const [storeFilter, setStoreFilter] = useState<string>("All");
+  const [roleFilter, setRoleFilter] = useState<string>("All");
+  const [memberFilter, setMemberFilter] = useState<string>("All");
   const [isExporting, setIsExporting] = useState(false);
 
   // --- HELPER FUNCTIONS ---
@@ -98,11 +102,37 @@ export default function Reports({ tickets, settings }: ReportsProps) {
 
     return tickets.filter((ticket) => {
       const ticketDate = new Date(ticket.date);
+      // Date Check
       if (ticketDate < startDate) return false;
+
+      // Store Check
       if (storeFilter !== "All" && ticket.store !== storeFilter) return false;
+
+      // Role & Member Check
+      if (roleFilter !== "All" || memberFilter !== "All") {
+        const assignee = settings.teamMembers.find(
+          (m) => m.id === ticket.assignedToId
+        );
+
+        if (roleFilter !== "All") {
+          if (!assignee || assignee.role !== roleFilter) return false;
+        }
+
+        if (memberFilter !== "All") {
+          if (ticket.assignedToId !== memberFilter) return false;
+        }
+      }
+
       return true;
     });
-  }, [tickets, timeFilter, storeFilter]);
+  }, [
+    tickets,
+    timeFilter,
+    storeFilter,
+    roleFilter,
+    memberFilter,
+    settings.teamMembers,
+  ]);
 
   const analytics = useMemo(() => {
     // 1. KPI Stats
@@ -235,7 +265,7 @@ export default function Reports({ tickets, settings }: ReportsProps) {
     <div className="space-y-6 pb-20">
       {/* HEADER & FILTERS */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sticky top-0 z-20 backdrop-blur-xl bg-white/90">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-4 justify-between">
+        <div className="flex flex-col xl:flex-row xl:items-center gap-4 justify-between">
           <div className="flex items-center gap-4">
             <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl">
               <ClipboardList size={24} />
@@ -268,31 +298,78 @@ export default function Reports({ tickets, settings }: ReportsProps) {
               ))}
             </div>
 
-            {/* Store Filter */}
-            <div className="relative">
-              <MapPin
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-              <select
-                value={storeFilter}
-                onChange={(e) => setStoreFilter(e.target.value)}
-                className="pl-8 pr-8 py-2 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer"
-              >
-                <option value="All">All Stores</option>
-                {settings.stores.map((s) => (
-                  <option key={s.id} value={s.name}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+              {/* Store Filter */}
+              <div className="relative shrink-0">
+                <MapPin
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <select
+                  value={storeFilter}
+                  onChange={(e) => setStoreFilter(e.target.value)}
+                  className="pl-8 pr-8 py-2 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer min-w-[120px]"
+                >
+                  <option value="All">All Stores</option>
+                  {settings.stores.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Role Filter */}
+              <div className="relative shrink-0">
+                <Shield
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <select
+                  value={roleFilter}
+                  onChange={(e) => {
+                    setRoleFilter(e.target.value);
+                    setMemberFilter("All");
+                  }}
+                  className="pl-8 pr-8 py-2 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer min-w-[120px]"
+                >
+                  <option value="All">All Roles</option>
+                  <option value="TECHNICIAN">Technician</option>
+                  <option value="MANAGER">Manager</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+
+              {/* Member Filter */}
+              <div className="relative shrink-0">
+                <User
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <select
+                  value={memberFilter}
+                  onChange={(e) => setMemberFilter(e.target.value)}
+                  className="pl-8 pr-8 py-2 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer min-w-[120px]"
+                >
+                  <option value="All">All Staff</option>
+                  {settings.teamMembers
+                    .filter(
+                      (m) => roleFilter === "All" || m.role === roleFilter
+                    )
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
             </div>
 
             {/* Export */}
             <button
               onClick={handleExportPDF}
               disabled={isExporting}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200 disabled:opacity-70"
+              className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200 disabled:opacity-70 ml-auto xl:ml-0"
             >
               {isExporting ? (
                 <Loader2 size={14} className="animate-spin" />

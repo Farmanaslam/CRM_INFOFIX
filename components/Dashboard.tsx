@@ -113,7 +113,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
     // Strict Zonal Customer Filter: Identify unique customers present in the current zone's ticket list
     const customerEmailsInZone = new Set(
-      zoneFilteredTickets.map((t) => t.email.toLowerCase())
+      zoneFilteredTickets.map((t) => t?.email?.toLowerCase())
     );
     const totalCustomersInZone = customers.length;
 

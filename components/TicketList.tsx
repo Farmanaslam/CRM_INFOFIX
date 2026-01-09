@@ -246,10 +246,10 @@ const TicketList: React.FC<TicketListProps> = ({
 
   const filteredTickets = zoneFilteredTickets.filter(
     (ticket) =>
-      ticket.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.number.includes(searchTerm) ||
-      ticket.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.ticketId.toLowerCase().includes(searchTerm.toLowerCase())
+      ticket?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ticket?.number?.includes(searchTerm) ||
+      ticket?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ticket?.ticketId?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleEdit = (ticket: Ticket) => {
@@ -408,7 +408,7 @@ const TicketList: React.FC<TicketListProps> = ({
                       </div>
                       <div>
                         <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                          {ticket.ticketId}
+                          {ticket.id}
                           {ticket.priority === "High" && (
                             <span
                               className="w-2 h-2 rounded-full bg-red-500"
