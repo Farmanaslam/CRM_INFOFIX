@@ -157,7 +157,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     { id: "b1", name: "IVOOMI" },
     { id: "b2", name: "ELISTA" },
   ],
-  laptopDealers: [],
+  laptopDealers: [   { id: "ld-1", name: "Direct Customer" },
+    { id: "ld-2", name: "Local Dealer" },],
   sla: { high: 2, medium: 5, low: 10 },
   teamMembers: [
     {

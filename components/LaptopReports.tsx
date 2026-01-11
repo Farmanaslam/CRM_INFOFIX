@@ -1314,11 +1314,14 @@ export default function LaptopReports({
                 className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
               >
                 <option value="All">All Technicians</option>
-                {settings?.teamMembers?.map((m) => (
-                  <option key={m.id} value={m.name}>
-                    {m.name}
-                  </option>
-                ))}
+                {/* Filter to show only technicians, not all team members */}
+                {settings?.teamMembers
+                  ?.filter((member) => member.role === "TECHNICIAN") // Only show technicians
+                  .map((member) => (
+                    <option key={member.id} value={member.name}>
+                      {member.name} ({member.role})
+                    </option>
+                  ))}
               </select>
               <ChevronDown
                 size={14}
@@ -1763,11 +1766,14 @@ export default function LaptopReports({
                     className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg appearance-none cursor-pointer pr-4"
                   >
                     <option value="">Select Tech...</option>
-                    {settings?.teamMembers?.map((member) => (
-                      <option key={member.id} value={member.name}>
-                        {member.name}
-                      </option>
-                    ))}
+                    {/* Filter to show only technicians, not all team members */}
+                    {settings?.teamMembers
+                      ?.filter((member) => member.role === "TECHNICIAN") // Only show technicians
+                      .map((member) => (
+                        <option key={member.id} value={member.name}>
+                          {member.name} ({member.role})
+                        </option>
+                      ))}
                   </select>
                   <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none">
                     <ChevronDown size={14} className="text-slate-400" />
