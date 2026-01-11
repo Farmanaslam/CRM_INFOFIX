@@ -133,43 +133,7 @@ function useSmartSync<T>(
 
 const DEFAULT_SETTINGS: AppSettings = {
   zones: [],
- stores: [
-  {
-    id: "store-1",
-    name: "DGP SHOP",
-    address: "",
-    phone: "",
-    zoneId: "global", // ✅ ADD THIS
-  },
-  {
-    id: "store-2",
-    name: "DGP SHOWROOM",
-    address: "",
-    phone: "",
-    zoneId: "global",
-  },
-  {
-    id: "store-3",
-    name: "DGP STORE",
-    address: "",
-    phone: "",
-    zoneId: "global",
-  },
-  {
-    id: "store-4",
-    name: "ASANSOL",
-    address: "",
-    phone: "",
-    zoneId: "global",
-  },
-  {
-    id: "store-5",
-    name: "UKHRA",
-    address: "",
-    phone: "",
-    zoneId: "global",
-  },
-],
+  stores: [],
 
   deviceTypes: [
     { id: "d1", name: "Smartphone" },

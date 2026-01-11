@@ -505,22 +505,21 @@ const ZoneModal: React.FC<ZoneModalProps> = ({
     }
   }, [isOpen, zone, allStores]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name) return;
+ const handleSubmit = (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!name) return;
 
-    const newZone: OperationalZone = {
-      id: zone ? zone.id : `zone-${Date.now()}`,
-      name,
-      color,
-      headBranchId: headBranchId || undefined,
-      address: address || undefined,
-    };
-
-    onSave(newZone, selectedStoreIds);
-    onClose();
+  const newZone: OperationalZone = {
+    id: zone ? zone.id : ``, // Don't generate ID here - let Supabase generate UUID
+    name,
+    color,
+    headBranchId: headBranchId || undefined,
+    address: address || undefined,
   };
 
+  onSave(newZone, selectedStoreIds);
+  onClose();
+};
   const toggleStore = (storeId: string) => {
     if (selectedStoreIds.includes(storeId)) {
       setSelectedStoreIds(selectedStoreIds.filter((id) => id !== storeId));
@@ -812,47 +811,114 @@ const ZoneManager: React.FC<{
   );
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const handleSaveZone = (
-    newZone: OperationalZone,
-    selectedStoreIds: string[]
-  ) => {
-    // 1. Update Zones List
-    let updatedZones = [...zones];
-    const existingIdx = zones.findIndex((z) => z.id === newZone.id);
-    if (existingIdx > -1) {
-      updatedZones[existingIdx] = newZone;
-    } else {
-      updatedZones.push(newZone);
+ const handleSaveZone = async (
+  newZone: OperationalZone,
+  selectedStoreIds: string[]
+) => {
+  try {
+    // 1. Save or update zone in Supabase
+    const { data: savedZone, error: zoneError } = await supabase
+      .from("operational_zones")
+      .upsert({
+        // Don't include id for new zones - let Supabase generate UUID
+        ...(newZone.id && { id: newZone.id }), // Only include if editing
+        name: newZone.name,
+        color: newZone.color,
+        address: newZone.address,
+        head_branch_id: newZone.headBranchId || null,
+      })
+      .select()
+      .single();
+
+    if (zoneError) throw zoneError;
+
+    // 2. Use the ID that Supabase generated
+    const zoneId = savedZone.id;
+
+    // 3. Update store zone assignments in Supabase
+    for (const store of stores) {
+      const shouldBeAssigned = selectedStoreIds.includes(store.id);
+      const currentZoneId = store.zoneId;
+
+      // Only update if assignment changed
+      if (
+        (shouldBeAssigned && currentZoneId !== zoneId) ||
+        (!shouldBeAssigned && currentZoneId === zoneId)
+      ) {
+        await supabase
+          .from("stores")
+          .update({
+            zone_id: shouldBeAssigned ? zoneId : null,
+          })
+          .eq("id", store.id);
+      }
     }
 
-    // 2. Update Stores List
-    // - Set zoneId = newZone.id for selected stores
-    // - Set zoneId = undefined for stores that were in this zone but are now unselected
+    // 4. Update local state with the zone from Supabase
+    let updatedZones = [...zones];
+    const existingIdx = zones.findIndex((z) => z.id === zoneId);
+    if (existingIdx > -1) {
+      updatedZones[existingIdx] = {
+        ...newZone,
+        id: zoneId, // Use the database ID
+      };
+    } else {
+      updatedZones.push({
+        ...newZone,
+        id: zoneId, // Use the database ID
+      });
+    }
+
+    // 5. Update stores with new zone assignments
     const updatedStores = stores.map((store) => {
-      // If currently selected, assign to this zone
       if (selectedStoreIds.includes(store.id)) {
-        return { ...store, zoneId: newZone.id };
+        return { ...store, zoneId: zoneId };
       }
-      // If not selected, BUT was previously assigned to this zone, unassign it
-      if (store.zoneId === newZone.id) {
+      if (store.zoneId === zoneId) {
         return { ...store, zoneId: undefined };
       }
-      // Otherwise keep as is (assigned to other zones or unassigned)
       return store;
     });
 
     onUpdate(updatedZones, updatedStores);
-  };
 
-  const handleDeleteZone = () => {
-    if (deleteId) {
-      // Unassign stores
+    alert("Zone saved successfully!");
+  } catch (error: any) {
+    console.error("Error saving zone:", error);
+    alert(`Failed to save zone: ${error.message}`);
+  }
+};
+
+  const handleDeleteZone = async () => {
+    if (!deleteId) return;
+
+    try {
+      // Delete zone from Supabase
+      const { error } = await supabase
+        .from("operational_zones")
+        .delete()
+        .eq("id", deleteId);
+
+      if (error) throw error;
+
+      // Unassign stores from this zone in Supabase
+      await supabase
+        .from("stores")
+        .update({ zone_id: null })
+        .eq("zone_id", deleteId);
+
+      // Update local state
       const updatedStores = stores.map((s) =>
         s.zoneId === deleteId ? { ...s, zoneId: undefined } : s
       );
       const updatedZones = zones.filter((z) => z.id !== deleteId);
+
       onUpdate(updatedZones, updatedStores);
       setDeleteId(null);
+      alert("Zone deleted successfully!");
+    } catch (error: any) {
+      console.error("Error deleting zone:", error);
+      alert(`Failed to delete zone: ${error.message}`);
     }
   };
 
@@ -1237,32 +1303,86 @@ const StoreManager: React.FC<{
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
     const data = Object.fromEntries(formData);
 
-    const newStore: Store = {
-      id: editingStore ? editingStore.id : Date.now().toString(),
+    const storeData = {
       name: data.name as string,
       address: data.address as string,
       phone: data.phone as string,
-      zoneId: data.zoneId as string,
+      zone_id: (data.zoneId as string) || null,
     };
 
-    if (editingStore) {
-      onUpdate(stores.map((s) => (s.id === newStore.id ? newStore : s)));
-    } else {
-      onUpdate([...stores, newStore]);
+    try {
+      if (editingStore) {
+        // Update existing store in Supabase
+        const { error } = await supabase
+          .from("stores")
+          .update(storeData)
+          .eq("id", editingStore.id);
+
+        if (error) throw error;
+      } else {
+        // Create new store in Supabase
+        const { error } = await supabase.from("stores").insert({
+          ...storeData,
+          id: Date.now().toString(),
+        });
+
+        if (error) throw error;
+      }
+
+      // Refresh stores from Supabase
+      // You need to pass a function to fetch stores
+      // For now, update local state
+      const newStore: Store = {
+        id: editingStore ? editingStore.id : Date.now().toString(),
+        name: data.name as string,
+        address: data.address as string,
+        phone: data.phone as string,
+        zoneId: (data.zoneId as string) || undefined,
+      };
+
+      if (editingStore) {
+        onUpdate(stores.map((s) => (s.id === newStore.id ? newStore : s)));
+      } else {
+        onUpdate([...stores, newStore]);
+      }
+
+      setIsModalOpen(false);
+      setEditingStore(null);
+      alert(
+        editingStore
+          ? "Store updated successfully!"
+          : "Store created successfully!"
+      );
+    } catch (error: any) {
+      console.error("Error saving store:", error);
+      alert(`Failed to save store: ${error.message}`);
     }
-    setIsModalOpen(false);
-    setEditingStore(null);
   };
 
-  const handleDelete = () => {
-    if (deleteId) {
+  const handleDelete = async () => {
+    if (!deleteId) return;
+
+    try {
+      // Delete store from Supabase
+      const { error } = await supabase
+        .from("stores")
+        .delete()
+        .eq("id", deleteId);
+
+      if (error) throw error;
+
+      // Update local state
       onUpdate(stores.filter((s) => s.id !== deleteId));
       setDeleteId(null);
+      alert("Store deleted successfully!");
+    } catch (error: any) {
+      console.error("Error deleting store:", error);
+      alert(`Failed to delete store: ${error.message}`);
     }
   };
 
@@ -1466,6 +1586,7 @@ const TeamManager: React.FC<{
   const [photoUrl, setPhotoUrl] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isLoading, setIsLoading] = useState(false); // Add this line
 
   useEffect(() => {
     if (editingMember) {
@@ -1501,37 +1622,112 @@ const TeamManager: React.FC<{
     setIsUploading(false);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
+
     const formData = new FormData(e.target as HTMLFormElement);
     const data = Object.fromEntries(formData);
 
-    const newUser: User = {
-      id: editingMember ? editingMember.id : Date.now().toString(),
+    const userData = {
       name: data.name as string,
       email: data.email as string,
       role: data.role as Role,
-      zoneId: data.zoneId as string,
-      storeId: data.storeId as string,
-      password:
-        (data.password as string) || editingMember?.password || "123456",
+      zone_id: data.zoneId as string,
+      store_id: data.storeId as string,
       mobile: data.mobile as string,
-      photo: photoUrl, // Save uploaded URL
+      photo: photoUrl,
+      address: data.address as string,
+      experience: data.experience as string,
     };
 
-    if (editingMember) {
-      onUpdate(members.map((m) => (m.id === newUser.id ? newUser : m)));
-    } else {
-      onUpdate([...members, newUser]);
-    }
-    setIsModalOpen(false);
-    setEditingMember(null);
-  };
+    try {
+      if (editingMember) {
+        // Update existing user in Supabase
+        const { error } = await supabase
+          .from("users")
+          .update(userData)
+          .eq("id", editingMember.id);
 
-  const handleDelete = () => {
-    if (deleteId) {
+        if (error) throw error;
+
+        // If password is provided and not empty, update it
+        if (data.password && data.password.toString().trim() !== "") {
+          const { error: authError } = await supabase.auth.updateUser({
+            password: data.password as string,
+          });
+
+          if (authError) {
+            console.error("Password update failed:", authError);
+            // Continue even if password update fails
+          }
+        }
+      } else {
+        // Create new user
+        const { data: authData, error: authError } = await supabase.auth.signUp(
+          {
+            email: data.email as string,
+            password: (data.password as string) || "123456",
+            options: {
+              data: {
+                name: data.name,
+                role: data.role,
+              },
+            },
+          }
+        );
+
+        if (authError) throw authError;
+
+        // Create user profile in users table
+        const { error: dbError } = await supabase.from("users").insert({
+          auth_id: authData.user?.id,
+          ...userData,
+          email: data.email as string,
+        });
+
+        if (dbError) throw dbError;
+      }
+
+      // Use the onUpdate prop to refresh team members
+      onUpdate(members);
+
+      setIsModalOpen(false);
+      setEditingMember(null);
+      alert(
+        editingMember
+          ? "Team member updated successfully!"
+          : "Team member created successfully!"
+      );
+    } catch (err: any) {
+      console.error("Error saving team member:", err);
+      alert(`Failed to save team member: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  const handleDelete = async () => {
+    if (!deleteId) return;
+
+    setIsLoading(true);
+    try {
+      // Delete from Supabase
+      const { error } = await supabase
+        .from("users")
+        .delete()
+        .eq("id", deleteId);
+
+      if (error) throw error;
+
+      // Refresh the team members list
       onUpdate(members.filter((m) => m.id !== deleteId));
       setDeleteId(null);
+      alert("Team member deleted successfully!");
+    } catch (error: any) {
+      console.error("Error deleting team member:", error);
+      alert(`Failed to delete team member: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1854,6 +2050,10 @@ export default function Settings({
   onUpdateSettings,
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<string>("team");
+  const [zones, setZones] = useState<OperationalZone[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [loadingZones, setLoadingZones] = useState(true);
+
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<User | undefined>(
     undefined
@@ -1867,6 +2067,7 @@ export default function Settings({
   const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
 
   // Fetch team members from Supabase when component mounts
+
   useEffect(() => {
     if (activeSection === "team") {
       fetchTeamMembers();
@@ -1913,6 +2114,97 @@ export default function Settings({
     }
   };
 
+  useEffect(() => {
+    const loadZonesAndStores = async () => {
+      setLoadingZones(true);
+
+      const { data: zoneData, error: zoneError } = await supabase
+        .from("operational_zones")
+        .select("*");
+
+      const { data: storeData, error: storeError } = await supabase
+        .from("stores")
+        .select("*");
+
+      if (zoneError || storeError) {
+        console.error(zoneError || storeError);
+        setLoadingZones(false);
+        return;
+      }
+
+      setZones(
+        zoneData.map((z) => ({
+          id: z.id,
+          name: z.name,
+          color: z.color,
+          address: z.address,
+          headBranchId: z.head_branch_id ?? undefined,
+        }))
+      );
+
+      setStores(
+        storeData.map((s) => ({
+          id: s.id,
+          name: s.name,
+          address: s.address,
+          phone: s.phone,
+          zoneId: s.zone_id ?? undefined,
+        }))
+      );
+
+      setLoadingZones(false);
+    };
+
+    loadZonesAndStores();
+  }, []);
+
+  const handleZoneUpdate = async (
+    updatedZones: OperationalZone[],
+    updatedStores: Store[]
+  ) => {
+    // Update zone metadata
+    for (const z of updatedZones) {
+      await supabase.from("operational_zones").upsert({
+        id: z.id,
+        name: z.name,
+        color: z.color,
+        address: z.address,
+        head_branch_id: z.headBranchId ?? null,
+      });
+    }
+
+    // Update store zone assignments
+    for (const s of updatedStores) {
+      await supabase
+        .from("stores")
+        .update({ zone_id: s.zoneId ?? null })
+        .eq("id", s.id);
+    }
+
+    setZones(updatedZones);
+    setStores(updatedStores);
+  };
+
+  const handleStoreUpdate = async (updatedStores: Store[]) => {
+    // Update stores in Supabase
+    for (const store of updatedStores) {
+      await supabase.from("stores").upsert({
+        id: store.id,
+        name: store.name,
+        address: store.address,
+        phone: store.phone,
+        zone_id: store.zoneId ?? null,
+      });
+    }
+
+    setStores(updatedStores);
+
+    // Also update settings for backward compatibility
+    onUpdateSettings({
+      ...settings,
+      stores: updatedStores,
+    });
+  };
   // --- CLOUD SYNC ENGINE ---
   const handleForceSync = async () => {
     if (!isSupabaseConfigured || !supabase) {
@@ -2224,28 +2516,35 @@ export default function Settings({
         {activeSection === "team" && (
           <TeamManager
             members={settings.teamMembers}
-            zones={settings.zones}
-            stores={settings.stores}
+            zones={zones}
+            stores={stores}
             tickets={tickets}
-            onUpdate={(m) => onUpdateSettings({ ...settings, teamMembers: m })}
+            onUpdate={fetchTeamMembers}
             currentUser={currentUser}
           />
         )}
         {activeSection === "zones" && (
-          <ZoneManager
-            zones={settings.zones}
-            stores={settings.stores}
-            teamMembers={settings.teamMembers}
-            onUpdate={(z, s) =>
-              onUpdateSettings({ ...settings, zones: z, stores: s })
-            }
-          />
+          <>
+            {loadingZones ? (
+              <div className="flex justify-center items-center h-64">
+                <Loader2 className="animate-spin text-indigo-600" size={32} />
+              </div>
+            ) : (
+              <ZoneManager
+                zones={zones}
+                stores={stores}
+                teamMembers={settings.teamMembers}
+                onUpdate={handleZoneUpdate}
+              />
+            )}
+          </>
         )}
+
         {activeSection === "stores" && (
           <StoreManager
-            stores={settings.stores}
-            zones={settings.zones}
-            onUpdate={(s) => onUpdateSettings({ ...settings, stores: s })}
+            stores={stores}
+            zones={zones}
+            onUpdate={handleStoreUpdate}
           />
         )}
 
