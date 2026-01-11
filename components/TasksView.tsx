@@ -52,24 +52,24 @@ export default function TasksView({
     currentUser.role === "MANAGER";
 
   // --- DERIVED DATA & PERMISSIONS ---
-const accessibleMembers = useMemo(() => {
-  // SUPER_ADMIN should see ALL team members
-  if (currentUser.role === "SUPER_ADMIN") {
-    return teamMembers; // Show all members including other SUPER_ADMINs
-  }
+  const accessibleMembers = useMemo(() => {
+    // SUPER_ADMIN should see ALL team members
+    if (currentUser.role === "SUPER_ADMIN") {
+      return teamMembers; // Show all members including other SUPER_ADMINs
+    }
 
-  if (currentUser.role === "ADMIN") {
-    return teamMembers.filter((m) => m.role !== "SUPER_ADMIN");
-  }
+    if (currentUser.role === "ADMIN") {
+      return teamMembers.filter((m) => m.role !== "SUPER_ADMIN");
+    }
 
-  if (currentUser.role === "MANAGER") {
-    return teamMembers.filter(
-      (m) => m.role === "MANAGER" || m.role === "TECHNICIAN"
-    );
-  }
+    if (currentUser.role === "MANAGER") {
+      return teamMembers.filter(
+        (m) => m.role === "MANAGER" || m.role === "TECHNICIAN"
+      );
+    }
 
-  return [currentUser]; // TECHNICIAN only sees themselves
-}, [currentUser, teamMembers]);
+    return [currentUser]; // TECHNICIAN only sees themselves
+  }, [currentUser, teamMembers]);
   const accessibleTasks = useMemo(() => {
     const accessibleIds = accessibleMembers.map((m) => m.id);
     return tasks.filter(

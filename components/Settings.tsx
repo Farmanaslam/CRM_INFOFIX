@@ -505,21 +505,21 @@ const ZoneModal: React.FC<ZoneModalProps> = ({
     }
   }, [isOpen, zone, allStores]);
 
- const handleSubmit = (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!name) return;
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name) return;
 
-  const newZone: OperationalZone = {
-    id: zone ? zone.id : ``, // Don't generate ID here - let Supabase generate UUID
-    name,
-    color,
-    headBranchId: headBranchId || undefined,
-    address: address || undefined,
+    const newZone: OperationalZone = {
+      id: zone ? zone.id : ``, // Don't generate ID here - let Supabase generate UUID
+      name,
+      color,
+      headBranchId: headBranchId || undefined,
+      address: address || undefined,
+    };
+
+    onSave(newZone, selectedStoreIds);
+    onClose();
   };
-
-  onSave(newZone, selectedStoreIds);
-  onClose();
-};
   const toggleStore = (storeId: string) => {
     if (selectedStoreIds.includes(storeId)) {
       setSelectedStoreIds(selectedStoreIds.filter((id) => id !== storeId));
@@ -811,83 +811,83 @@ const ZoneManager: React.FC<{
   );
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
- const handleSaveZone = async (
-  newZone: OperationalZone,
-  selectedStoreIds: string[]
-) => {
-  try {
-    // 1. Save or update zone in Supabase
-    const { data: savedZone, error: zoneError } = await supabase
-      .from("operational_zones")
-      .upsert({
-        // Don't include id for new zones - let Supabase generate UUID
-        ...(newZone.id && { id: newZone.id }), // Only include if editing
-        name: newZone.name,
-        color: newZone.color,
-        address: newZone.address,
-        head_branch_id: newZone.headBranchId || null,
-      })
-      .select()
-      .single();
+  const handleSaveZone = async (
+    newZone: OperationalZone,
+    selectedStoreIds: string[]
+  ) => {
+    try {
+      // 1. Save or update zone in Supabase
+      const { data: savedZone, error: zoneError } = await supabase
+        .from("operational_zones")
+        .upsert({
+          // Don't include id for new zones - let Supabase generate UUID
+          ...(newZone.id && { id: newZone.id }), // Only include if editing
+          name: newZone.name,
+          color: newZone.color,
+          address: newZone.address,
+          head_branch_id: newZone.headBranchId || null,
+        })
+        .select()
+        .single();
 
-    if (zoneError) throw zoneError;
+      if (zoneError) throw zoneError;
 
-    // 2. Use the ID that Supabase generated
-    const zoneId = savedZone.id;
+      // 2. Use the ID that Supabase generated
+      const zoneId = savedZone.id;
 
-    // 3. Update store zone assignments in Supabase
-    for (const store of stores) {
-      const shouldBeAssigned = selectedStoreIds.includes(store.id);
-      const currentZoneId = store.zoneId;
+      // 3. Update store zone assignments in Supabase
+      for (const store of stores) {
+        const shouldBeAssigned = selectedStoreIds.includes(store.id);
+        const currentZoneId = store.zoneId;
 
-      // Only update if assignment changed
-      if (
-        (shouldBeAssigned && currentZoneId !== zoneId) ||
-        (!shouldBeAssigned && currentZoneId === zoneId)
-      ) {
-        await supabase
-          .from("stores")
-          .update({
-            zone_id: shouldBeAssigned ? zoneId : null,
-          })
-          .eq("id", store.id);
+        // Only update if assignment changed
+        if (
+          (shouldBeAssigned && currentZoneId !== zoneId) ||
+          (!shouldBeAssigned && currentZoneId === zoneId)
+        ) {
+          await supabase
+            .from("stores")
+            .update({
+              zone_id: shouldBeAssigned ? zoneId : null,
+            })
+            .eq("id", store.id);
+        }
       }
-    }
 
-    // 4. Update local state with the zone from Supabase
-    let updatedZones = [...zones];
-    const existingIdx = zones.findIndex((z) => z.id === zoneId);
-    if (existingIdx > -1) {
-      updatedZones[existingIdx] = {
-        ...newZone,
-        id: zoneId, // Use the database ID
-      };
-    } else {
-      updatedZones.push({
-        ...newZone,
-        id: zoneId, // Use the database ID
+      // 4. Update local state with the zone from Supabase
+      let updatedZones = [...zones];
+      const existingIdx = zones.findIndex((z) => z.id === zoneId);
+      if (existingIdx > -1) {
+        updatedZones[existingIdx] = {
+          ...newZone,
+          id: zoneId, // Use the database ID
+        };
+      } else {
+        updatedZones.push({
+          ...newZone,
+          id: zoneId, // Use the database ID
+        });
+      }
+
+      // 5. Update stores with new zone assignments
+      const updatedStores = stores.map((store) => {
+        if (selectedStoreIds.includes(store.id)) {
+          return { ...store, zoneId: zoneId };
+        }
+        if (store.zoneId === zoneId) {
+          return { ...store, zoneId: undefined };
+        }
+        return store;
       });
+
+      onUpdate(updatedZones, updatedStores);
+
+      alert("Zone saved successfully!");
+    } catch (error: any) {
+      console.error("Error saving zone:", error);
+      alert(`Failed to save zone: ${error.message}`);
     }
-
-    // 5. Update stores with new zone assignments
-    const updatedStores = stores.map((store) => {
-      if (selectedStoreIds.includes(store.id)) {
-        return { ...store, zoneId: zoneId };
-      }
-      if (store.zoneId === zoneId) {
-        return { ...store, zoneId: undefined };
-      }
-      return store;
-    });
-
-    onUpdate(updatedZones, updatedStores);
-
-    alert("Zone saved successfully!");
-  } catch (error: any) {
-    console.error("Error saving zone:", error);
-    alert(`Failed to save zone: ${error.message}`);
-  }
-};
+  };
 
   const handleDeleteZone = async () => {
     if (!deleteId) return;
