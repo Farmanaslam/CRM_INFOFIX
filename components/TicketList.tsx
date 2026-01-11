@@ -14,6 +14,11 @@ import {
   Laptop,
   Smartphone,
   Printer,
+  Activity,
+  AlertCircle,
+  Monitor,
+  X,
+  Calendar,
 } from "lucide-react";
 import {
   Ticket,
@@ -224,6 +229,15 @@ const TicketList: React.FC<TicketListProps> = ({
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [ticketToDelete, setTicketToDelete] = useState<string | null>(null);
 
+  // Filters State
+  const [filterAssignee, setFilterAssignee] = useState<string>("all");
+  const [filterStore, setFilterStore] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [filterDevice, setFilterDevice] = useState<string>("all");
+  const [filterStartDate, setFilterStartDate] = useState<string>("");
+  const [filterEndDate, setFilterEndDate] = useState<string>("");
+
   // --- FILTERING LOGIC ---
   const zoneFilteredTickets = useMemo(() => {
     let result = tickets.filter((t) => t.status !== "Pending Approval");
@@ -244,13 +258,86 @@ const TicketList: React.FC<TicketListProps> = ({
     return result;
   }, [tickets, selectedZoneId, settings.stores, currentUser]);
 
-  const filteredTickets = zoneFilteredTickets.filter(
-    (ticket) =>
-      ticket?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket?.number?.includes(searchTerm) ||
-      ticket?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket?.ticketId?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const normalize = (value?: string) => value?.toString().toLowerCase() || "";
+
+  const filteredTickets = useMemo(() => {
+    return zoneFilteredTickets.filter((ticket) => {
+      // 1. Text Search
+      const search = searchTerm.trim().toLowerCase();
+
+      const matchesSearch =
+        search === "" ||
+        normalize(ticket.subject).includes(search) ||
+        normalize(ticket.customerName).includes(search) ||
+        normalize(ticket.number).includes(search) ||
+        normalize(ticket.mobile).includes(search) ||
+        normalize(ticket.email).includes(search) ||
+        normalize(ticket.ticketId).includes(search) ||
+        normalize(ticket.id).includes(search);
+
+      // 2. Assignee Filter
+      const matchesAssignee =
+        filterAssignee === "all" || ticket.assignedToId === filterAssignee;
+
+      // 3. Store Filter
+      const matchesStore =
+        filterStore === "all" || ticket.store === filterStore;
+
+      // 4. Status Filter
+      const matchesStatus =
+        filterStatus === "all" || ticket.status === filterStatus;
+
+      // 5. Priority Filter
+      const matchesPriority =
+        filterPriority === "all" || ticket.priority === filterPriority;
+
+      // 6. Device Type Filter
+      const matchesDevice =
+        filterDevice === "all" || ticket.deviceType === filterDevice;
+
+      // 7. Date Range Filter
+      let matchesDate = true;
+      if (filterStartDate || filterEndDate) {
+        const ticketDate = new Date(ticket.date);
+
+        // Ensure valid date comparison by stripping time or handling string format
+        if (!isNaN(ticketDate.getTime())) {
+          ticketDate.setHours(0, 0, 0, 0);
+
+          if (filterStartDate) {
+            const start = new Date(filterStartDate);
+            start.setHours(0, 0, 0, 0);
+            if (ticketDate < start) matchesDate = false;
+          }
+          if (filterEndDate && matchesDate) {
+            const end = new Date(filterEndDate);
+            end.setHours(23, 59, 59, 999);
+            if (ticketDate > end) matchesDate = false;
+          }
+        }
+      }
+
+      return (
+        matchesSearch &&
+        matchesAssignee &&
+        matchesStore &&
+        matchesStatus &&
+        matchesPriority &&
+        matchesDevice &&
+        matchesDate
+      );
+    });
+  }, [
+    zoneFilteredTickets,
+    searchTerm,
+    filterAssignee,
+    filterStore,
+    filterStatus,
+    filterPriority,
+    filterDevice,
+    filterStartDate,
+    filterEndDate,
+  ]);
 
   const handleEdit = (ticket: Ticket) => {
     setEditingTicket(ticket);
@@ -292,7 +379,25 @@ const TicketList: React.FC<TicketListProps> = ({
     }
   };*/
   }
+  const clearFilters = () => {
+    setFilterAssignee("all");
+    setFilterStore("all");
+    setFilterStatus("all");
+    setFilterPriority("all");
+    setFilterDevice("all");
+    setFilterStartDate("");
+    setFilterEndDate("");
+    setSearchTerm("");
+  };
 
+  const hasActiveFilters =
+    filterAssignee !== "all" ||
+    filterStore !== "all" ||
+    filterStatus !== "all" ||
+    filterPriority !== "all" ||
+    filterDevice !== "all" ||
+    filterStartDate !== "" ||
+    filterEndDate !== "";
   const handleOpenNew = () => {
     setEditingTicket(null);
     setIsModalOpen(true);
@@ -305,49 +410,203 @@ const TicketList: React.FC<TicketListProps> = ({
   const canDelete =
     currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN";
 
+  // Filter options should respect the current Zone if set
+  const availableStores = useMemo(() => {
+    if (selectedZoneId === "all") return settings.stores;
+    return settings.stores.filter((s) => s.zoneId === selectedZoneId);
+  }, [settings.stores, selectedZoneId]);
+
+  const availableTechs = useMemo(() => {
+    let techs = settings.teamMembers.filter(
+      (m) => m.role === "TECHNICIAN" || m.role === "MANAGER"
+    );
+    if (selectedZoneId !== "all") {
+      techs = techs.filter((t) => t.zoneId === selectedZoneId);
+    }
+    return techs;
+  }, [settings.teamMembers, selectedZoneId]);
+
   return (
     <div className="relative h-full min-h-[calc(100vh-140px)] flex flex-col">
       {/* Header Actions */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-center">
-        {/* Search */}
-        <div className="relative flex-1 w-full">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            size={20}
-          />
-          <input
-            type="text"
-            placeholder="Search tickets in this zone..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none shadow-sm text-slate-700"
-          />
+      <div className="flex flex-col gap-4 mb-6">
+        {/* Row 1: Search & View Toggle */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+          <div className="relative flex-1 w-full">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              size={20}
+            />
+            <input
+              type="text"
+              placeholder="Search tickets by ID, Name, Mobile..."
+              value={searchTerm}
+              onChange={(e) =>
+                setSearchTerm(e.target.value.trim().toLowerCase())
+              }
+              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none shadow-sm text-slate-700"
+            />
+          </div>
+
+          <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm shrink-0">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === "grid"
+                  ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                  : "text-slate-400 hover:text-slate-600"
+              }`}
+              title="Grid View"
+            >
+              <LayoutGrid size={20} />
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === "list"
+                  ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                  : "text-slate-400 hover:text-slate-600"
+              }`}
+              title="List View"
+            >
+              <ListIcon size={20} />
+            </button>
+          </div>
         </div>
 
-        {/* View Toggle */}
-        <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
-          <button
-            onClick={() => setViewMode("grid")}
-            className={`p-2 rounded-lg transition-colors ${
-              viewMode === "grid"
-                ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                : "text-slate-400 hover:text-slate-600"
-            }`}
-            title="Grid View"
-          >
-            <LayoutGrid size={20} />
-          </button>
-          <button
-            onClick={() => setViewMode("list")}
-            className={`p-2 rounded-lg transition-colors ${
-              viewMode === "list"
-                ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                : "text-slate-400 hover:text-slate-600"
-            }`}
-            title="List View"
-          >
-            <ListIcon size={20} />
-          </button>
+        {/* Row 2: Filters */}
+        <div className="flex flex-wrap gap-3 items-center">
+          {/* Date Range Filter */}
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-sm h-9 hover:border-indigo-300 transition-colors">
+            <Calendar size={14} className="text-slate-400" />
+            <input
+              type="date"
+              value={filterStartDate}
+              onChange={(e) => setFilterStartDate(e.target.value)}
+              className="text-xs font-bold text-slate-600 outline-none bg-transparent w-24 cursor-pointer"
+              title="Start Date"
+            />
+            <span className="text-slate-300 text-xs">-</span>
+            <input
+              type="date"
+              value={filterEndDate}
+              onChange={(e) => setFilterEndDate(e.target.value)}
+              className="text-xs font-bold text-slate-600 outline-none bg-transparent w-24 cursor-pointer"
+              title="End Date"
+            />
+          </div>
+
+          {/* Assignee Filter */}
+          {currentUser.role !== "TECHNICIAN" && (
+            <div className="relative group">
+              <User
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <select
+                value={filterAssignee}
+                onChange={(e) => setFilterAssignee(e.target.value)}
+                className="pl-8 pr-8 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 outline-none appearance-none cursor-pointer hover:border-indigo-300 transition-colors shadow-sm focus:ring-2 focus:ring-indigo-500/20 h-9"
+              >
+                <option value="all">All Techs</option>
+                {availableTechs.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Store Filter */}
+          <div className="relative group">
+            <MapPin
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <select
+              value={filterStore}
+              onChange={(e) => setFilterStore(e.target.value)}
+              className="pl-8 pr-8 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 outline-none appearance-none cursor-pointer hover:border-indigo-300 transition-colors shadow-sm focus:ring-2 focus:ring-indigo-500/20 h-9"
+            >
+              <option value="all">All Stores</option>
+              {availableStores.map((s) => (
+                <option key={s.id} value={s.name}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div className="relative group">
+            <Activity
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="pl-8 pr-8 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 outline-none appearance-none cursor-pointer hover:border-indigo-300 transition-colors shadow-sm focus:ring-2 focus:ring-indigo-500/20 h-9"
+            >
+              <option value="all">All Status</option>
+              {settings.ticketStatuses.map((s) => (
+                <option key={s.id} value={s.name}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Priority Filter */}
+          <div className="relative group">
+            <AlertCircle
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <select
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value)}
+              className="pl-8 pr-8 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 outline-none appearance-none cursor-pointer hover:border-indigo-300 transition-colors shadow-sm focus:ring-2 focus:ring-indigo-500/20 h-9"
+            >
+              <option value="all">All Priorities</option>
+              {settings.priorities.map((p) => (
+                <option key={p.id} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Device Filter */}
+          <div className="relative group">
+            <Monitor
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <select
+              value={filterDevice}
+              onChange={(e) => setFilterDevice(e.target.value)}
+              className="pl-8 pr-8 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 outline-none appearance-none cursor-pointer hover:border-indigo-300 transition-colors shadow-sm focus:ring-2 focus:ring-indigo-500/20 h-9"
+            >
+              <option value="all">All Devices</option>
+              {settings.deviceTypes.map((d) => (
+                <option key={d.id} value={d.name}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Clear Filters */}
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-colors h-9"
+            >
+              <X size={14} /> Clear
+            </button>
+          )}
         </div>
       </div>
 

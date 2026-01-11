@@ -91,6 +91,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const isSystemBlank = tickets.length === 0;
 
   // --- STATS ENGINE ---
+  
   const metrics = useMemo(() => {
     const activeTickets = zoneFilteredTickets.filter(
       (t) => t.status !== "Resolved" && t.status !== "Rejected"
@@ -112,10 +113,10 @@ const Dashboard: React.FC<DashboardProps> = ({
     }).length;
 
     // Strict Zonal Customer Filter: Identify unique customers present in the current zone's ticket list
-    const customerEmailsInZone = new Set(
-      zoneFilteredTickets.map((t) => t?.email?.toLowerCase())
+    const customerIdsInZone  = new Set(
+       zoneFilteredTickets.map((t) => t.customerId)
     );
-    const totalCustomersInZone = customers.length;
+    const totalCustomersInZone = customerIdsInZone .size;
 
     return {
       openJobs: activeTickets.length,

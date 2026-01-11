@@ -21,6 +21,7 @@ import {
   Globe,
   Waves,
   Snowflake,
+  Zap,
 } from "lucide-react";
 import { supabase } from "@/supabaseClient";
 import NotificationHub from "./NotificationHub";
@@ -60,8 +61,18 @@ export default function Login({
   const [shake, setShake] = useState(false);
   // Dynamic Theme Mapping
   const theme = {
-    staff: { color: "indigo", hex: "#6366f1" },
-    customer: { color: "emerald", hex: "#10b981" },
+    staff: {
+      primary: "indigo",
+      hex: "#6366f1",
+      gradient: "from-indigo-600 to-purple-600",
+      shadow: "shadow-indigo-500/20",
+    },
+    customer: {
+      primary: "emerald",
+      hex: "#10b981",
+      gradient: "from-emerald-500 to-teal-500",
+      shadow: "shadow-emerald-500/20",
+    },
   }[activeTab];
 
   // Advanced 3D Snow Generation logic
@@ -350,54 +361,37 @@ export default function Login({
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   return (
-    <div
-      className="min-h-screen bg-[#010409] flex items-center justify-center p-4 sm:p-6 font-sans selection:bg-indigo-500/30 overflow-hidden relative"
-      style={{ perspective: "1200px" }}
-    >
-      {/* 3D SNOW WORLD - LAYER 0 & 1 (Background and Midground) */}
-      <div
-        className="absolute inset-0 pointer-events-none z-0 overflow-hidden"
-        style={{ transformStyle: "preserve-3d" }}
-      >
-        {snowflakeLayers
-          .filter((f) => f.z <= 1)
-          .map((flake) => (
-            <div
-              key={flake.id}
-              className="absolute bg-white rounded-full animate-snow-3d"
-              style={
-                {
-                  left: flake.left,
-                  top: "-50px",
-                  width: flake.size,
-                  height: flake.size,
-                  opacity: flake.opacity,
-                  filter: `blur(${flake.blur})`,
-                  animationDuration: flake.duration,
-                  animationDelay: flake.delay,
-                  "--sway": flake.sway,
-                  "--tz": `${flake.tz}px`,
-                } as any
-              }
-            />
-          ))}
-      </div>
+    <div className="h-[100dvh] bg-[#020617] flex items-center justify-center p-4 sm:p-6 font-sans selection:bg-indigo-500/30 overflow-hidden relative isolate">
+      {/* BACKGROUND EFFECTS */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#0f172a_0%,transparent_90%)] opacity-60"></div>
 
-      {/* ATMOSPHERIC GLOW */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#0f172a_0%,transparent_70%)] opacity-80"></div>
+        {/* Animated Orbs */}
         <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-[140px] opacity-10 transition-all duration-1000"
-          style={{ backgroundColor: theme.hex }}
+          className="absolute left-[20%] top-[20%] w-[600px] h-[600px] rounded-full blur-[120px] opacity-20 transition-all duration-[2000ms] animate-pulse"
+          style={{
+            backgroundColor: activeTab === "staff" ? "#6366f1" : "#10b981",
+          }}
+        ></div>
+        <div
+          className="absolute right-[10%] bottom-[10%] w-[500px] h-[500px] rounded-full blur-[100px] opacity-10 transition-all duration-[3000ms]"
+          style={{
+            backgroundColor: activeTab === "staff" ? "#a855f7" : "#06b6d4",
+          }}
+        ></div>
+
+        {/* Stars */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: "radial-gradient(white 1px, transparent 1px)",
+            backgroundSize: "50px 50px",
+            opacity: 0.05,
+          }}
         ></div>
       </div>
 
       <style>{`
-        @keyframes snow-3d {
-          0% { transform: translateY(-10vh) translateX(0) translateZ(var(--tz)); }
-          50% { transform: translateY(50vh) translateX(var(--sway)) translateZ(var(--tz)); }
-          100% { transform: translateY(120vh) translateX(0) translateZ(var(--tz)); }
-        }
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
           20%, 60% { transform: translateX(-6px); }
@@ -405,100 +399,88 @@ export default function Login({
         }
         .animate-shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
         
-        .scrooller::-webkit-scrollbar {
-          width: 5px;
-        }
-        .scrooller::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.01);
-          border-radius: 10px;
-        }
-        .scrooller::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 10px;
-        }
-        .scrooller::-webkit-scrollbar-thumb:hover {
-          background: ${theme.hex}50;
-        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.02); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 
-        .glass-card {
-          background: rgba(13, 17, 23, 0.7);
-          backdrop-filter: blur(40px) saturate(200%);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.8), inset 0 0 1px 1px rgba(255, 255, 255, 0.05);
+        .glass-panel {
+          background: rgba(15, 23, 42, 0.6);
+          backdrop-filter: blur(24px) saturate(180%);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
         
-        .animate-snow-3d {
-          animation-name: snow-3d;
-          animation-iteration-count: infinite;
-          animation-timing-function: linear;
-        }
+        .input-group:focus-within .input-icon { color: ${theme.hex}; transform: translateY(-50%) scale(1.1); }
+        .input-group:focus-within input { border-color: ${theme.hex}60; background: rgba(255,255,255,0.08); }
       `}</style>
 
-      {/* COMPACT AUTH CARD */}
+      {/* LOGIN CARD */}
       <div
-        className={`w-full max-w-[460px] h-full sm:h-auto sm:max-h-[92vh] glass-card rounded-none sm:rounded-[3.5rem] overflow-hidden flex flex-col transition-all duration-700 z-10 ${
+        className={`w-full max-w-[420px] h-full sm:h-auto sm:max-h-[85vh] glass-panel rounded-none sm:rounded-[2.5rem] overflow-hidden flex flex-col transition-all duration-500 z-10 ${
           shake ? "animate-shake" : ""
         }`}
       >
-        {/* Fixed Branding Header */}
-        <div className="px-8 pt-8 pb-3 text-center shrink-0 border-b border-white/5">
-          <div className="inline-flex items-center gap-3 mb-4 animate-in slide-in-from-top-4 duration-700">
+        {/* Header Section */}
+        <div className="px-8 pt-10 pb-6 text-center shrink-0 relative">
+          <div className="flex flex-col items-center gap-4 mb-2 animate-in slide-in-from-top-4 duration-700">
             <div
-              className={`w-10 h-10 bg-${theme.color}-600 rounded-xl flex items-center justify-center text-white shadow-2xl shadow-${theme.color}-500/40 ring-1 ring-white/30 transition-all duration-700`}
+              className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${theme.gradient} flex items-center justify-center shadow-lg ${theme.shadow} mb-2 ring-4 ring-white/5 relative group cursor-default transition-transform hover:scale-105`}
             >
-              <ShieldCheck size={24} strokeWidth={2.5} />
+              {activeTab === "staff" ? (
+                <ShieldCheck size={32} className="text-white" />
+              ) : (
+                <UserIcon size={32} className="text-white" />
+              )}
+              <div className="absolute inset-0 bg-white/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl"></div>
             </div>
-            <div className="text-left">
-              <h1 className="text-lg font-black text-white tracking-tighter uppercase leading-none">
+            <div>
+              <h1 className="text-3xl font-black text-white tracking-tighter drop-shadow-md">
                 INFOFIX{" "}
-                <span className={`text-${theme.color}-400 transition-colors`}>
+                <span
+                  className={`text-transparent bg-clip-text bg-gradient-to-r ${theme.gradient}`}
+                >
                   SERVICES
                 </span>
               </h1>
-              <p className="text-[8px] font-black text-slate-500 uppercase tracking-[0.4em] mt-1 flex items-center gap-1">
-                <span
-                  className={`w-1 h-1 rounded-full bg-${theme.color}-500`}
-                ></span>{" "}
-                SUPPORT
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.25em] mt-1.5 opacity-80">
+                {isSignUp
+                  ? "New Member Registration"
+                  : activeTab === "staff"
+                  ? "Internal System Access"
+                  : "Customer Service Portal"}
               </p>
             </div>
           </div>
-
-          <h2 className="text-xl font-black text-white tracking-tight mb-1">
-            {isSignUp
-              ? "New Registry"
-              : activeTab === "staff"
-              ? "STAFF"
-              : "CUSTOMER SUPPORT"}
-          </h2>
         </div>
 
-        {/* Form Content */}
-        <div className="flex-1 overflow-y-auto scrooller px-8 py-4">
+        {/* Scrollable Form Area */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-8 py-2 min-h-0">
+          {/* Tab Switcher */}
           {!isSignUp && (
-            <div className="pb-4">
-              <div className="bg-white/5 p-1 rounded-2xl flex relative border border-white/5 shadow-inner">
+            <div className="mb-8">
+              <div className="bg-black/20 p-1 rounded-xl flex relative border border-white/5">
                 <div
-                  className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white/10 rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
+                  className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white/10 rounded-lg transition-all duration-300 ease-out shadow-sm border border-white/5 ${
                     activeTab === "customer" ? "left-1" : "left-[calc(50%+1px)]"
                   }`}
                 ></div>
                 <button
                   onClick={() => setActiveTab("customer")}
-                  className={`flex-1 py-2 relative z-10 text-[9px] font-black uppercase tracking-[0.25em] transition-colors duration-500 flex items-center justify-center gap-2 ${
+                  className={`flex-1 py-2.5 relative z-10 text-[10px] font-black uppercase tracking-widest transition-colors duration-300 flex items-center justify-center gap-2 ${
                     activeTab === "customer"
-                      ? `text-${theme.color}-400`
-                      : "text-slate-500"
+                      ? "text-white"
+                      : "text-slate-500 hover:text-slate-300"
                   }`}
                 >
-                  <UserIcon size={12} /> Client
+                  <UserIcon size={12} /> Customers
                 </button>
                 <button
                   onClick={() => setActiveTab("staff")}
-                  className={`flex-1 py-2 relative z-10 text-[9px] font-black uppercase tracking-[0.25em] transition-colors duration-500 flex items-center justify-center gap-2 ${
+                  className={`flex-1 py-2.5 relative z-10 text-[10px] font-black uppercase tracking-widest transition-colors duration-300 flex items-center justify-center gap-2 ${
                     activeTab === "staff"
-                      ? `text-${theme.color}-400`
-                      : "text-slate-500"
+                      ? "text-white"
+                      : "text-slate-500 hover:text-slate-300"
                   }`}
                 >
                   <Shield size={12} /> Staff
@@ -508,190 +490,216 @@ export default function Login({
           )}
 
           {error && (
-            <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] rounded-xl flex items-center gap-2 font-bold animate-in fade-in slide-in-from-top-2">
-              <ShieldAlert size={14} className="shrink-0" />
-              {error}
+            <div className="mb-6 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] rounded-xl flex items-start gap-2.5 font-bold animate-in fade-in slide-in-from-top-2">
+              <ShieldAlert size={16} className="shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleAuth} className="space-y-4">
+          <form onSubmit={handleAuth} className="space-y-5 pb-4">
             {isSignUp ? (
-              <div className="space-y-3 animate-in fade-in duration-500">
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                    Identity Name
+              <div className="space-y-5 animate-in fade-in duration-500">
+                <div className="space-y-1.5 input-group">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Full Name
                   </label>
                   <div className="relative">
                     <UserIcon
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
-                      size={14}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 transition-all duration-300 input-icon"
+                      size={18}
                     />
                     <input
                       type="text"
                       required
                       value={regName}
                       onChange={(e) => setRegName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white outline-none focus:ring-4 ring-indigo-50/10 focus:border-indigo-500 transition-all shadow-inner"
+                      className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold text-white outline-none transition-all placeholder:text-slate-600"
                       placeholder="Enter Full Name"
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                      Email Node
-                    </label>
+                <div className="space-y-1.5 input-group">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 transition-all duration-300 input-icon"
+                      size={18}
+                    />
                     <input
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white outline-none focus:ring-4 ring-indigo-50/10 transition-all shadow-inner"
+                      className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold text-white outline-none transition-all placeholder:text-slate-600"
                       placeholder="user@domain.com"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                      Mobile UID
-                    </label>
+                </div>
+                <div className="space-y-1.5 input-group">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Mobile Number
+                  </label>
+                  <div className="relative">
+                    <Smartphone
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 transition-all duration-300 input-icon"
+                      size={18}
+                    />
                     <input
                       type="tel"
                       required
                       value={regPhone}
-                      onChange={(e) => setRegPhone(e.target.value)}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white outline-none focus:ring-4 ring-indigo-50/10 transition-all shadow-inner"
-                      placeholder="+91..."
+                      onChange={(e) => {
+                        const val = e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 10);
+                        setRegPhone(val);
+                      }}
+                      className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold text-white outline-none transition-all placeholder:text-slate-600"
+                      placeholder="9876543210"
                     />
                   </div>
+                  <p className="text-[9px] text-slate-500 ml-1 flex items-center gap-1">
+                    <Zap size={10} className="text-amber-400" /> Use this number
+                    to login later.
+                  </p>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                    Address Location
+                <div className="space-y-1.5 input-group">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Address
                   </label>
                   <textarea
                     required
                     value={regAddress}
                     onChange={(e) => setRegAddress(e.target.value)}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white outline-none focus:ring-4 ring-indigo-50/10 transition-all h-20 resize-none scrooller shadow-inner"
-                    placeholder="Detailed service address..."
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold text-white outline-none transition-all h-20 resize-none custom-scrollbar placeholder:text-slate-600 focus:bg-white/10 focus:border-white/20"
+                    placeholder="Service location..."
                   />
                 </div>
               </div>
             ) : (
-              <div className="space-y-4 animate-in fade-in duration-500">
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                    Identity ID
+              <div className="space-y-6 animate-in fade-in duration-500">
+                <div className="space-y-1.5 input-group">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Email Address
                   </label>
-                  <div className="relative group">
+                  <div className="relative">
                     <Mail
-                      className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${
+                      className={`absolute left-4 top-1/2 -translate-y-1/2 transition-all duration-300 input-icon ${
                         isEmailValid
-                          ? `text-${theme.color}-400`
+                          ? `text-${theme.primary}-400`
                           : "text-slate-500"
                       }`}
-                      size={14}
+                      size={18}
                     />
                     <input
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white outline-none focus:ring-4 ring-indigo-50/10 focus:border-indigo-500 transition-all shadow-inner"
+                      className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold text-white outline-none transition-all placeholder:text-slate-600"
                       placeholder="user@infofix.com"
                     />
                   </div>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1.5 input-group">
                   <div className="flex justify-between items-center px-1">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                       {activeTab === "staff"
                         ? "Access Cipher"
-                        : "Phone Identity"}
+                        : "Mobile Number"}
                     </label>
                   </div>
                   <div className="relative">
                     {activeTab === "staff" ? (
                       <>
                         <Lock
-                          className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
-                          size={14}
+                          className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 transition-all duration-300 input-icon"
+                          size={18}
                         />
                         <input
                           type={showPassword ? "text" : "password"}
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="w-full pl-10 pr-12 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white outline-none focus:ring-4 ring-indigo-50/10 focus:border-indigo-500 transition-all shadow-inner"
+                          className="w-full pl-12 pr-12 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold text-white outline-none transition-all placeholder:text-slate-600"
                           placeholder="••••••••"
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors p-1"
                         >
                           {showPassword ? (
-                            <EyeOff size={14} />
+                            <EyeOff size={18} />
                           ) : (
-                            <Eye size={14} />
+                            <Eye size={18} />
                           )}
                         </button>
                       </>
                     ) : (
                       <>
                         <Smartphone
-                          className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
-                          size={14}
+                          className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 transition-all duration-300 input-icon"
+                          size={18}
                         />
                         <input
                           type="tel"
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white outline-none focus:ring-4 ring-indigo-50/10 focus:border-indigo-500 transition-all shadow-inner"
-                          placeholder="+91..."
+                          className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold text-white outline-none transition-all placeholder:text-slate-600"
+                          placeholder="9876543210"
                         />
                       </>
                     )}
                   </div>
                 </div>
                 <div
-                  className="flex items-center gap-3 pt-0.5 cursor-pointer group"
+                  className="flex items-center gap-3 pt-1 cursor-pointer group w-fit"
                   onClick={() => setRememberMe(!rememberMe)}
                 >
                   <div
-                    className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
+                    className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all duration-300 ${
                       rememberMe
-                        ? `bg-${theme.color}-600 border-${theme.color}-600 shadow-lg shadow-${theme.color}-500/20`
-                        : "bg-transparent border-white/10 group-hover:border-white/20"
+                        ? `bg-${theme.primary}-500 border-${theme.primary}-500`
+                        : "bg-transparent border-slate-600 group-hover:border-slate-400"
                     }`}
                   >
                     {rememberMe && (
                       <Check size={10} strokeWidth={4} className="text-white" />
                     )}
                   </div>
-                  <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">
-                    Persist Session
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider group-hover:text-slate-200 transition-colors">
+                    Keep Session Active
                   </span>
                 </div>
               </div>
             )}
 
-            <div className="pt-2">
+            <div className="pt-6">
               <button
                 type="submit"
                 disabled={isLoading}
-                className={`w-full py-3.5 bg-${theme.color}-600 text-white font-black rounded-xl shadow-2xl shadow-${theme.color}-500/30 hover:bg-${theme.color}-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50 group active:scale-95 text-xs uppercase tracking-widest`}
+                className={`w-full py-4.5 bg-gradient-to-r ${theme.gradient} text-white font-black rounded-2xl shadow-lg ${theme.shadow} hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:hover:scale-100 group active:scale-95 text-[11px] uppercase tracking-[0.25em] relative overflow-hidden`}
               >
                 {isLoading ? (
-                  <Loader2 className="animate-spin" size={18} />
-                ) : isSignUp ? (
-                  <>
-                    <UserPlus size={16} /> Initialize
-                  </>
+                  <Loader2 className="animate-spin" size={20} />
                 ) : (
                   <>
-                    <LogIn size={16} /> Authorize
+                    <span className="relative z-10 flex items-center gap-2">
+                      {isSignUp ? (
+                        <>
+                          <UserPlus size={18} /> Join Now
+                        </>
+                      ) : (
+                        <>
+                          <LogIn size={18} /> LOGIN
+                        </>
+                      )}
+                    </span>
+                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                   </>
                 )}
               </button>
@@ -699,85 +707,64 @@ export default function Login({
           </form>
         </div>
 
-        {/* FIXED NAVIGATION AREA */}
-        <div className="px-8 py-3 shrink-0 border-t border-white/5 bg-white/2">
+        {/* Footer Navigation */}
+        <div className="px-8 py-5 shrink-0 border-t border-white/5 bg-black/10">
           {activeTab === "customer" && !isSignUp && (
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 animate-in fade-in duration-1000 relative group overflow-hidden">
-              <div
-                className={`absolute -right-4 -bottom-4 w-16 h-16 bg-${theme.color}-500 blur-3xl opacity-10 group-hover:opacity-30 transition-all`}
-              ></div>
-              <div className="flex items-center justify-between mb-2 relative z-10">
-                <h4 className="text-[10px] font-black text-white tracking-tight uppercase">
-                  New Member?
-                </h4>
-                <Sparkles size={12} className="text-amber-400 animate-pulse" />
+            <div
+              className="relative group cursor-pointer"
+              onClick={() => setIsSignUp(true)}
+            >
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl blur opacity-20 group-hover:opacity-50 transition duration-500"></div>
+              <div className="relative p-4 rounded-xl bg-[#0B1120] border border-white/10 flex items-center justify-between group-hover:border-emerald-500/30 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                    <UserPlus size={18} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wide">
+                      New User?
+                    </h4>
+                    <p className="text-[10px] text-slate-400">
+                      Create an account
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight
+                  size={14}
+                  className="text-slate-500 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all"
+                />
               </div>
-              <button
-                type="button"
-                onClick={() => setIsSignUp(true)}
-                className="w-full py-2.5 bg-white text-slate-900 font-black rounded-lg text-[8px] uppercase tracking-[0.25em] hover:bg-slate-200 transition-all flex items-center justify-center gap-2 shadow-xl relative z-10"
-              >
-                Join Registry <ArrowRight size={10} />
-              </button>
             </div>
           )}
-
           {isSignUp && (
-            <div className="py-1 text-center">
+            <div className="text-center">
               <button
                 type="button"
                 onClick={() => setIsSignUp(false)}
-                className="text-slate-500 hover:text-white font-black uppercase tracking-[0.25em] text-[8px] inline-flex items-center gap-2 transition-colors group"
+                className="text-slate-400 hover:text-white font-black uppercase tracking-[0.2em] text-[9px] inline-flex items-center gap-2 transition-colors group py-2"
               >
                 <ArrowLeft
                   size={12}
                   className="group-hover:-translate-x-1 transition-transform"
                 />{" "}
-                Back to Entry
+                Return to Login
               </button>
             </div>
           )}
         </div>
 
-        {/* Card Footer */}
-        <div className="bg-white/5 py-4 px-8 border-t border-white/5 flex justify-between items-center shrink-0">
-          <p className="text-[8px] text-slate-500 font-black uppercase tracking-[0.2em]">
-            © 2025 INFOFIX SERVICE HAPPY TO HELP
-          </p>
-          <div className="flex gap-3">
-            <Globe size={10} className="text-slate-600" />
-            <Shield size={10} className="text-slate-600" />
+        {/* Bottom Bar */}
+        <div className="py-3 px-8 border-t border-white/5 flex justify-between items-center shrink-0 bg-black/20 text-[9px] font-bold text-slate-600 uppercase tracking-wider">
+          <p>© 2025 INFOFIX</p>
+          <div className="flex gap-4">
+            <span className="flex items-center gap-1 hover:text-slate-400 cursor-pointer transition-colors">
+              <Globe size={10} /> EN
+            </span>
+            <span className="flex items-center gap-1 hover:text-slate-400 cursor-pointer transition-colors">
+              <Shield size={10} /> Secure
+            </span>
           </div>
         </div>
-      </div>
-
-      {/* 3D SNOW WORLD - LAYER 2 (Foreground - In front of card) */}
-      <div
-        className="absolute inset-0 pointer-events-none z-20 overflow-hidden"
-        style={{ transformStyle: "preserve-3d" }}
-      >
-        {snowflakeLayers
-          .filter((f) => f.z === 2)
-          .map((flake) => (
-            <div
-              key={flake.id}
-              className="absolute bg-white rounded-full animate-snow-3d"
-              style={
-                {
-                  left: flake.left,
-                  top: "-50px",
-                  width: flake.size,
-                  height: flake.size,
-                  opacity: flake.opacity,
-                  filter: `blur(${flake.blur})`,
-                  animationDuration: flake.duration,
-                  animationDelay: flake.delay,
-                  "--sway": flake.sway,
-                  "--tz": `${flake.tz}px`,
-                } as any
-              }
-            />
-          ))}
       </div>
     </div>
   );

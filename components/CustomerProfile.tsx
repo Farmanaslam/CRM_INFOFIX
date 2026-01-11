@@ -11,7 +11,7 @@ interface CustomerProfileProps {
 }
 
 export default function CustomerProfile({ currentUser, customers, setCustomers, updateCurrentUser, tickets }: CustomerProfileProps) {
-  const customerRecord = customers.find(c => c.email.toLowerCase() === currentUser.email.toLowerCase());
+  const customerRecord = customers.find(c => c?.email?.toLowerCase() === currentUser?.email?.toLowerCase());
 
   // Stats
   const myTickets = tickets.filter(t => t.email.toLowerCase() === currentUser.email.toLowerCase());

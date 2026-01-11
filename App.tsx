@@ -216,6 +216,14 @@ function App() {
   );
   const [isNotificationHubOpen, setIsNotificationHubOpen] = useState(false);
 
+  // Handle PWA Shortcuts
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("action") === "new_ticket") {
+      setIsGlobalTicketModalOpen(true);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
   // isolation: User-specific notification storage key
   const notificationKey = useMemo(() => {
     return currentUser
@@ -241,6 +249,21 @@ function App() {
     };
     setNotifications((prev) => [newNotif, ...prev].slice(0, 50));
   };
+  const isRelevance = useCallback(
+    (t: Ticket) => {
+      if (!currentUser) return false;
+      if (currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN")
+        return true;
+      if (currentUser.role === "MANAGER")
+        return t.zoneId === currentUser.zoneId;
+      if (currentUser.role === "TECHNICIAN")
+        return t.assignedToId === currentUser.id;
+      if (currentUser.role === "CUSTOMER")
+        return t.email.toLowerCase() === currentUser.email.toLowerCase();
+      return false;
+    },
+    [currentUser]
+  );
 
   const syncZone = selectedZoneId === "all" ? "global" : selectedZoneId;
   const [appSettings, setAppSettings] = useSmartSync<AppSettings>(
@@ -346,7 +369,6 @@ function App() {
     fetchTickets();
   }, [currentUser, fetchTickets]);
 
-  // 🔥 FIX: Set up realtime subscription separately
   useEffect(() => {
     if (!supabase || !currentUser) return;
 
@@ -383,11 +405,6 @@ function App() {
     console.log("🔐 Login initiated for:", user.email);
 
     setCurrentUser(user);
-
-    // Removed: Zone filtering on login - keeps selectedZoneId as "all" to show all tickets
-    // if (user.role !== "SUPER_ADMIN" && user.zoneId) {
-    //   setSelectedZoneId(user.zoneId);
-    // }
 
     setCurrentView(
       user.role === "CUSTOMER" ? "customer_dashboard" : "dashboard"
@@ -621,6 +638,7 @@ function App() {
             tickets={tickets}
             customers={customers}
             tasks={tasks}
+            reports={laptopReports}
             settings={appSettings}
             onUpdateSettings={setAppSettings}
           />
