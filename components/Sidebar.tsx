@@ -96,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN'],
       children: [
         { id: 'task_dashboard', label: 'Task Dashboard', icon: LayoutDashboard, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
-        { id: 'task_my_works', label: 'My Work Log', icon: Briefcase, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN'] },
+        { id: 'task_my_works', label: 'My Work', icon: Briefcase, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN'] },
         { id: 'task_schedule', label: 'Schedule', icon: Calendar, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TECHNICIAN'] },
         { id: 'task_reports', label: 'Task Reports', icon: FileText, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] }
       ]

@@ -23,5 +23,27 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
     persistSession: false,
   },
 });
+export const uploadFile = async (file: Blob | File, bucket: string = 'public-files', path?: string): Promise<string | null> => {
+  if (!supabase) return null;
+  
+  try {
+    const fileName = path || `${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const { data, error } = await supabase.storage.from(bucket).upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+
+    if (error) {
+      console.warn(`Supabase Storage upload failed (Bucket: ${bucket}):`, error.message);
+      return null;
+    }
+
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.warn("Unexpected error during file upload:", err);
+    return null;
+  }
+};
 
 export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);

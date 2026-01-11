@@ -45,7 +45,7 @@ id: string;
 export interface OperationalZone {
   id: string;
   name: string;
-  
+    color: string;
   headBranchId?: string;
   address?: string;
   phone?:String |null;
