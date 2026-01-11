@@ -166,6 +166,40 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     }
   }, [isOpen, editingTicket]);
 
+const [stores, setStores] = useState<any[]>([]);
+const [loadingStores, setLoadingStores] = useState(false);
+
+useEffect(() => {
+  if (!isOpen) return;
+
+  const fetchStores = async () => {
+    setLoadingStores(true);
+    try {
+      const { data, error } = await supabase
+        .from("stores")
+        .select("id, name")
+        .order("name");
+
+      if (error) throw error;
+
+      setStores(data || []);
+
+      // 🔥 IMPORTANT: set default store AFTER fetch
+      setFormData((prev) => ({
+        ...prev,
+        store: prev.store || data?.[0]?.name || "",
+      }));
+    } catch (err) {
+      console.error("Failed loading stores", err);
+    } finally {
+      setLoadingStores(false);
+    }
+  };
+
+  fetchStores();
+}, [isOpen]);
+
+
   // Check if selected brand is a Service Brand
   const isServiceBrand = useMemo(() => {
     return settings.serviceBrands.some(
@@ -859,7 +893,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                           }`}
                         >
                           <option value="">Choose Store</option>
-                          {settings.stores.map((s) => (
+                          {stores.map((s) => (
                             <option key={s.id} value={s.name}>
                               {s.name}
                             </option>
