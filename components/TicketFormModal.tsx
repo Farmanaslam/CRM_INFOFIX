@@ -59,6 +59,7 @@ interface TicketFormModalProps {
   currentUser: AppUser;
   editingTicket?: Ticket | null;
   onSuccess?: () => void;
+  onRefresh?: () => Promise<void>;
 }
 
 export const TicketFormModal: React.FC<TicketFormModalProps> = ({
@@ -72,6 +73,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
   currentUser,
   editingTicket,
   onSuccess,
+  onRefresh,
 }) => {
   // UI State
   const [activeTab, setActiveTab] = useState<"details" | "history">("details");
@@ -166,39 +168,38 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     }
   }, [isOpen, editingTicket]);
 
-const [stores, setStores] = useState<any[]>([]);
-const [loadingStores, setLoadingStores] = useState(false);
+  const [stores, setStores] = useState<any[]>([]);
+  const [loadingStores, setLoadingStores] = useState(false);
 
-useEffect(() => {
-  if (!isOpen) return;
+  useEffect(() => {
+    if (!isOpen) return;
 
-  const fetchStores = async () => {
-    setLoadingStores(true);
-    try {
-      const { data, error } = await supabase
-        .from("stores")
-        .select("id, name")
-        .order("name");
+    const fetchStores = async () => {
+      setLoadingStores(true);
+      try {
+        const { data, error } = await supabase
+          .from("stores")
+          .select("id, name")
+          .order("name");
 
-      if (error) throw error;
+        if (error) throw error;
 
-      setStores(data || []);
+        setStores(data || []);
 
-      // 🔥 IMPORTANT: set default store AFTER fetch
-      setFormData((prev) => ({
-        ...prev,
-        store: prev.store || data?.[0]?.name || "",
-      }));
-    } catch (err) {
-      console.error("Failed loading stores", err);
-    } finally {
-      setLoadingStores(false);
-    }
-  };
+        // 🔥 IMPORTANT: set default store AFTER fetch
+        setFormData((prev) => ({
+          ...prev,
+          store: prev.store || data?.[0]?.name || "",
+        }));
+      } catch (err) {
+        console.error("Failed loading stores", err);
+      } finally {
+        setLoadingStores(false);
+      }
+    };
 
-  fetchStores();
-}, [isOpen]);
-
+    fetchStores();
+  }, [isOpen]);
 
   // Check if selected brand is a Service Brand
   const isServiceBrand = useMemo(() => {
@@ -453,15 +454,13 @@ useEffect(() => {
 
         if (insertError) throw insertError;
 
-        setTickets((prev) => [
-          ...prev,
-          {
-            ...newTicket,
-            subject: newTicket.subject, // ✅ makes search & UI work
-            issueDescription: newTicket.subject, // ✅ matches existing UI usage
-            ticketId: newTicket.id, // ✅ prevents ID mismatch
-          } as Ticket,
-        ]);
+        // ✅ Call onRefresh to fetch fresh data from Supabase
+        if (insertError) throw insertError;
+
+        // ✅ Call onRefresh to fetch fresh data from Supabase
+        if (onRefresh) {
+          await onRefresh();
+        }
 
         if (onSuccess) onSuccess();
       }

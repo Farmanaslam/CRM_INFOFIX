@@ -477,6 +477,7 @@ function App() {
             settings={appSettings}
             currentUser={currentUser}
             selectedZoneId={selectedZoneId}
+            onRefresh={fetchTickets}
           />
         );
       case "review_reports":
@@ -544,6 +545,7 @@ function App() {
             savedReports={laptopReports}
             settings={appSettings}
             selectedZoneId={selectedZoneId}
+            onNavigate={setCurrentView}
           />
         );
       case "staff_reports_financial":
@@ -717,6 +719,7 @@ function App() {
           settings={appSettings}
           currentUser={currentUser}
           onSuccess={() => setIsGlobalTicketModalOpen(false)}
+          onRefresh={fetchTickets}
         />
         <NotificationHub
           isOpen={isNotificationHubOpen}

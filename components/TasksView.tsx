@@ -134,29 +134,23 @@ export default function TasksView({
     const completionRate =
       total > 0 ? Math.round((completed / total) * 100) : 0;
 
-    const baseReports =
-      memberFilter === "all"
-        ? accessibleReports
-        : accessibleReports.filter((r) => {
-            const member = teamMembers.find((m) => m.id === memberFilter);
-            return member
-              ? r.deviceInfo.technicianName?.trim().toLowerCase() ===
-                  member.name.trim().toLowerCase()
-              : false;
-          });
-
+    // ✅ FIX: Calculate completed tasks this month from TASKS, not reports
     const currentMonth = new Date().getMonth();
-    const reportsThisMonth = baseReports.filter(
-      (r) => new Date(r.date).getMonth() === currentMonth
-    ).length;
+    const currentYear = new Date().getFullYear();
+
+    const reportsThisMonth = baseTasks.filter((t) => {
+      if (t.status !== "completed") return false;
+      const taskDate = new Date(t.date);
+      return (
+        taskDate.getMonth() === currentMonth &&
+        taskDate.getFullYear() === currentYear
+      );
+    }).length;
     const monthlyTarget =
-      20 *
-      (memberFilter === "all" &&
-      (currentUser.role === "SUPER_ADMIN" ||
-        currentUser.role === "ADMIN" ||
-        currentUser.role === "MANAGER")
-        ? accessibleMembers.length
-        : 1);
+      memberFilter === "all"
+        ? accessibleMembers.length * 20 // All members: total members × 20
+        : 20; // Single member: 20
+
     const targetProgress = Math.min(
       Math.round((reportsThisMonth / (monthlyTarget || 1)) * 100),
       100
@@ -169,7 +163,7 @@ export default function TasksView({
       completionRate,
       reportsThisMonth,
       targetProgress,
-      totalHistory: baseReports.length,
+      totalHistory: completed, // ✅ FIX: Show total completed tasks instead of reports
       monthlyTargetDisplay: monthlyTarget,
     };
   }, [

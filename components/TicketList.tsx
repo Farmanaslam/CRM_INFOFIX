@@ -39,6 +39,7 @@ interface TicketListProps {
   settings: AppSettings;
   currentUser: AppUser;
   selectedZoneId: string;
+   onRefresh?: () => Promise<void>;
 }
 
 // --- Receipt Generation Logic ---
@@ -220,6 +221,7 @@ const TicketList: React.FC<TicketListProps> = ({
   settings,
   currentUser,
   selectedZoneId,
+  onRefresh,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -267,13 +269,12 @@ const TicketList: React.FC<TicketListProps> = ({
 
       const matchesSearch =
         search === "" ||
-        normalize(ticket.subject).includes(search) ||
-        normalize(ticket.customerName).includes(search) ||
-        normalize(ticket.number).includes(search) ||
-        normalize(ticket.mobile).includes(search) ||
-        normalize(ticket.email).includes(search) ||
-        normalize(ticket.ticketId).includes(search) ||
-        normalize(ticket.id).includes(search);
+       normalize(ticket.issueDescription).includes(search) || // Correct field from App.tsx mapping
+normalize(ticket.name).includes(search) ||            // Correct field
+normalize(ticket.brand).includes(search) ||           // Added for better search
+normalize(ticket.model).includes(search) ||           // Added for better search
+normalize(ticket.deviceType).includes(search) ||      // Added for better search
+normalize(ticket.store).includes(search)              // Added for better search
 
       // 2. Assignee Filter
       const matchesAssignee =
@@ -903,6 +904,7 @@ const TicketList: React.FC<TicketListProps> = ({
         currentUser={currentUser}
         editingTicket={editingTicket}
         onSuccess={handleTicketCreated}
+         onRefresh={onRefresh} 
       />
 
       <DeleteConfirmationModal

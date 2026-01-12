@@ -205,6 +205,67 @@ export default function Login({
 
     loadCachedCredentials();
   }, [activeTab]);
+  const handleCustomerSignup = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanPhone = regPhone.trim();
+
+      if (cleanPhone.length !== 10) {
+        throw new Error("Mobile number must be 10 digits");
+      }
+
+      // ✅ STEP 1: CREATE AUTH USER
+      const { data: signUpData, error: signUpError } =
+        await supabase.auth.signUp({
+          email: cleanEmail,
+          password: cleanPhone, // 👈 phone is password
+          options: {
+            data: {
+              role: "CUSTOMER",
+              name: regName,
+            },
+          },
+        });
+
+      if (signUpError) throw signUpError;
+      if (!signUpData.user) throw new Error("Auth user not created");
+
+      const authUser = signUpData.user;
+
+      // ✅ STEP 2: INSERT CUSTOMER PROFILE
+      const { data: customer, error: insertError } = await supabase
+        .from("customers")
+        .insert({
+          auth_id: authUser.id, // 🔥 VERY IMPORTANT
+          name: regName,
+          email: cleanEmail,
+          mobile: cleanPhone,
+          address: regAddress,
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // ✅ STEP 3: AUTO LOGIN
+      onLogin({
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        role: "CUSTOMER",
+        zoneId: "all",
+      });
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Customer signup failed");
+      triggerShake();
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -218,7 +279,11 @@ export default function Login({
       if (activeTab === "staff") {
         await handleStaffLogin(cleanEmail, cleanPass);
       } else {
-        await handleCustomerLogin();
+        if (isSignUp) {
+          await handleCustomerSignup(); // 👈 ADD THIS
+        } else {
+          await handleCustomerLogin();
+        }
       }
     } catch (err: any) {
       console.error("Auth error:", err);

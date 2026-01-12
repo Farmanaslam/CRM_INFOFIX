@@ -201,25 +201,33 @@ export default function TaskManager({
   }, [tasks, teamMembers]);
 
   // 1. Determine which users the current user is allowed to see
-  const accessibleMembers = useMemo(() => {
+const accessibleMembers = useMemo(() => {
     let members = teamMembers;
-    // Role-based visibility
-    if (currentUser.role === "MANAGER") {
+    
+    // ✅ Role-based visibility
+    if (currentUser.role === "SUPER_ADMIN") {
+      // SUPER_ADMIN sees everyone
+      members = teamMembers;
+    } else if (currentUser.role === "ADMIN") {
+      // ADMIN sees everyone except SUPER_ADMIN
+      members = teamMembers.filter((m) => m.role !== "SUPER_ADMIN");
+    } else if (currentUser.role === "MANAGER") {
+      // MANAGER sees only MANAGER and TECHNICIAN (no ADMIN or SUPER_ADMIN)
       members = teamMembers.filter(
-        (m) => m.id === currentUser.id || m.role === "TECHNICIAN"
+        (m) => m.role === "MANAGER" || m.role === "TECHNICIAN"
       );
     } else if (currentUser.role === "TECHNICIAN") {
+      // TECHNICIAN sees only themselves
       members = [currentUser];
     }
 
-    // Zone-based filtering (Fix: added selectedZoneId to dependencies and logic)
+    // Zone-based filtering
     if (selectedZoneId !== "all") {
       members = members.filter((m) => m.zoneId === selectedZoneId);
     }
 
     return members;
   }, [currentUser, teamMembers, selectedZoneId]);
-
   // --- SUB-VIEWS ---
 
   // 1. DASHBOARD VIEW
@@ -651,7 +659,7 @@ export default function TaskManager({
                 className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none appearance-none hover:bg-slate-100 focus:bg-white transition-all cursor-pointer"
               >
                 <option value="all">All Staff</option>
-                {teamMembers.map((m) => (
+                {accessibleMembers.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
                   </option>

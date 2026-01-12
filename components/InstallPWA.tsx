@@ -1,65 +1,48 @@
+import { useEffect, useState } from "react";
+import { Download } from "lucide-react";
 
-import React, { useEffect, useState } from 'react';
-import { Download } from 'lucide-react';
+let deferredPrompt: any = null;
 
-export const InstallPWA = () => {
-  const [supportsPWA, setSupportsPWA] = useState(false);
-  const [promptInstall, setPromptInstall] = useState<any>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
+export function InstallPWA() {
+  const [canInstall, setCanInstall] = useState(false);
 
   useEffect(() => {
-    // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-        setIsInstalled(true);
-    }
+    console.log("🟡 InstallPWA mounted");
 
     const handler = (e: any) => {
+      console.log("🟢 beforeinstallprompt fired");
       e.preventDefault();
-      setSupportsPWA(true);
-      setPromptInstall(e);
-    };
-    
-    const installedHandler = () => {
-        setIsInstalled(true);
-        setSupportsPWA(false);
+      deferredPrompt = e;
+      setCanInstall(true);
     };
 
-    window.addEventListener('beforeinstallprompt', handler);
-    window.addEventListener('appinstalled', installedHandler);
-
-    return () => {
-        window.removeEventListener('beforeinstallprompt', handler);
-        window.removeEventListener('appinstalled', installedHandler);
-    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  const onClick = (evt: React.MouseEvent) => {
-    evt.preventDefault();
-    if (!promptInstall) return;
-    promptInstall.prompt();
-    promptInstall.userChoice.then((choiceResult: any) => {
-      if (choiceResult.outcome === 'accepted') {
-        // console.log('User accepted the install prompt');
-      }
-      setPromptInstall(null);
-      setSupportsPWA(false);
-    });
+  const installApp = async () => {
+    if (!deferredPrompt) return;
+
+    deferredPrompt.prompt();
+    const choice = await deferredPrompt.userChoice;
+
+    if (choice.outcome === "accepted") {
+      console.log("✅ PWA installed");
+    }
+
+    deferredPrompt = null;
+    setCanInstall(false);
   };
 
-  if (!supportsPWA || isInstalled) return null;
+  if (!canInstall) return null;
 
   return (
     <button
-      onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3 mb-2 rounded-xl text-[11px] font-black uppercase tracking-widest bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/20 hover:scale-[1.02] transition-all active:scale-95 group animate-in slide-in-from-left-4 duration-500"
+      onClick={installApp}
+      className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-indigo-600 text-white font-black text-xs uppercase tracking-widest"
     >
-      <div className="p-1.5 bg-white/20 rounded-lg group-hover:bg-white/30 transition-colors">
-        <Download size={14} />
-      </div>
-      <div className="text-left">
-        <span className="block leading-none">Install App</span>
-        <span className="text-[8px] opacity-80 normal-case font-medium">Add to Home Screen</span>
-      </div>
+      <Download size={16} />
+      Install App
     </button>
   );
-};
+}

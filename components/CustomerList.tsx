@@ -94,75 +94,135 @@ const CustomerFormModal: React.FC<{
       }
     }
 
-    if (editingCustomer) {
-      const { data, error } = await supabase
-        .from("customers")
-        .update({
-          name: formData.name,
-          email: formData.email || null,
-          phone: formData.phone,
-          address: formData.address || null,
-          notes: formData.notes || null,
-        })
-        .eq("id", editingCustomer.id)
-        .select("*");
+    try {
+      if (editingCustomer) {
+        // Update existing customer - only update fields that exist
+        const { data, error } = await supabase
+          .from("customers")
+          .update({
+            name: formData.name,
+            email: formData.email || null,
+            phone: formData.phone,
+            address: formData.address || null,
+            notes: formData.notes || null,
+            // Remove updated_at if column doesn't exist
+          })
+          .eq("id", editingCustomer.id)
+          .select("*");
 
-      if (error) {
-        setError("Failed to update customer");
-        return;
+        if (error) {
+          setError("Failed to update customer: " + error.message);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          setCustomers((prev) =>
+            prev.map((c) => (c.id === editingCustomer.id ? data[0] : c))
+          );
+        }
+      } else {
+        // Create new customer - simpler ID generation
+        // Use timestamp-based ID to avoid conflicts
+        const customerId = `CUST-${Date.now().toString().slice(-9)}`;
+
+        // Create auth user if email is provided
+        let authId = null;
+        if (formData.email) {
+          try {
+            const { data: authData, error: authError } =
+              await supabase.auth.signUp({
+                email: formData.email,
+                password: formData.phone + "!Aa1", // Add some complexity for password
+                options: {
+                  data: {
+                    name: formData.name,
+                    phone: formData.phone,
+                    role: "customer",
+                  },
+                },
+              });
+
+            if (authError) {
+              console.warn(
+                "Auth signup failed, proceeding without auth:",
+                authError.message
+              );
+              // Continue without auth - not all customers need auth accounts
+            } else if (authData.user) {
+              authId = authData.user.id;
+            }
+          } catch (authErr) {
+            console.warn("Auth signup error:", authErr);
+            // Continue without auth
+          }
+        }
+
+        // Insert into customers table - only fields that exist
+        const { data: newCustomer, error: dbError } = await supabase
+          .from("customers")
+          .insert({
+            id: customerId,
+            name: formData.name,
+            email: formData.email || null,
+            phone: formData.phone,
+            address: formData.address || null,
+            notes: formData.notes || null,
+            auth_id: authId,
+            // Remove created_at and updated_at if columns don't exist
+          })
+          .select()
+          .single();
+
+        if (dbError) {
+          console.error("Database error:", dbError);
+          if (dbError.code === "23505") {
+            // Unique violation
+            // If there's still a conflict, try one more time with different ID
+            const fallbackId = `CUST-${Date.now()
+              .toString()
+              .slice(-9)}-${Math.random().toString(36).slice(2, 5)}`;
+
+            const { data: retryData, error: retryError } = await supabase
+              .from("customers")
+              .insert({
+                id: fallbackId,
+                name: formData.name,
+                email: formData.email || null,
+                phone: formData.phone,
+                address: formData.address || null,
+                notes: formData.notes || null,
+                auth_id: authId,
+              })
+              .select()
+              .single();
+
+            if (retryError) {
+              setError("Failed to create customer: " + retryError.message);
+              return;
+            }
+
+            if (retryData) {
+              setCustomers((prev) => [retryData, ...prev]);
+            }
+          } else {
+            setError("Failed to create customer: " + dbError.message);
+          }
+          return;
+        }
+
+        if (newCustomer) {
+          setCustomers((prev) => [newCustomer, ...prev]);
+        }
       }
 
-      if (data && data.length > 0) {
-        setCustomers((prev) =>
-          prev.map((c) => (c.id === editingCustomer.id ? data[0] : c))
-        );
-      }
-    } else {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.phone, // phone = password
-      });
-
-      if (authError) {
-        throw authError;
-      }
-
-      // 🔹 STEP 2: get last customer ID
-      const { data: lastCustomer } = await supabase
-        .from("customers")
-        .select("id")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      // 🔹 STEP 3: generate next ID
-      const generateNextCustomerId = (lastId?: string) => {
-        if (!lastId) return "CUST-001";
-
-        const num = parseInt(lastId.split("-")[1], 10) + 1;
-        return `CUST-${num.toString().padStart(3, "0")}`;
-      };
-
-      const customerId = generateNextCustomerId(lastCustomer?.id);
-
-      // 🔹 STEP 4: insert into customers table
-      const { error: dbError } = await supabase.from("customers").insert({
-        id: customerId,
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        address: formData.address || null,
-        auth_id: authData.user?.id, // 🔥 IMPORTANT
-      });
-
-      if (dbError) {
-        throw dbError;
-      }
+      onClose();
+    } catch (error: any) {
+      console.error("Error in handleSubmit:", error);
+      setError(
+        "An unexpected error occurred: " + (error.message || "Unknown error")
+      );
     }
-
-    onClose();
   };
-
   if (!isOpen) return null;
 
   return (
@@ -382,6 +442,9 @@ const CustomerList: React.FC = () => {
         phone: c.phone,
         address: c.address ?? "",
         notes: c.notes ?? "",
+        auth_id: c.auth_id,
+        created_at: c.created_at,
+        updated_at: c.updated_at,
       }))
     );
   };
