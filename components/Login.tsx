@@ -753,7 +753,7 @@ export default function Login({
                   <Loader2 className="animate-spin" size={20} />
                 ) : (
                   <>
-                    <span className="relative z-10 flex items-center gap-2">
+                    <span className="relative z-10 flex items-center gap-2 p-2">
                       {isSignUp ? (
                         <>
                           <UserPlus size={18} /> Join Now

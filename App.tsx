@@ -42,7 +42,7 @@ import {
 import { CloudOff } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
 
-type SyncStatus = "connected" | "local" | "error";
+type SyncStatus = "checking" | "connected" | "local" | "error";
 
 const safeStringify = (v: any) => JSON.stringify(v);
 const safeParse = <T,>(json: string | null, fallback: T): T => {
@@ -53,11 +53,10 @@ const safeParse = <T,>(json: string | null, fallback: T): T => {
     return fallback;
   }
 };
-
 function useSessionStorage<T>(
   key: string,
   initialValue: T
-): [T, React.Dispatch<React.SetStateAction<T>>] {
+): [T, (value: T | ((prev: T) => T)) => void] {
   const [storedValue, setStoredValue] = useState<T>(() => {
     try {
       const item = window.localStorage.getItem(key);
@@ -67,7 +66,6 @@ function useSessionStorage<T>(
     }
   });
 
-  // 🔥 KEY CHANGE HANDLER - Sync with localStorage when key changes
   useEffect(() => {
     try {
       const item = window.localStorage.getItem(key);
@@ -77,10 +75,13 @@ function useSessionStorage<T>(
     }
   }, [key]);
 
-  const setValue = (value: T | ((val: T) => T)) => {
+  const setValue = (value: T | ((prev: T) => T)) => {
     try {
       const valueToStore =
-        value instanceof Function ? value(storedValue) : value;
+        typeof value === "function"
+          ? (value as (prev: T) => T)(storedValue)
+          : value;
+
       setStoredValue(valueToStore);
       window.localStorage.setItem(key, safeStringify(valueToStore));
     } catch {}
@@ -95,7 +96,7 @@ function useSmartSync<T>(
   activeZoneId: string,
   onStatusChange?: (status: SyncStatus) => void,
   onUpdateReceived?: (newData: T) => void
-): [T, (val: T) => void] {
+): [T, (val: T | ((prev: T) => T)) => void] {
   const [data, setData] = useState<T>(() => {
     try {
       return safeParse(
@@ -107,7 +108,10 @@ function useSmartSync<T>(
     }
   });
 
-  const updateData = (newValue: T) => {
+  const updateData = (value: T | ((prev: T) => T)) => {
+    const newValue =
+      typeof value === "function" ? (value as (prev: T) => T)(data) : value;
+
     setData(newValue);
     localStorage.setItem(`${docName}_${activeZoneId}`, safeStringify(newValue));
 
@@ -128,6 +132,7 @@ function useSmartSync<T>(
         });
     }
   };
+
   return [data, updateData];
 }
 
@@ -179,15 +184,36 @@ function App() {
   const [currentView, setCurrentView] = useState<View>("dashboard");
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isBannerVisible, setIsBannerVisible] = useState(true);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>(
-    navigator.onLine ? "connected" : "local"
-  );
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("checking");
+
   const [isGlobalTicketModalOpen, setIsGlobalTicketModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useSessionStorage<User | null>(
     "nexus_current_user_v1",
     null
   );
   const [isNotificationHubOpen, setIsNotificationHubOpen] = useState(false);
+
+  // Health check to determine actual Supabase connectivity
+  useEffect(() => {
+    const checkSupabaseConnection = async () => {
+      if (!supabase) {
+        setSyncStatus("local");
+        return;
+      }
+
+      try {
+        const { error } = await supabase
+          .from("app_data")
+          .select("key")
+          .limit(1);
+        setSyncStatus(error ? "local" : "connected");
+      } catch {
+        setSyncStatus("local");
+      }
+    };
+
+    checkSupabaseConnection();
+  }, []);
 
   // Handle PWA Shortcuts
   useEffect(() => {
@@ -197,31 +223,57 @@ function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
-  // isolation: User-specific notification storage key
-  const notificationKey = useMemo(() => {
-    return currentUser
-      ? `nexus_notifications_${currentUser.id}_v1`
-      : "nexus_notifications_guest_v1";
-  }, [currentUser]);
+  // NEW: global notifications synced across users
+  const [notifications, setNotifications] = useSmartSync<AppNotification[]>(
+    "notifications",
+    [],
+    "global",
+    setSyncStatus
+  );
 
-  const [notifications, setNotifications] = useSessionStorage<
-    AppNotification[]
-  >(notificationKey, []);
   const [selectedZoneId, setSelectedZoneId] = useState<string>("all");
 
   const pushNotification = (
-    notif: Omit<AppNotification, "id" | "timestamp" | "read" | "userId">
+    notif: Omit<
+      AppNotification,
+      "id" | "timestamp" | "read" | "userId" | "userRole"
+    >
   ) => {
     if (!currentUser) return;
+
     const newNotif: AppNotification = {
       ...notif,
       id: Date.now().toString() + Math.random().toString().slice(2, 5),
       userId: currentUser.id,
+      userRole: currentUser.role,
       timestamp: Date.now(),
-      read: false,
+
+      // 🔥 NEW
+      readBy: [],
     };
-    setNotifications((prev) => [newNotif, ...prev].slice(0, 50));
+
+    // --- Notification Permission Logic ---
+    setNotifications((prev) => {
+      // Super admin sees all
+      if (currentUser.role === "SUPER_ADMIN")
+        return [newNotif, ...prev].slice(0, 50);
+
+      // Admin sees all except notifications from SUPER_ADMIN
+      if (currentUser.role === "ADMIN") {
+        return [
+          newNotif,
+          ...prev.filter((n) => n.userRole !== "SUPER_ADMIN"),
+        ].slice(0, 50);
+      }
+
+      // Other roles only see self notifications
+      return [
+        newNotif,
+        ...prev.filter((n) => n.userId === currentUser.id),
+      ].slice(0, 50);
+    });
   };
+
   const isRelevance = useCallback(
     (t: Ticket) => {
       if (!currentUser) return false;
@@ -328,12 +380,11 @@ function App() {
     } finally {
       setIsLoadingTickets(false);
     }
-  }, []); // No dependencies - supabase is constant
+  }, []);
 
-  // 🔥 FIX: Fetch tickets IMMEDIATELY when currentUser changes (on login)
   useEffect(() => {
     if (!supabase || !currentUser) {
-      console.log("⏭️ Skipping ticket fetch - no user or supabase");
+      setSyncStatus("local");
       return;
     }
 
@@ -365,6 +416,32 @@ function App() {
     };
   }, [currentUser, fetchTickets]);
 
+  useEffect(() => {
+    if (!supabase) return;
+
+    const fetchZones = async () => {
+      const { data, error } = await supabase
+        .from("operational_zones")
+        .select("*");
+
+      if (!error && data) {
+        // Map Supabase data to OperationalZone type
+        const zones: OperationalZone[] = data.map((z: any, index: number) => ({
+          id: z.id,
+          name: z.name,
+          color: z.color ?? `indigo-${500 + (index % 4) * 100}`, // fallback color
+        }));
+
+        setAppSettings((prev) => ({
+          ...prev,
+          zones,
+        }));
+      }
+    };
+
+    fetchZones();
+  }, []);
+
   const [tasks, setTasks] = useSmartSync<Task[]>(
     "tasks",
     [],
@@ -385,8 +462,23 @@ function App() {
 
     // 🔥 FIX: Clear any stale tickets before fetching fresh data from Supabase
     setTickets([]);
+    // ✅ SYSTEM LOGIN NOTIFICATION (OLD APP STYLE)
+    setNotifications((prev) => [
+      {
+        id: Date.now().toString(),
+        type: "info",
+        title: "System Access",
+        message: `${user.name} logged into the system.`,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        timestamp: Date.now(),
+        readBy: [],
+      },
+      ...prev,
+    ]);
   };
-  useEffect(() => {
+  /* useEffect(() => {
     if (!currentUser) return;
 
     // Small delay to ensure notification system is ready
@@ -400,7 +492,25 @@ function App() {
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [currentUser?.id]); // Only trigger on user ID change
+  }, [currentUser?.id]);*/ // Only trigger on user ID change
+  const visibleNotifications = useMemo(() => {
+    if (!currentUser) return [];
+
+    return notifications.filter((n) => {
+      // TECHNICIAN: only own notifications
+      if (currentUser.role === "TECHNICIAN") {
+        return n.userId === currentUser.id;
+      }
+
+      // MANAGER: exclude admin & customer
+      if (currentUser.role === "MANAGER") {
+        return !["SUPER_ADMIN", "ADMIN", "CUSTOMER"].includes(n.userRole);
+      }
+
+      // ADMIN & SUPER_ADMIN: see all
+      return true;
+    });
+  }, [notifications, currentUser]);
 
   const renderContent = () => {
     if (!currentUser) return null;
@@ -671,11 +781,27 @@ function App() {
         setIsMobileOpen={setIsMobileOpen}
         currentUser={currentUser}
         onLogout={() => {
-          console.log("👋 Logging out...");
+          if (currentUser) {
+            setNotifications((prev) => [
+              {
+                id: Date.now().toString(),
+                type: "info",
+                title: "Session Ended",
+                message: `${currentUser.name} logged out.`,
+                userId: currentUser.id,
+                userName: currentUser.name,
+                userRole: currentUser.role,
+                timestamp: Date.now(),
+                readBy: [],
+              },
+              ...prev,
+            ]);
+          }
+
           setCurrentUser(null);
           setCurrentView("dashboard");
           setSelectedZoneId("all");
-          setTickets([]); // Clear tickets on logout
+          setTickets([]);
         }}
         syncStatus={syncStatus}
         settings={appSettings}
@@ -687,7 +813,7 @@ function App() {
           onMenuClick={() => setIsMobileOpen(true)}
           title={currentView.replace(/_/g, " ")}
           currentUser={currentUser}
-          notifications={notifications}
+          visibleNotifications={visibleNotifications}
           onBellClick={() => setIsNotificationHubOpen(true)}
         />
         {syncStatus === "local" && isBannerVisible && (

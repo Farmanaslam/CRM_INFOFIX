@@ -27,28 +27,29 @@ export type Role =
   | "ADMIN"
   | "MANAGER"
   | "TECHNICIAN"
-  | "CUSTOMER";
+  | "CUSTOMER"
+  | "SYSTEM";
 
 export interface AppNotification {
-id: string;
+  id: string;
   userId: string; // The specific owner/triggerer of this notification
   userName?: string; // Display name of the user who triggered it
-  userRole?: Role;   // Role of the user who triggered it
+  userRole?: Role; // Role of the user who triggered it
   title: string;
   message: string;
   timestamp: number;
-  type: 'info' | 'success' | 'warning' | 'urgent';
-  read: boolean;
+  type: "info" | "success" | "warning" | "urgent";
   link?: View;
+  readBy: string[];
 }
 
 export interface OperationalZone {
   id: string;
   name: string;
-    color: string;
+  color: string;
   headBranchId?: string;
   address?: string;
-  phone?:String |null;
+  phone?: String | null;
 }
 
 export interface User {
