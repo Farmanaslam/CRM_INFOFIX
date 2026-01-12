@@ -208,11 +208,16 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     );
   }, [formData.brand, settings.serviceBrands]);
 
-  const selectedStoreZone = useMemo(() => {
-    const store = settings.stores.find((s) => s.name === formData.store);
-    if (!store) return null;
-    return settings.zones.find((z) => z.id === store.zoneId);
-  }, [formData.store, settings.stores, settings.zones]);
+const selectedStoreZone = useMemo(() => {
+  if (!settings?.stores?.length || !settings?.zones?.length) return null;
+  const store = settings.stores.find(
+    (s) => s.name === formData.store
+  );
+  if (!store) return null;
+  return settings.zones.find(
+    (z) => z.id.toString() === store.zoneId.toString()
+  );
+}, [formData.store, settings.stores, settings.zones]);
 
   const handleQuickIssue = (issue: string) => {
     setFormData((prev) => ({
