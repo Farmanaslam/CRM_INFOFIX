@@ -72,7 +72,7 @@ export default function BrandElista() {
   const [newProtocol, setNewProtocol] = useState<Partial<BrandProtocol>>({ category: 'Repair' });
   const [searchTerm, setSearchTerm] = useState('');
   const [isCompressing, setIsCompressing] = useState(false);
-  const [viewImage, setViewImage] = useState<string | null>(null);
+  const [viewImage, setViewImage] = useState<string | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
