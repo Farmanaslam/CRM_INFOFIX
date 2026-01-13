@@ -38,6 +38,8 @@ import {
   Report,
   OperationalZone,
   AppNotification,
+  Store,
+  Role,
 } from "./types";
 import { CloudOff } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
@@ -192,6 +194,102 @@ function App() {
     null
   );
   const [isNotificationHubOpen, setIsNotificationHubOpen] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<User[]>([]);
+  const [zones, setZones] = useState<OperationalZone[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [isLoadingTeamData, setIsLoadingTeamData] = useState(false);
+
+  // Add this function to fetch all team-related data
+  const fetchTeamData = useCallback(async () => {
+    if (!supabase) {
+      console.log("Supabase not configured");
+      return;
+    }
+
+    setIsLoadingTeamData(true);
+    try {
+      // Fetch team members
+      const { data: usersData, error: usersError } = await supabase
+        .from("users")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (usersError) throw usersError;
+
+      const transformedUsers: User[] = usersData.map((user) => ({
+        id: user.id,
+        auth_id: user.auth_id,
+        name: user.name,
+        email: user.email,
+        role: user.role as Role,
+        zoneId: user.zone_id || "",
+        storeId: user.store_id || "",
+        mobile: user.mobile || "",
+        photo: user.photo || "",
+        experience: user.experience || "",
+        address: user.address || "",
+        password: user.password || "",
+      }));
+
+      setTeamMembers(transformedUsers);
+
+      // Fetch zones
+      const { data: zonesData, error: zonesError } = await supabase
+        .from("operational_zones")
+        .select("*");
+
+      if (zonesError) throw zonesError;
+
+      const transformedZones: OperationalZone[] = zonesData.map((z: any) => ({
+        id: z.id,
+        name: z.name,
+        color: z.color,
+        address: z.address,
+        headBranchId: z.head_branch_id ?? undefined,
+      }));
+
+      setZones(transformedZones);
+
+      // Fetch stores
+      const { data: storesData, error: storesError } = await supabase
+        .from("stores")
+        .select("*");
+
+      if (storesError) throw storesError;
+
+      const transformedStores: Store[] = storesData.map((s) => ({
+        id: s.id,
+        name: s.name,
+        address: s.address,
+        phone: s.phone,
+        zoneId: s.zone_id ?? undefined,
+      }));
+
+      setStores(transformedStores);
+
+      // Update app settings with fetched data
+      setAppSettings((prev) => ({
+        ...prev,
+        teamMembers: transformedUsers,
+        zones: transformedZones,
+        stores: transformedStores,
+      }));
+
+      console.log("✅ Team data fetched successfully");
+    } catch (error) {
+      console.error("❌ Error fetching team data:", error);
+    } finally {
+      setIsLoadingTeamData(false);
+    }
+  }, []);
+
+  // Replace the existing useEffect that fetches zones (around line 300) with this combined one:
+  useEffect(() => {
+    if (!supabase || !currentUser) return;
+
+    console.log("👥 User logged in, fetching team data...");
+    fetchTeamData();
+  }, [currentUser, fetchTeamData]);
 
   // Health check to determine actual Supabase connectivity
   useEffect(() => {
@@ -416,32 +514,6 @@ function App() {
     };
   }, [currentUser, fetchTickets]);
 
-  useEffect(() => {
-    if (!supabase) return;
-
-    const fetchZones = async () => {
-      const { data, error } = await supabase
-        .from("operational_zones")
-        .select("*");
-
-      if (!error && data) {
-        // Map Supabase data to OperationalZone type
-        const zones: OperationalZone[] = data.map((z: any, index: number) => ({
-          id: z.id,
-          name: z.name,
-          color: z.color ?? `indigo-${500 + (index % 4) * 100}`, // fallback color
-        }));
-
-        setAppSettings((prev) => ({
-          ...prev,
-          zones,
-        }));
-      }
-    };
-
-    fetchZones();
-  }, []);
-
   const [tasks, setTasks] = useSmartSync<Task[]>(
     "tasks",
     [],
@@ -478,21 +550,7 @@ function App() {
       ...prev,
     ]);
   };
-  /* useEffect(() => {
-    if (!currentUser) return;
 
-    // Small delay to ensure notification system is ready
-    const timeoutId = setTimeout(() => {
-      pushNotification({
-        type: "success",
-        title: "Login Successful",
-        message: `Welcome back, ${currentUser.name}!`,
-        link: "dashboard",
-      });
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [currentUser?.id]);*/ // Only trigger on user ID change
   const visibleNotifications = useMemo(() => {
     if (!currentUser) return [];
 
@@ -588,6 +646,9 @@ function App() {
             currentUser={currentUser}
             selectedZoneId={selectedZoneId}
             onRefresh={fetchTickets}
+            teamMembers={teamMembers}
+            zones={zones}
+            stores={stores || []}
           />
         );
       case "review_reports":
@@ -604,7 +665,7 @@ function App() {
             activeTab="dashboard"
             tasks={tasks}
             setTasks={setTasks}
-            teamMembers={appSettings.teamMembers}
+            teamMembers={teamMembers}
             currentUser={currentUser}
             savedReports={laptopReports}
             settings={appSettings}
@@ -617,7 +678,7 @@ function App() {
             activeTab="my_works"
             tasks={tasks}
             setTasks={setTasks}
-            teamMembers={appSettings.teamMembers}
+            teamMembers={teamMembers}
             currentUser={currentUser}
             savedReports={laptopReports}
             settings={appSettings}
@@ -640,7 +701,7 @@ function App() {
             activeTab="reports"
             tasks={tasks}
             setTasks={setTasks}
-            teamMembers={appSettings.teamMembers}
+            teamMembers={teamMembers}
             currentUser={currentUser}
             savedReports={laptopReports}
             settings={appSettings}
@@ -650,7 +711,7 @@ function App() {
       case "staff_reports_dashboard":
         return (
           <StaffReportsDashboard
-            teamMembers={appSettings.teamMembers}
+            teamMembers={teamMembers}
             tasks={tasks}
             savedReports={laptopReports}
             settings={appSettings}
@@ -661,7 +722,7 @@ function App() {
       case "staff_reports_financial":
         return (
           <StaffReportsFinancial
-            teamMembers={appSettings.teamMembers}
+            teamMembers={teamMembers}
             tasks={tasks}
             savedReports={laptopReports}
             settings={appSettings}
@@ -673,7 +734,7 @@ function App() {
         return (
           <StaffRatingsView
             currentUser={currentUser}
-            teamMembers={appSettings.teamMembers}
+            teamMembers={teamMembers}
             tasks={tasks}
             savedReports={laptopReports}
             settings={appSettings}
@@ -742,6 +803,10 @@ function App() {
             onUpdateLaptopReports={setLaptopReports}
             settings={appSettings}
             onUpdateSettings={setAppSettings}
+            teamMembers={teamMembers}
+            zones={zones}
+            stores={stores}
+            onRefreshTeamData={fetchTeamData}
           />
         );
       default:
@@ -846,6 +911,9 @@ function App() {
           currentUser={currentUser}
           onSuccess={() => setIsGlobalTicketModalOpen(false)}
           onRefresh={fetchTickets}
+          teamMembers={teamMembers}
+          zones={zones}
+          stores={stores || []}
         />
         <NotificationHub
           isOpen={isNotificationHubOpen}

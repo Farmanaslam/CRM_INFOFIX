@@ -44,6 +44,8 @@ import {
   AppSettings,
   User as AppUser,
   TicketHistory,
+  OperationalZone,
+  Store,
 } from "../types";
 import { supabase } from "../supabaseClient";
 import jsPDF from "jspdf";
@@ -60,6 +62,9 @@ interface TicketFormModalProps {
   editingTicket?: Ticket | null;
   onSuccess?: () => void;
   onRefresh?: () => Promise<void>;
+  teamMembers: AppUser[];
+  zones: OperationalZone[];
+  stores: Store[];
 }
 
 export const TicketFormModal: React.FC<TicketFormModalProps> = ({
@@ -74,6 +79,9 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
   editingTicket,
   onSuccess,
   onRefresh,
+  teamMembers,
+  zones,
+  stores=[],
 }) => {
   // UI State
   const [activeTab, setActiveTab] = useState<"details" | "history">("details");
@@ -92,7 +100,8 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     chargerIncluded: "No",
     deviceDescription: "",
     issueDescription: "",
-    store: settings?.stores?.[0]?.name || "",
+    store: "",
+
     estimatedAmount: "",
     warranty: "No",
     billNumber: "",
@@ -114,10 +123,8 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     currentUser.role === "MANAGER";
 
   const technicians = useMemo(() => {
-    return settings.teamMembers.filter(
-      (member) => member.role === "TECHNICIAN"
-    );
-  }, [settings.teamMembers]);
+    return (teamMembers || []).filter((member) => member.role === "TECHNICIAN");
+  }, [teamMembers]);
 
   // Quick Issue Chips
   const commonIssues = [
@@ -168,39 +175,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     }
   }, [isOpen, editingTicket]);
 
-  const [stores, setStores] = useState<any[]>([]);
-  const [loadingStores, setLoadingStores] = useState(false);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const fetchStores = async () => {
-      setLoadingStores(true);
-      try {
-        const { data, error } = await supabase
-          .from("stores")
-          .select("id, name")
-          .order("name");
-
-        if (error) throw error;
-
-        setStores(data || []);
-
-        // 🔥 IMPORTANT: set default store AFTER fetch
-        setFormData((prev) => ({
-          ...prev,
-          store: prev.store || data?.[0]?.name || "",
-        }));
-      } catch (err) {
-        console.error("Failed loading stores", err);
-      } finally {
-        setLoadingStores(false);
-      }
-    };
-
-    fetchStores();
-  }, [isOpen]);
-
   // Check if selected brand is a Service Brand
   const isServiceBrand = useMemo(() => {
     return settings.serviceBrands.some(
@@ -208,16 +182,11 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     );
   }, [formData.brand, settings.serviceBrands]);
 
-const selectedStoreZone = useMemo(() => {
-  if (!settings?.stores?.length || !settings?.zones?.length) return null;
-  const store = settings.stores.find(
-    (s) => s.name === formData.store
-  );
-  if (!store) return null;
-  return settings.zones.find(
-    (z) => z.id.toString() === store.zoneId.toString()
-  );
-}, [formData.store, settings.stores, settings.zones]);
+  const selectedStoreZone = useMemo(() => {
+    const store = stores?.find((s) => s.name === formData.store);
+    if (!store) return null;
+    return zones.find((z) => z.id === store.zoneId);
+  }, [formData.store, stores, zones]);
 
   const handleQuickIssue = (issue: string) => {
     setFormData((prev) => ({
@@ -897,11 +866,12 @@ const selectedStoreZone = useMemo(() => {
                           }`}
                         >
                           <option value="">Choose Store</option>
-                          {stores.map((s) => (
-                            <option key={s.id} value={s.name}>
-                              {s.name}
-                            </option>
-                          ))}
+                         {stores?.length > 0 &&
+  stores.map((s) => (
+    <option key={s.id} value={s.name}>
+      {s.name}
+    </option>
+  ))}
                         </select>
                       </div>
 

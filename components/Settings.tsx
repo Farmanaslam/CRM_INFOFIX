@@ -86,6 +86,10 @@ interface SettingsProps {
   onUpdateLaptopReports: (reports: Report[]) => void;
   settings: AppSettings;
   onUpdateSettings: (settings: AppSettings) => void;
+  teamMembers: User[]; // NEW
+  zones: OperationalZone[]; // NEW
+  stores: Store[]; // NEW
+  onRefreshTeamData: () => void; // NEW
 }
 
 // --- SUB-COMPONENTS ---
@@ -2048,11 +2052,12 @@ export default function Settings({
   onUpdateLaptopReports,
   settings,
   onUpdateSettings,
+  teamMembers, // NEW
+  zones, // NEW
+  stores, // NEW
+  onRefreshTeamData,
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<string>("team");
-  const [zones, setZones] = useState<OperationalZone[]>([]);
-  const [stores, setStores] = useState<Store[]>([]);
-  const [loadingZones, setLoadingZones] = useState(true);
 
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<User | undefined>(
@@ -2061,102 +2066,9 @@ export default function Settings({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const [isLoadingTeam, setIsLoadingTeam] = useState(false); // Add loading state
-  const [teamMembers, setTeamMembers] = useState<User[]>([]); // Local state for team members
-
   const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
 
   // Fetch team members from Supabase when component mounts
-
-  useEffect(() => {
-    if (activeSection === "team") {
-      fetchTeamMembers();
-    }
-  }, [activeSection]);
-
-  const fetchTeamMembers = async () => {
-    setIsLoadingTeam(true);
-    try {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      // Transform Supabase data to match your User type
-      const transformedUsers: User[] = data.map((user) => ({
-        id: user.id,
-        auth_id: user.auth_id,
-        name: user.name,
-        email: user.email,
-        role: user.role as Role,
-        zoneId: user.zone_id || "",
-        storeId: user.store_id || "",
-        mobile: user.mobile || "",
-        photo: user.photo || "",
-        experience: user.experience || "",
-        address: user.address || "",
-        password: user.password || "", // Only for display/edit
-      }));
-
-      setTeamMembers(transformedUsers);
-
-      // Also update settings for other parts of the app
-      onUpdateSettings({
-        ...settings,
-        teamMembers: transformedUsers,
-      });
-    } catch (error) {
-      console.error("Error fetching team members:", error);
-    } finally {
-      setIsLoadingTeam(false);
-    }
-  };
-
-  useEffect(() => {
-    const loadZonesAndStores = async () => {
-      setLoadingZones(true);
-
-      const { data: zoneData, error: zoneError } = await supabase
-        .from("operational_zones")
-        .select("*");
-
-      const { data: storeData, error: storeError } = await supabase
-        .from("stores")
-        .select("*");
-
-      if (zoneError || storeError) {
-        console.error(zoneError || storeError);
-        setLoadingZones(false);
-        return;
-      }
-
-      setZones(
-        zoneData.map((z) => ({
-          id: z.id,
-          name: z.name,
-          color: z.color,
-          address: z.address,
-          headBranchId: z.head_branch_id ?? undefined,
-        }))
-      );
-
-      setStores(
-        storeData.map((s) => ({
-          id: s.id,
-          name: s.name,
-          address: s.address,
-          phone: s.phone,
-          zoneId: s.zone_id ?? undefined,
-        }))
-      );
-
-      setLoadingZones(false);
-    };
-
-    loadZonesAndStores();
-  }, []);
 
   const handleZoneUpdate = async (
     updatedZones: OperationalZone[],
@@ -2181,8 +2093,8 @@ export default function Settings({
         .eq("id", s.id);
     }
 
-    setZones(updatedZones);
-    setStores(updatedStores);
+    // Refresh all team data from parent
+    onRefreshTeamData();
   };
 
   const handleStoreUpdate = async (updatedStores: Store[]) => {
@@ -2197,14 +2109,10 @@ export default function Settings({
       });
     }
 
-    setStores(updatedStores);
-
-    // Also update settings for backward compatibility
-    onUpdateSettings({
-      ...settings,
-      stores: updatedStores,
-    });
+    // Refresh all team data from parent
+    onRefreshTeamData();
   };
+
   // --- CLOUD SYNC ENGINE ---
   const handleForceSync = async () => {
     if (!isSupabaseConfigured || !supabase) {
@@ -2326,36 +2234,11 @@ export default function Settings({
       if (dbError) throw dbError;
 
       alert("Staff account created successfully. They can now log in.");
-      // Refresh the team members list
-      fetchTeamMembers();
     } catch (err: any) {
       console.error("Error creating staff:", err);
       alert(`Failed to create staff: ${err.message}`);
     }
     setIsTeamModalOpen(false);
-  };
-
-  const handleDeleteMember = async (id: string) => {
-    try {
-      // Permission check inside the handler as a secondary safeguard
-      const target = teamMembers.find((m) => m.id === id);
-      if (target?.role === "SUPER_ADMIN" && !isSuperAdmin) {
-        alert("Authorization Denied: You cannot delete a Super Admin.");
-        setConfirmDeleteId(null);
-        return;
-      }
-
-      const { error } = await supabase.from("users").delete().eq("id", id);
-
-      if (error) throw error;
-
-      // Refresh team members
-      fetchTeamMembers();
-      setConfirmDeleteId(null);
-    } catch (error: any) {
-      console.error("Error deleting team member:", error);
-      alert(`Failed to delete team member: ${error.message}`);
-    }
   };
 
   const handleSlaUpdate = (key: keyof SLAConfig, value: number) => {
@@ -2515,28 +2398,22 @@ export default function Settings({
       <div className="flex-1 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-6 lg:p-10 overflow-y-auto custom-scrollbar">
         {activeSection === "team" && (
           <TeamManager
-            members={settings.teamMembers}
+            members={teamMembers}
             zones={zones}
             stores={stores}
             tickets={tickets}
-            onUpdate={fetchTeamMembers}
+            onUpdate={onRefreshTeamData}
             currentUser={currentUser}
           />
         )}
         {activeSection === "zones" && (
           <>
-            {loadingZones ? (
-              <div className="flex justify-center items-center h-64">
-                <Loader2 className="animate-spin text-indigo-600" size={32} />
-              </div>
-            ) : (
-              <ZoneManager
-                zones={zones}
-                stores={stores}
-                teamMembers={settings.teamMembers}
-                onUpdate={handleZoneUpdate}
-              />
-            )}
+            <ZoneManager
+              zones={zones}
+              stores={stores}
+              teamMembers={teamMembers}
+              onUpdate={handleZoneUpdate}
+            />
           </>
         )}
 

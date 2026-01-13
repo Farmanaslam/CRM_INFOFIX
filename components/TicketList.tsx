@@ -26,6 +26,7 @@ import {
   AppSettings,
   User as AppUser,
   Store,
+  OperationalZone,
 } from "../types";
 import { TicketFormModal } from "./TicketFormModal";
 import { jsPDF } from "jspdf";
@@ -39,7 +40,10 @@ interface TicketListProps {
   settings: AppSettings;
   currentUser: AppUser;
   selectedZoneId: string;
-   onRefresh?: () => Promise<void>;
+  onRefresh?: () => Promise<void>;
+  teamMembers: AppUser[];
+  zones: OperationalZone[];
+  stores: Store[];
 }
 
 // --- Receipt Generation Logic ---
@@ -222,6 +226,9 @@ const TicketList: React.FC<TicketListProps> = ({
   currentUser,
   selectedZoneId,
   onRefresh,
+  teamMembers,
+  zones,
+  stores = [],
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -246,7 +253,7 @@ const TicketList: React.FC<TicketListProps> = ({
 
     // Zone Filter
     if (selectedZoneId !== "all") {
-      const zoneStoreNames = settings.stores
+      const zoneStoreNames = stores
         .filter((s) => s.zoneId === selectedZoneId)
         .map((s) => s.name);
       result = result.filter((t) => zoneStoreNames.includes(t.store));
@@ -258,7 +265,7 @@ const TicketList: React.FC<TicketListProps> = ({
     }
 
     return result;
-  }, [tickets, selectedZoneId, settings.stores, currentUser]);
+  }, [tickets, selectedZoneId, stores, currentUser]);
 
   const normalize = (value?: string) => value?.toString().toLowerCase() || "";
 
@@ -269,12 +276,12 @@ const TicketList: React.FC<TicketListProps> = ({
 
       const matchesSearch =
         search === "" ||
-       normalize(ticket.issueDescription).includes(search) || // Correct field from App.tsx mapping
-normalize(ticket.name).includes(search) ||            // Correct field
-normalize(ticket.brand).includes(search) ||           // Added for better search
-normalize(ticket.model).includes(search) ||           // Added for better search
-normalize(ticket.deviceType).includes(search) ||      // Added for better search
-normalize(ticket.store).includes(search)              // Added for better search
+        normalize(ticket.issueDescription).includes(search) || // Correct field from App.tsx mapping
+        normalize(ticket.name).includes(search) || // Correct field
+        normalize(ticket.brand).includes(search) || // Added for better search
+        normalize(ticket.model).includes(search) || // Added for better search
+        normalize(ticket.deviceType).includes(search) || // Added for better search
+        normalize(ticket.store).includes(search); // Added for better search
 
       // 2. Assignee Filter
       const matchesAssignee =
@@ -413,19 +420,19 @@ normalize(ticket.store).includes(search)              // Added for better search
 
   // Filter options should respect the current Zone if set
   const availableStores = useMemo(() => {
-    if (selectedZoneId === "all") return settings.stores;
-    return settings.stores.filter((s) => s.zoneId === selectedZoneId);
-  }, [settings.stores, selectedZoneId]);
+    if (selectedZoneId === "all") return stores;
+    return stores.filter((s) => s.zoneId === selectedZoneId);
+  }, [stores, selectedZoneId]);
 
   const availableTechs = useMemo(() => {
-    let techs = settings.teamMembers.filter(
+    let techs = teamMembers.filter(
       (m) => m.role === "TECHNICIAN" || m.role === "MANAGER"
     );
     if (selectedZoneId !== "all") {
       techs = techs.filter((t) => t.zoneId === selectedZoneId);
     }
     return techs;
-  }, [settings.teamMembers, selectedZoneId]);
+  }, [teamMembers, selectedZoneId]);
 
   return (
     <div className="relative h-full min-h-[calc(100vh-140px)] flex flex-col">
@@ -904,7 +911,11 @@ normalize(ticket.store).includes(search)              // Added for better search
         currentUser={currentUser}
         editingTicket={editingTicket}
         onSuccess={handleTicketCreated}
-         onRefresh={onRefresh} 
+        onRefresh={onRefresh}
+        selectedZoneId={selectedZoneId}
+        teamMembers={teamMembers}
+        stores={stores}
+        zones={zones}
       />
 
       <DeleteConfirmationModal
