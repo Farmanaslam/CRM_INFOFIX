@@ -39,13 +39,14 @@ import {
   Activity,
   Layers,
   Shield,
-  User,
+  User as UserIcon,
 } from "lucide-react";
 import { Ticket, AppSettings } from "../types";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-
+import { User } from "../types";
 interface ReportsProps {
+  currentUser: User;
   tickets: Ticket[];
   settings: AppSettings;
 }
@@ -70,7 +71,11 @@ const PIE_COLORS = [
   "#06b6d4",
 ];
 
-export default function Reports({ tickets, settings }: ReportsProps) {
+export default function Reports({
+  tickets,
+  settings,
+  currentUser,
+}: ReportsProps) {
   // --- STATE ---
   const [timeFilter, setTimeFilter] = useState<"7d" | "30d" | "90d" | "all">(
     "30d"
@@ -234,6 +239,24 @@ export default function Reports({ tickets, settings }: ReportsProps) {
     };
   }, [filteredData, settings.teamMembers]);
 
+  const accessibleStaff = useMemo(() => {
+    switch (currentUser.role) {
+      case "SUPER_ADMIN":
+        return settings.teamMembers;
+
+      case "ADMIN":
+        return settings.teamMembers.filter((m) => m.role !== "SUPER_ADMIN");
+
+      case "MANAGER":
+        return settings.teamMembers.filter(
+          (m) => m.role !== "ADMIN" && m.role !== "SUPER_ADMIN"
+        );
+
+      default:
+        return [];
+    }
+  }, [settings.teamMembers, currentUser.role]);
+
   // --- EXPORT PDF ---
   const handleExportPDF = async () => {
     const element = document.getElementById("report-dashboard");
@@ -342,7 +365,7 @@ export default function Reports({ tickets, settings }: ReportsProps) {
 
               {/* Member Filter */}
               <div className="relative shrink-0">
-                <User
+                <UserIcon
                   size={14}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
                 />
@@ -352,7 +375,7 @@ export default function Reports({ tickets, settings }: ReportsProps) {
                   className="pl-8 pr-8 py-2 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer min-w-[120px]"
                 >
                   <option value="All">All Staff</option>
-                  {settings.teamMembers
+                  {accessibleStaff
                     .filter(
                       (m) => roleFilter === "All" || m.role === roleFilter
                     )

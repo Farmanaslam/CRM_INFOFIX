@@ -722,12 +722,14 @@ function App() {
       case "staff_reports_financial":
         return (
           <StaffReportsFinancial
+            currentUser={currentUser}
             teamMembers={teamMembers}
             tasks={tasks}
             savedReports={laptopReports}
             settings={appSettings}
             onUpdateSettings={setAppSettings}
             selectedZoneId={selectedZoneId}
+            
           />
         );
       case "staff_reports_ratings":
@@ -777,7 +779,7 @@ function App() {
       case "brand_elista":
         return <BrandElista />;
       case "reports":
-        return <Reports tickets={tickets} settings={appSettings} />;
+        return <Reports currentUser={currentUser} tickets={tickets} settings={appSettings} />;
       case "supports":
         return (
           <Supports
