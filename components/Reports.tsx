@@ -207,7 +207,8 @@ export default function Reports({
     // 5. Status Distribution
     const statusCounts: Record<string, number> = {};
     filteredData.forEach((t) => {
-      statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
+      const statusKey = t.status.trim().toLowerCase(); // normalize
+      statusCounts[statusKey] = (statusCounts[statusKey] || 0) + 1;
     });
     const statusData = Object.keys(statusCounts).map((key) => ({
       name: key,
@@ -574,6 +575,7 @@ export default function Reports({
           </div>
 
           {/* STATUS DISTRIBUTION */}
+          {/* STATUS DISTRIBUTION */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
             <h3 className="font-bold text-slate-800 text-lg mb-2">
               Service Status
@@ -591,20 +593,41 @@ export default function Reports({
                       paddingAngle={5}
                       dataKey="value"
                     >
-                      {analytics.statusData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={PIE_COLORS[index % PIE_COLORS.length]}
-                        />
-                      ))}
+                      {analytics.statusData.map((entry, index) => {
+                        const statusKey = entry.name.toLowerCase();
+                        const STATUS_COLORS: Record<string, string> = {
+                          new: "#3B82F6", // Blue
+                          delivery: "#F59E0B", // Amber
+                          hold: "#F97316", // Orange
+                          "in progress": "#6366F1", // Indigo
+                          "pending approval": "#FACC15", // Yellow
+                          rejected: "#EF4444", // Red
+                          resolved: "#10B981", // Green
+                          "service done": "#EC4899", // Pink
+                        };
+                        const fillColor = STATUS_COLORS[statusKey] || "#64748b";
+                        return <Cell key={`cell-${index}`} fill={fillColor} />;
+                      })}
                     </Pie>
+
                     <Tooltip />
+
                     <Legend
                       verticalAlign="bottom"
                       height={36}
                       iconType="circle"
                       iconSize={8}
                       wrapperStyle={{ fontSize: "11px" }}
+                      formatter={(value: string) => {
+                        // Capitalize first letter of each word
+                        return value
+                          .split(" ")
+                          .map(
+                            (word) =>
+                              word.charAt(0).toUpperCase() + word.slice(1)
+                          )
+                          .join(" ");
+                      }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -686,51 +709,73 @@ export default function Reports({
             <h3 className="font-bold text-slate-800 text-lg mb-6 flex items-center gap-2">
               <Layers size={20} className="text-indigo-600" /> Device Breakdown
             </h3>
-            <div className="relative w-full h-[300px]">
+            <div className="relative w-full h-[300px]" tabIndex={-1}>
               <div className="absolute inset-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={analytics.deviceData}
-                    layout="vertical"
-                    margin={{ top: 0, right: 30, left: 40, bottom: 0 }}
+                <div
+                  className="chart-container relative w-full h-[300px] focus:outline-none select-none"
+                  tabIndex={-1}
+                >
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                    className="focus:outline-none "
                   >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      horizontal={true}
-                      vertical={false}
-                      stroke="#f1f5f9"
-                    />
-                    <XAxis type="number" hide />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      width={100}
-                      tick={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        fill: COLORS.slate,
-                      }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <Tooltip
-                      cursor={{ fill: "#f8fafc" }}
-                      contentStyle={{
-                        borderRadius: "8px",
-                        border: "none",
-                        boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
-                      }}
-                    />
-                    <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={24}>
-                      {analytics.deviceData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={PIE_COLORS[index % PIE_COLORS.length]}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                    <BarChart
+                      data={analytics.deviceData}
+                      layout="vertical"
+                      margin={{ top: 0, right: 30, left: 40, bottom: 0 }}
+                      className="focus:outline-none"
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        horizontal
+                        vertical={false}
+                        stroke="#f1f5f9"
+                        className="focus:outline-none"
+                      />
+                      <XAxis
+                        type="number"
+                        hide
+                        className="focus:outline-none"
+                      />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        width={100}
+                        tick={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          fill: COLORS.slate,
+                        }}
+                        tickLine={false}
+                        axisLine={false}
+                        className="focus:outline-none"
+                      />
+                      <Tooltip
+                        cursor={{ fill: "#f8fafc" }}
+                        contentStyle={{
+                          borderRadius: "8px",
+                          border: "none",
+                          boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                        }}
+                      />
+                      <Bar
+                        dataKey="count"
+                        radius={[0, 4, 4, 0]}
+                        barSize={24}
+                        className="focus:outline-none"
+                      >
+                        {analytics.deviceData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={PIE_COLORS[index % PIE_COLORS.length]}
+                            className="focus:outline-none"
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
           </div>

@@ -7,10 +7,7 @@ export function InstallPWA() {
   const [canInstall, setCanInstall] = useState(false);
 
   useEffect(() => {
-    console.log("🟡 InstallPWA mounted");
-
     const handler = (e: any) => {
-      console.log("🟢 beforeinstallprompt fired");
       e.preventDefault();
       deferredPrompt = e;
       setCanInstall(true);

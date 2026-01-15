@@ -1735,6 +1735,10 @@ const TeamManager: React.FC<{
     }
   };
 
+  const isSuperAdminLocked = (memberRole: string) => {
+    return currentUser.role === "ADMIN" && memberRole === "SUPER_ADMIN";
+  };
+
   const getRoleColor = (role: Role) => {
     switch (role) {
       case "SUPER_ADMIN":
@@ -1829,20 +1833,32 @@ const TeamManager: React.FC<{
                 </span>
                 <div className="flex gap-1 z-10 relative">
                   <button
+                    title={
+                      isSuperAdminLocked(member.role)
+                        ? "Admins cannot modify Super Admins"
+                        : "Edit user"
+                    }
                     onClick={() => {
                       setEditingMember(member);
                       setIsModalOpen(true);
                     }}
+                    disabled={isSuperAdminLocked(member.role)}
                     className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-indigo-600 transition-colors"
                   >
                     <Edit2 size={16} />
                   </button>
                   {currentUser.id !== member.id && (
                     <button
+                      title={
+                        isSuperAdminLocked(member.role)
+                          ? "Admins cannot modify Super Admins"
+                          : "Edit user"
+                      }
                       onClick={(e) => {
                         e.stopPropagation();
                         setDeleteId(member.id);
                       }}
+                      disabled={isSuperAdminLocked(member.role)}
                       className="p-2 hover:bg-red-50 rounded-xl text-slate-400 hover:text-red-600 transition-colors"
                     >
                       <Trash2 size={16} />

@@ -81,7 +81,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
   onRefresh,
   teamMembers,
   zones,
-  stores=[],
+  stores = [],
 }) => {
   // UI State
   const [activeTab, setActiveTab] = useState<"details" | "history">("details");
@@ -346,7 +346,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
       }
 
       const ticketId = `TKT-IF-${nextNumber.toString().padStart(3, "0")}`;
-      console.log("Generated Ticket ID:", ticketId);
 
       // 3️⃣ Create / Update Ticket
       if (editingTicket) {
@@ -866,12 +865,12 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                           }`}
                         >
                           <option value="">Choose Store</option>
-                         {stores?.length > 0 &&
-  stores.map((s) => (
-    <option key={s.id} value={s.name}>
-      {s.name}
-    </option>
-  ))}
+                          {stores?.length > 0 &&
+                            stores.map((s) => (
+                              <option key={s.id} value={s.name}>
+                                {s.name}
+                              </option>
+                            ))}
                         </select>
                       </div>
 

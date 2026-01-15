@@ -202,7 +202,6 @@ function App() {
   // Add this function to fetch all team-related data
   const fetchTeamData = useCallback(async () => {
     if (!supabase) {
-      console.log("Supabase not configured");
       return;
     }
 
@@ -274,8 +273,6 @@ function App() {
         zones: transformedZones,
         stores: transformedStores,
       }));
-
-      console.log("✅ Team data fetched successfully");
     } catch (error) {
       console.error("❌ Error fetching team data:", error);
     } finally {
@@ -286,8 +283,6 @@ function App() {
   // Replace the existing useEffect that fetches zones (around line 300) with this combined one:
   useEffect(() => {
     if (!supabase || !currentUser) return;
-
-    console.log("👥 User logged in, fetching team data...");
     fetchTeamData();
   }, [currentUser, fetchTeamData]);
 
@@ -420,7 +415,6 @@ function App() {
       return;
     }
 
-    console.log("🎫 Fetching tickets from Supabase...");
     setIsLoadingTickets(true);
 
     try {
@@ -434,8 +428,6 @@ function App() {
         setSyncStatus("error");
         return;
       }
-
-      console.log(`✅ Fetched ${data?.length || 0} tickets from Supabase`);
 
       const mapped: Ticket[] = data.map((t) => ({
         id: t.id,
@@ -486,7 +478,6 @@ function App() {
       return;
     }
 
-    console.log("👤 User logged in, fetching tickets...");
     // Add a small delay to ensure all state updates have propagated
     fetchTickets();
   }, [currentUser, fetchTickets]);
@@ -494,22 +485,18 @@ function App() {
   useEffect(() => {
     if (!supabase || !currentUser) return;
 
-    console.log("🔄 Setting up realtime subscription...");
-
     const channel = supabase
       .channel("tickets-realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "tickets" },
         (payload) => {
-          console.log("🔔 Realtime update received:", payload);
           fetchTickets();
         }
       )
       .subscribe();
 
     return () => {
-      console.log("🔌 Unsubscribing from realtime...");
       supabase.removeChannel(channel);
     };
   }, [currentUser, fetchTickets]);
@@ -524,8 +511,6 @@ function App() {
 
   // 🔥 FIX: handleLogin now properly triggers ticket fetch
   const handleLogin = async (user: User) => {
-    console.log("🔐 Login initiated for:", user.email);
-
     setCurrentUser(user);
 
     setCurrentView(
@@ -729,7 +714,6 @@ function App() {
             settings={appSettings}
             onUpdateSettings={setAppSettings}
             selectedZoneId={selectedZoneId}
-            
           />
         );
       case "staff_reports_ratings":
@@ -779,7 +763,13 @@ function App() {
       case "brand_elista":
         return <BrandElista />;
       case "reports":
-        return <Reports currentUser={currentUser} tickets={tickets} settings={appSettings} />;
+        return (
+          <Reports
+            currentUser={currentUser}
+            tickets={tickets}
+            settings={appSettings}
+          />
+        );
       case "supports":
         return (
           <Supports

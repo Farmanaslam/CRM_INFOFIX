@@ -200,6 +200,7 @@ export interface OfficialPerformanceRecord {
   salaryAmount?: number;
   otherExpenses?: number;
   zoneId?: string;
+  type: "attendance" | "merit";
 }
 
 export interface AppSettings {
