@@ -122,7 +122,7 @@ serve(async (req: Request) => {
 
        <p style="margin-top: 30px;">
          Thank you,<br/>
-         <strong>Infofix Support Team</strong>
+         <strong>InfoFix Support Team</strong>
        </p>
      </div>`,
           payload,
