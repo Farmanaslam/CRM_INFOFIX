@@ -267,6 +267,47 @@ export default function Schedule({
     }
   };
 
+  const SUPABASE_FUNCTION_URL =
+    "https://jajnueotoourhmfupepb.functions.supabase.co/sendEmail";
+  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const notifyTaskAssignment = async (
+    task: Task,
+    assignee: AppUser | undefined
+  ) => {
+    if (!assignee?.email) return;
+
+    try {
+      const res = await fetch(SUPABASE_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          type: "TASK_ASSIGNED",
+          payload: {
+            taskId: task.id,
+            title: task.title,
+            description: task.description,
+            priority: task.priority || "medium",
+          },
+          user: {
+            id: assignee.id,
+            name: assignee.name,
+            email: assignee.email,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Edge Function Error:", text);
+      }
+    } catch (err) {
+      console.error("Failed to send task assignment email:", err);
+    }
+  };
+
   const handleSaveTask = async (task: Task) => {
     // Validate assigned user exists in profiles
     if (task.assignedToId) {
@@ -343,7 +384,16 @@ export default function Schedule({
       }
 
       if (data) {
-        setTasks(tasks.map((t) => (t.id === data.id ? mapDbTask(data) : t)));
+        const updatedTask = mapDbTask(data);
+
+        setTasks(tasks.map((t) => (t.id === data.id ? updatedTask : t)));
+
+        // 🔥 SEND EMAIL IF ASSIGNEE CHANGED OR TASK UPDATED
+        const assignee = settings.teamMembers.find(
+          (m) => m.id === updatedTask.assignedToId
+        );
+
+        await notifyTaskAssignment(updatedTask, assignee);
       }
     } else {
       // INSERT
@@ -376,7 +426,14 @@ export default function Schedule({
       }
 
       if (data) {
-        setTasks([...tasks, mapDbTask(data)]);
+        const newTask = mapDbTask(data);
+        setTasks([...tasks, newTask]);
+
+        // 🔥 SEND EMAIL TO ASSIGNED PERSON
+        const assignee = settings.teamMembers.find(
+          (m) => m.id === newTask.assignedToId
+        );
+        await notifyTaskAssignment(newTask, assignee);
       }
     }
 

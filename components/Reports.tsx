@@ -201,7 +201,7 @@ export default function Reports({
       trendMap[dateKey].tickets++;
     });
     const trendData = Object.values(trendMap).sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
     // 5. Status Distribution

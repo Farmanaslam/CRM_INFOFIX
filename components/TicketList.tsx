@@ -46,11 +46,45 @@ interface TicketListProps {
   stores: Store[];
 }
 
+// Add this helper function right after the imports and before the TicketList component
+const fetchCustomerForTicket = async (
+  customerId: string
+): Promise<Customer | null> => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("customers")
+    .select("*")
+    .eq("id", customerId)
+    .single();
+
+  if (error) {
+    console.error("Error fetching customer:", error);
+    return null;
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    email: data.email,
+    mobile: data.mobile,
+    address: data.address,
+  };
+};
 // --- Receipt Generation Logic ---
-export const generateTicketReceipt = (
+export const generateTicketReceipt = async (
   ticket: Ticket,
-  settings: AppSettings
+  settings: AppSettings,
+  shouldSave: boolean = false
 ) => {
+  // 🔥 FETCH CUSTOMER DATA
+  const customer = await fetchCustomerForTicket(ticket.customerId);
+
+  if (!customer) {
+    alert("Unable to fetch customer data. Please try again.");
+    return;
+  }
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -85,14 +119,14 @@ export const generateTicketReceipt = (
   doc.setDrawColor(230, 230, 230);
   doc.line(15, 60, pageWidth - 15, 60);
 
-  // Section: Customer Info
+  // Section: Customer Info - 🔥 NOW USING FETCHED CUSTOMER DATA
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
   doc.text("Customer Information", 15, 72);
   doc.setFont("helvetica", "normal");
-  doc.text(`Name: ${ticket.name}`, 15, 80);
-  doc.text(`Mobile: ${ticket.number}`, 15, 86);
-  doc.text(`Email: ${ticket.email}`, 15, 92);
+  doc.text(`Name: ${customer.name}`, 15, 80);
+  doc.text(`Mobile: ${customer.mobile}`, 15, 86);
+  doc.text(`Email: ${customer.email}`, 15, 92);
 
   // Section: Device Info
   doc.setFont("helvetica", "bold");
@@ -115,7 +149,7 @@ export const generateTicketReceipt = (
   );
   doc.text(issueLines, 20, 115);
 
-  // --- LOGIN CREDENTIALS SECTION ---
+  // --- LOGIN CREDENTIALS SECTION - 🔥 NOW USING CUSTOMER DATA ---
   doc.setFillColor(238, 242, 255); // Indigo-50
   doc.setDrawColor(199, 210, 254); // Indigo-200
   doc.roundedRect(15, 140, pageWidth - 30, 45, 3, 3, "FD");
@@ -136,8 +170,8 @@ export const generateTicketReceipt = (
 
   doc.setFontSize(11);
   doc.setTextColor(30, 41, 59);
-  doc.text(`Portal Login ID: ${ticket.email}`, 25, 168);
-  doc.text(`Default Password: ${ticket.number}`, 25, 175);
+  doc.text(`Portal Login ID: ${customer.email}`, 25, 168);
+  doc.text(`Default Password: ${customer.mobile}`, 25, 175);
   doc.setFontSize(8);
   doc.text("(Password is your registered mobile number)", 25, 180);
 
@@ -172,8 +206,16 @@ export const generateTicketReceipt = (
   doc.text(`${storeAddress} • Tel: ${storePhone}`, pageWidth / 2, 280, {
     align: "center",
   });
+  if (shouldSave) {
+    doc.save(`Receipt_${ticket.ticketId}.pdf`);
+  }
+  // Convert PDF to Base64 and RETURN it (for emailing)
+  const pdfBase64 = doc.output("datauristring");
 
-  doc.save(`Receipt_${ticket.ticketId}.pdf`);
+  return {
+    fileName: `Receipt_${ticket.ticketId}.pdf`,
+    base64: pdfBase64.split(",")[1],
+  };
 };
 
 // --- Delete Confirmation Modal ---
@@ -276,12 +318,12 @@ const TicketList: React.FC<TicketListProps> = ({
 
       const matchesSearch =
         search === "" ||
-        normalize(ticket.issueDescription).includes(search) || // Correct field from App.tsx mapping
-        normalize(ticket.name).includes(search) || // Correct field
-        normalize(ticket.brand).includes(search) || // Added for better search
-        normalize(ticket.model).includes(search) || // Added for better search
-        normalize(ticket.deviceType).includes(search) || // Added for better search
-        normalize(ticket.store).includes(search); // Added for better search
+        normalize(ticket.issueDescription).includes(search) ||
+        normalize(ticket.name).includes(search) ||
+        normalize(ticket.brand).includes(search) ||
+        normalize(ticket.model).includes(search) ||
+        normalize(ticket.deviceType).includes(search) ||
+        normalize(ticket.store).includes(search);
 
       // 2. Assignee Filter
       const matchesAssignee =
@@ -379,14 +421,6 @@ const TicketList: React.FC<TicketListProps> = ({
     }
   };
 
-  {
-    /*} const confirmDelete = () => {
-    if (ticketToDelete) {
-      setTickets(tickets.filter(t => t.id !== ticketToDelete));
-      setTicketToDelete(null);
-    }
-  };*/
-  }
   const clearFilters = () => {
     setFilterAssignee("all");
     setFilterStore("all");
@@ -632,7 +666,9 @@ const TicketList: React.FC<TicketListProps> = ({
                   {/* Card Actions (Hover) */}
                   <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                      onClick={() => generateTicketReceipt(ticket, settings)}
+                      onClick={async () =>
+                        await generateTicketReceipt(ticket, settings, true)
+                      } // Add true for saving
                       className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
                       title="Print Receipt"
                     >

@@ -143,34 +143,29 @@ export default function CustomerPortal({
 }: CustomerPortalProps) {
   // --- STATE ---
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null); // For Timeline View
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
 
-  // New Request State
   const [deviceType, setDeviceType] = useState("Smartphone");
   const [issue, setIssue] = useState("");
   const [store, setStore] = useState(settings.stores[0]?.name || "");
-  const [isLoading, setIsLoading] = useState(false); // Add loading state
+  const [isLoading, setIsLoading] = useState(false);
 
   const fetchCustomerTickets = async () => {
     try {
       setIsLoading(true);
 
-      // Fetch tickets from Supabase for this specific customer
       const { data, error } = await supabase
         .from("tickets")
         .select("*")
-        .or(
-          `customer_id.eq.${currentUser.id},email.eq.${currentUser.email},mobile.eq.${currentUser.mobile}`
-        )
+        .or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
       if (data) {
-        // Transform Supabase data to match your Ticket type
         const transformedTickets: Ticket[] = data.map((ticket) => ({
           id: ticket.id || ticket.ticket_id || `TKT-${Date.now()}`,
           ticketId:
@@ -267,7 +262,6 @@ export default function CustomerPortal({
     setIsLoading(true);
 
     try {
-      // Generate Ticket ID in your format TKT-IF-XXX
       const latestId = tickets.length > 0 ? tickets[0]?.ticketId : "TKT-IF-000";
       const match = latestId.match(/TKT-IF-(\d+)/);
       const nextNumber = match ? parseInt(match[1]) + 1 : tickets.length + 1;
@@ -276,27 +270,26 @@ export default function CustomerPortal({
 
       const now = new Date().toISOString();
 
-      // Prepare ticket data for Supabase matching YOUR table structure
       const ticketData = {
-        id: ticketId, // Your table uses id as ticket ID
+        id: ticketId,
         customer_id: currentUser.id,
         subject: issue,
-        status: "Pending Approval", // Change to match your status values
+        status: "Pending Approval",
         hold_reason: null,
-        priority: "MEDIUM", // Your table uses uppercase
-        assigned_to: null, // Will be assigned by admin
+        priority: "MEDIUM",
+        assigned_to: null,
         created_at: now,
         resolved_at: null,
         device_type: deviceType,
-        device_brand: null, // Add brand field if you have it
-        device_model: null, // Add model field if you have it
+        device_brand: null,
+        device_model: null,
         device_serial_number: null,
         device_brand_service: null,
         device_description: issue,
         charger_status: null,
         store: store,
-        amount_estimate: null, // Will be filled by admin
-        warranty: "NO", // Your table uses YES/NO
+        amount_estimate: null,
+        warranty: "NO",
         bill_number: null,
         scheduled_date: null,
         internal_progress_reason: null,
@@ -306,10 +299,9 @@ export default function CustomerPortal({
         name: currentUser.name,
         email: currentUser.email,
         mobile: currentUser.mobile || null,
-        zone_id: null, // Will be set based on store
+        zone_id: null,
       };
 
-      // Insert into Supabase tickets table
       const { data, error } = await supabase
         .from("tickets")
         .insert([ticketData])
@@ -320,8 +312,6 @@ export default function CustomerPortal({
 
       if (error) {
         console.error("Error creating ticket:", error);
-
-        // If error is about duplicate ID, try with UUID
         if (error.message.includes("duplicate key")) {
           const fallbackId = `TKT-${Date.now()}`;
           const { data: fallbackData, error: fallbackError } = await supabase
@@ -338,7 +328,6 @@ export default function CustomerPortal({
       }
 
       if (finalData) {
-        // Transform the returned data to match your Ticket type
         const newTicket: Ticket = {
           id: data.id,
           ticketId: data.id, // In your table, id is the ticket ID
@@ -373,8 +362,19 @@ export default function CustomerPortal({
 
         // Update local state
         setTickets([newTicket, ...tickets]);
-
-        // Reset form
+        await sendEmail(
+          "TICKET_CREATED",
+          {
+            ticketId: ticketId,
+            customerName: currentUser.name,
+            customerEmail: currentUser.email,
+            issueDescription: issue,
+            priority: "Medium",
+            status: "Pending Approval",
+            source: "CUSTOMER",
+          },
+          null
+        );
         setIsModalOpen(false);
         setIssue("");
         setDeviceType("Smartphone");
@@ -387,6 +387,38 @@ export default function CustomerPortal({
       alert(error.message || "Failed to create ticket");
     } finally {
       setIsLoading(false);
+    }
+  };
+  const SUPABASE_FUNCTION_URL =
+    "https://jajnueotoourhmfupepb.supabase.co/functions/v1/sendEmail";
+  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const sendEmail = async (
+    type: "TICKET_CREATED" | "TASK_ASSIGNED",
+    payload: any,
+    user: { name: string; email: string }
+  ) => {
+    try {
+      const res = await fetch(SUPABASE_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ type, payload, user }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Failed to send email:", text);
+        return false;
+      } else {
+        console.log("Email sent successfully");
+        return true;
+      }
+    } catch (err) {
+      console.error("Error calling sendEmail:", err);
+      return false;
     }
   };
   const getStatusColor = (status: string) => {

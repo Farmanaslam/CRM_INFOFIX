@@ -73,7 +73,6 @@ export default function NotificationHub({
     setPermissionStatus(perm);
   };
 
-  // Handle New Notifications (Sound & Vibration)
   useEffect(() => {
     if (notifications.length > prevCount.current) {
       // New notification arrived

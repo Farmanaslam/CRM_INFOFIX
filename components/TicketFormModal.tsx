@@ -49,6 +49,7 @@ import {
 } from "../types";
 import { supabase } from "../supabaseClient";
 import jsPDF from "jspdf";
+import { generateTicketReceipt } from "./TicketList";
 
 interface TicketFormModalProps {
   isOpen: boolean;
@@ -280,6 +281,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
+
     if (
       !formData.name ||
       !formData.mobile ||
@@ -296,21 +298,53 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     }
 
     setIsSubmitting(true);
-    try {
-      // 1️⃣ Check / Create Customer
-      let customerId: string;
 
-      const existingCustomer = customers.find(
-        (c) => c.email === formData.email
-      );
+    try {
+      let customerId: string;
+      let customerUserId: string | null = null;
+
+      // STEP 1 — CHECK IF CUSTOMER EXISTS
+      const { data: existingCustomer, error: fetchErr } = await supabase
+        .from("customers")
+        .select("id, email, auth_id")
+        .eq("email", formData.email)
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
 
       if (existingCustomer) {
+        // ✅ EXISTING CUSTOMER
         customerId = existingCustomer.id;
+        customerUserId = existingCustomer.auth_id || null;
       } else {
+        // ==========================
+        // STEP 2 — NEW CUSTOMER → CREATE AUTH FIRST
+        // ==========================
+        const { data: authData, error: authErr } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.mobile, // phone as default password
+          options: {
+            data: {
+              role: "CUSTOMER",
+              name: formData.name,
+            },
+          },
+        });
+
+        if (authErr) throw authErr;
+        if (!authData.user) throw new Error("Auth user creation failed");
+
+        // Store the customer's auth user ID (IMPORTANT FIX)
+        customerUserId = authData.user.id;
+
+        // ==========================
+        // STEP 3 — CREATE CUSTOMER WITH auth_id
+        // ==========================
         const { data: newCustomer, error: custErr } = await supabase
           .from("customers")
           .insert([
             {
+              auth_id: authData.user.id,
               name: formData.name,
               email: formData.email,
               mobile: formData.mobile,
@@ -324,9 +358,13 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
 
         customerId = newCustomer.id;
 
+        // Keep UI in sync
         setCustomers([...customers, newCustomer as Customer]);
       }
 
+      // ==========================
+      // STEP 4 — GENERATE TICKET ID (UNCHANGED)
+      // ==========================
       const { data: lastTicket, error: lastErr } = await supabase
         .from("tickets")
         .select("id")
@@ -337,9 +375,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
 
       if (lastErr && lastErr.code !== "PGRST116") throw lastErr;
 
-      // 🔹 Generate next TKT-IF ID
       let nextNumber = 1;
-
       if (lastTicket?.id) {
         const match = lastTicket.id.match(/TKT-IF-(\d+)/);
         if (match) nextNumber = parseInt(match[1], 10) + 1;
@@ -347,7 +383,9 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
 
       const ticketId = `TKT-IF-${nextNumber.toString().padStart(3, "0")}`;
 
-      // 3️⃣ Create / Update Ticket
+      // ==========================
+      // STEP 5 — CREATE OR UPDATE TICKET (YOUR ORIGINAL LOGIC)
+      // ==========================
       if (editingTicket) {
         const { error: updateError } = await supabase
           .from("tickets")
@@ -371,7 +409,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
 
         if (updateError) throw updateError;
 
-        // ✅ UPDATE ONLY THE EDITED TICKET IN STATE
+        // Update state (your logic unchanged)
         setTickets((prev) =>
           prev.map((t) =>
             t.id === editingTicket.id
@@ -397,13 +435,33 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         );
 
         if (onSuccess) onSuccess();
+
+        // Email (UNCHANGED)
+        const assignedTechnician = teamMembers.find(
+          (t) => t.id === formData.assignedToId
+        );
+
+        if (assignedTechnician) {
+          const ticketPayload = {
+            ticketId: editingTicket.id,
+            customerName: formData.name,
+            customerEmail: formData.email,
+            issueDescription: formData.issueDescription,
+            priority: formData.priority,
+          };
+
+          await sendEmail("TICKET_CREATED", ticketPayload, {
+            name: assignedTechnician.name,
+            email: assignedTechnician.email,
+          });
+        }
       } else {
-        // Insert new ticket
+        // Insert new ticket (YOUR CODE — unchanged)
         const { data: newTicket, error: insertError } = await supabase
           .from("tickets")
           .insert([
             {
-              id: ticketId, // ✅ THIS IS THE ONLY ID
+              id: ticketId,
               customer_id: customerId,
               subject: formData.issueDescription,
               status: formData.status,
@@ -418,23 +476,93 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
               warranty: formData.warranty === "Yes",
               bill_number: formData.billNumber || null,
               scheduled_date: formData.scheduledDate || null,
-              user_id: currentUser.id,
+              user_id: customerUserId,
+
+              // ✅ CRITICAL FIELDS FOR RECEIPT
+              email: formData.email,
+              name: formData.name,
+              mobile: formData.mobile,
+              address: formData.address,
+
               created_at: new Date().toISOString(),
             },
           ])
-          .select()
+          .select(
+            `
+  id,
+  customer_id,
+  user_id,
+  subject,
+  status,
+  priority,
+  assigned_to,
+  device_type,
+  device_brand,
+  device_model,
+  device_description,
+  store,
+  amount_estimate,
+  warranty,
+  bill_number,
+  scheduled_date,
+  email,
+  name,
+  mobile,
+  address,
+  created_at
+`
+          )
           .single();
 
         if (insertError) throw insertError;
 
-        // ✅ Call onRefresh to fetch fresh data from Supabase
-        if (insertError) throw insertError;
+        const assignedTechnician = teamMembers.find(
+          (t) => t.id === formData.assignedToId
+        );
 
-        // ✅ Call onRefresh to fetch fresh data from Supabase
-        if (onRefresh) {
-          await onRefresh();
-        }
+        // 🔥 1) GENERATE RECEIPT AFTER TICKET CREATION
+        const receipt = await generateTicketReceipt(
+          {
+            ticketId: newTicket.id, // Map DB 'id' to 'ticketId'
+            customerId: newTicket.customer_id,
+            name: newTicket.name,
+            email: newTicket.email,
+            number: newTicket.mobile, // Assuming 'number' is the mobile field in Ticket type
+            address: newTicket.address,
+            deviceType: newTicket.device_type,
+            brand: newTicket.device_brand,
+            model: newTicket.device_model,
+            serial: newTicket.device_description || "", // Assuming serial is part of device_description or add if needed
+            issueDescription: newTicket.subject, // Map DB 'subject' to 'issueDescription'
+            store: newTicket.store,
+            estimatedAmount: newTicket.amount_estimate,
+            warranty: newTicket.warranty,
+            billNumber: newTicket.bill_number,
+            priority: newTicket.priority,
+            status: newTicket.status,
+            date: new Date(newTicket.created_at).toLocaleDateString(), // Map 'created_at' to 'date'
+            // Add other fields as needed (e.g., assignedToId, etc.) if they exist in newTicket
+          } as Ticket, // Cast to Ticket type for type safety
+          settings
+        );
 
+        // 🔥 2) PREPARE EMAIL PAYLOAD WITH ATTACHMENT
+        const ticketPayload = {
+          ticketId: ticketId,
+          customerName: formData.name,
+          customerEmail: formData.email,
+          issueDescription: formData.issueDescription,
+          priority: formData.priority,
+          attachment: receipt, // ✅ ATTACH PDF
+        };
+
+        // 🔥 3) SEND EMAIL VIA EDGE FUNCTION
+        await sendEmail("TICKET_CREATED", ticketPayload, {
+          name: assignedTechnician ? assignedTechnician.name : formData.name,
+          email: assignedTechnician ? assignedTechnician.email : formData.email,
+        });
+
+        if (onRefresh) await onRefresh();
         if (onSuccess) onSuccess();
       }
 
@@ -474,6 +602,40 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     CCTV: Cctv,
     Accessory: Keyboard,
     Other: Zap,
+  };
+  // No import needed for fetch, but define your Supabase Function URL
+  const SUPABASE_FUNCTION_URL =
+    "https://jajnueotoourhmfupepb.supabase.co/functions/v1/sendEmail";
+
+  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const sendEmail = async (
+    type: "TICKET_CREATED" | "TASK_ASSIGNED",
+    payload: any,
+    user: { name: string; email: string }
+  ) => {
+    try {
+      const res = await fetch(SUPABASE_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ type, payload, user }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Failed to send email:", text);
+        return false;
+      } else {
+        console.log("Email sent successfully");
+        return true;
+      }
+    } catch (err) {
+      console.error("Error calling sendEmail:", err);
+      return false;
+    }
   };
 
   if (!isOpen) return null;

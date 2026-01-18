@@ -24,7 +24,7 @@ import {
   Zap,
 } from "lucide-react";
 import { supabase } from "@/supabaseClient";
-import NotificationHub from "./NotificationHub";
+import ForgotPassword from "./ForgotPassword";
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -59,6 +59,7 @@ export default function Login({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [shake, setShake] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   // Dynamic Theme Mapping
   const theme = {
     staff: {
@@ -424,7 +425,9 @@ export default function Login({
   };
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
+  if (showForgotPassword) {
+    return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
+  }
   return (
     <div className="h-[100dvh] bg-[#020617] flex items-center justify-center p-4 sm:p-6 font-sans selection:bg-indigo-500/30 overflow-hidden relative isolate">
       {/* BACKGROUND EFFECTS */}
@@ -675,6 +678,15 @@ export default function Login({
                         ? "Access Cipher"
                         : "Mobile Number"}
                     </label>
+                    {activeTab === "staff" && !isSignUp && (
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotPassword(true)}
+                        className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-wider"
+                      >
+                        Forgot?
+                      </button>
+                    )}
                   </div>
                   <div className="relative">
                     {activeTab === "staff" ? (

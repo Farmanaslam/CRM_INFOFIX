@@ -43,6 +43,7 @@ import {
 } from "./types";
 import { CloudOff } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
+import ResetPassword from "./components/ResetPasssword";
 
 type SyncStatus = "checking" | "connected" | "local" | "error";
 
@@ -198,7 +199,7 @@ function App() {
   const [zones, setZones] = useState<OperationalZone[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [isLoadingTeamData, setIsLoadingTeamData] = useState(false);
-
+  const [isResetPasswordRoute, setIsResetPasswordRoute] = useState(false);
   // Add this function to fetch all team-related data
   const fetchTeamData = useCallback(async () => {
     if (!supabase) {
@@ -316,6 +317,23 @@ function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
+  // Check for password reset route
+  useEffect(() => {
+    const hash = window.location.hash;
+    const params = new URLSearchParams(hash.substring(hash.indexOf("?")));
+
+    // Check for password recovery
+    if (hash.includes("type=recovery") || hash.includes("#reset-password")) {
+      setIsResetPasswordRoute(true);
+    }
+
+    // Also check URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("type") === "recovery") {
+      setIsResetPasswordRoute(true);
+    }
+  }, []);
+
   // NEW: global notifications synced across users
   const [notifications, setNotifications] = useSmartSync<AppNotification[]>(
     "notifications",
@@ -366,22 +384,6 @@ function App() {
       ].slice(0, 50);
     });
   };
-
-  const isRelevance = useCallback(
-    (t: Ticket) => {
-      if (!currentUser) return false;
-      if (currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN")
-        return true;
-      if (currentUser.role === "MANAGER")
-        return t.zoneId === currentUser.zoneId;
-      if (currentUser.role === "TECHNICIAN")
-        return t.assignedToId === currentUser.id;
-      if (currentUser.role === "CUSTOMER")
-        return t.email.toLowerCase() === currentUser.email.toLowerCase();
-      return false;
-    },
-    [currentUser]
-  );
 
   const syncZone = selectedZoneId === "all" ? "global" : selectedZoneId;
   const [appSettings, setAppSettings] = useSmartSync<AppSettings>(
@@ -817,6 +819,17 @@ function App() {
         );
     }
   };
+  if (isResetPasswordRoute) {
+    return (
+      <ResetPassword
+        onSuccess={() => {
+          setIsResetPasswordRoute(false);
+          window.location.hash = "";
+          window.location.pathname = "/";
+        }}
+      />
+    );
+  }
 
   if (!currentUser)
     return (

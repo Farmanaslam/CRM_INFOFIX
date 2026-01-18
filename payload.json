@@ -1,0 +1,14 @@
+{
+  "type": "TICKET_CREATED",
+  "payload": {
+    "ticketId": "TKT-001",
+    "customerName": "John",
+    "customerEmail": "mdfarmanaslam@gmail.com",
+    "issueDescription": "Broken Screen",
+    "priority": "High"
+  },
+  "user": {
+    "name": "Technician A",
+    "email": "sehkhfarman430@gmail.com"
+  }
+}

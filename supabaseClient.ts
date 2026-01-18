@@ -3,10 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 // Access environment variables.
 // We use simple assignment to allow the build-time substitution to work cleanly.
 const supabaseUrl = "https://jajnueotoourhmfupepb.supabase.co";
-const supabaseAnonKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impham51ZW90b291cmhtZnVwZXBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1MjA3MzgsImV4cCI6MjA4MzA5NjczOH0.GR1X4q2JSZo6e7EnZkhIkFsucXheBE6DmbfCczeg-Ek";
-const supabaseServiceKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impham51ZW90b291cmhtZnVwZXBiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NzUyMDczOCwiZXhwIjoyMDgzMDk2NzM4fQ.GrSuoMWlE59DErcOBtGrsSkYesp-ThJIhey4QKHp3U4";
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY;
 // Boolean check to verify configuration is present
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -23,22 +21,36 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
     persistSession: false,
   },
 });
-export const uploadFile = async (file: Blob | File, bucket: string = 'public-files', path?: string): Promise<string | null> => {
+export const uploadFile = async (
+  file: Blob | File,
+  bucket: string = "public-files",
+  path?: string,
+): Promise<string | null> => {
   if (!supabase) return null;
-  
+
   try {
-    const fileName = path || `${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    const { data, error } = await supabase.storage.from(bucket).upload(fileName, file, {
-      cacheControl: '3600',
-      upsert: false
-    });
+    const fileName = path ||
+      `${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const { data, error } = await supabase.storage.from(bucket).upload(
+      fileName,
+      file,
+      {
+        cacheControl: "3600",
+        upsert: false,
+      },
+    );
 
     if (error) {
-      console.warn(`Supabase Storage upload failed (Bucket: ${bucket}):`, error.message);
+      console.warn(
+        `Supabase Storage upload failed (Bucket: ${bucket}):`,
+        error.message,
+      );
       return null;
     }
 
-    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(
+      data.path,
+    );
     return urlData.publicUrl;
   } catch (err) {
     console.warn("Unexpected error during file upload:", err);
