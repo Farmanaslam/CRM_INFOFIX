@@ -191,18 +191,26 @@ export default function Reports({
       .slice(0, 5);
 
     // 4. Volume Trend (Group by Date)
-    const trendMap: Record<string, { date: string; tickets: number }> = {};
-    filteredData.forEach((t) => {
-      const dateKey = new Date(t.date).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
-      if (!trendMap[dateKey]) trendMap[dateKey] = { date: dateKey, tickets: 0 };
-      trendMap[dateKey].tickets++;
-    });
-    const trendData = Object.values(trendMap).sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
+const trendMap: Record<string, { date: string; tickets: number }> = {};
+
+filteredData.forEach((t) => {
+  const d = new Date(t.date);
+  const isoKey = d.toISOString().split("T")[0]; 
+  const label = d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+
+  if (!trendMap[isoKey]) {
+    trendMap[isoKey] = { date: label, tickets: 0 };
+  }
+  trendMap[isoKey].tickets++;
+});
+
+const trendData = Object.entries(trendMap)
+  .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
+  .map(([_, value]) => value);
+
 
     // 5. Status Distribution
     const statusCounts: Record<string, number> = {};

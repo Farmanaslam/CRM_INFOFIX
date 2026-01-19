@@ -30,11 +30,13 @@ export type Role =
   | "CUSTOMER"
   | "SYSTEM";
 
+// In your types.ts file, UPDATE the AppNotification interface:
+
 export interface AppNotification {
   id: string;
   userId: string; // The specific owner/triggerer of this notification
-  userName?: string; // Display name of the user who triggered it
-  userRole?: Role; // Role of the user who triggered it
+  userName: string; // Display name of the user who triggered it (REQUIRED)
+  userRole: Role; // Role of the user who triggered it (REQUIRED)
   title: string;
   message: string;
   timestamp: number;
@@ -115,7 +117,8 @@ export interface Ticket {
   assignedToId?: string;
   scheduledDate?: string;
   history?: TicketHistory[];
-  zoneId?: string; // Tagged zone
+  zoneId?: string;
+  resolvedAt?: string;
 }
 
 export interface Task {

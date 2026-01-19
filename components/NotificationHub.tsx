@@ -47,7 +47,7 @@ export default function NotificationHub({
   currentUser,
 }: NotificationHubProps) {
   const [activeFilter, setActiveFilter] = useState<"all" | "urgent" | "system">(
-    "all"
+    "all",
   );
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [userRoleFilter, setUserRoleFilter] = useState<Role | "ALL">("ALL");
@@ -178,42 +178,88 @@ export default function NotificationHub({
     userRoleFilter,
   ]);
 
-  const markAllRead = () => {
+  // REPLACE the markAllRead function in NotificationHub (around line 170)
+
+  const markAllRead = async () => {
     if (!currentUser) return;
 
+    const visibleIds = filteredNotifications
+      .filter((n) => !n.readBy.includes(currentUser.id))
+      .map((n) => n.id);
+
+    if (visibleIds.length === 0) return;
+
+    // Update in Supabase
+    if (window.supabase) {
+      for (const id of visibleIds) {
+        const notif = notifications.find((n) => n.id === id);
+        if (notif) {
+          const updatedReadBy = [...notif.readBy, currentUser.id];
+          await window.supabase
+            .from("notifications")
+            .update({ read_by: updatedReadBy })
+            .eq("id", id);
+        }
+      }
+    }
+
+    // Update local state
     setNotifications((prev) =>
       prev.map((n) =>
-        !n.readBy.includes(currentUser.id)
+        visibleIds.includes(n.id)
           ? { ...n, readBy: [...n.readBy, currentUser.id] }
-          : n
-      )
+          : n,
+      ),
     );
   };
 
-  const clearAll = () => {
-    if (confirm("Clear currently visible notifications?")) {
-      const visibleIds = new Set(filteredNotifications.map((n) => n.id));
-      setNotifications(notifications.filter((n) => !visibleIds.has(n.id)));
+  // REPLACE the clearAll function (around line 190)
+
+  const clearAll = async () => {
+    if (!confirm("Clear currently visible notifications?")) return;
+
+    const visibleIds = filteredNotifications.map((n) => n.id);
+
+    // Delete from Supabase
+    if (window.supabase) {
+      for (const id of visibleIds) {
+        await window.supabase.from("notifications").delete().eq("id", id);
+      }
     }
+
+    // Update local state
+    setNotifications(notifications.filter((n) => !visibleIds.includes(n.id)));
   };
 
-  const handleItemClick = (n: AppNotification) => {
+  // REPLACE the handleItemClick function (around line 200)
+
+  const handleItemClick = async (n: AppNotification) => {
     if (!currentUser) return;
 
-    setNotifications((prev) =>
-      prev.map((item) =>
-        item.id === n.id && !item.readBy.includes(currentUser.id)
-          ? { ...item, readBy: [...item.readBy, currentUser.id] }
-          : item
-      )
-    );
+    if (!n.readBy.includes(currentUser.id)) {
+      const updatedReadBy = [...n.readBy, currentUser.id];
+
+      // Update in Supabase
+      if (window.supabase) {
+        await window.supabase
+          .from("notifications")
+          .update({ read_by: updatedReadBy })
+          .eq("id", n.id);
+      }
+
+      // Update local state
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item.id === n.id ? { ...item, readBy: updatedReadBy } : item,
+        ),
+      );
+    }
 
     if (n.link) {
       onNavigate(n.link);
       onClose();
     }
   };
-
   const getIcon = (type: string) => {
     switch (type) {
       case "urgent":
@@ -259,29 +305,12 @@ export default function NotificationHub({
               <Bell size={24} className="text-indigo-600" />
               {/* Bell Indicator */}
               {currentUser &&
-                notifications
-                  .filter((n) => {
-                    // Role-based visibility
-                    switch (currentUser.role) {
-                      case "SUPER_ADMIN":
-                        return true; // sees all
-                      case "ADMIN":
-                        return n.userRole !== "SUPER_ADMIN";
-                      case "MANAGER":
-                        return !["SUPER_ADMIN", "ADMIN", "CUSTOMER"].includes(
-                          n.userRole
-                        );
-                      case "TECHNICIAN":
-                        return n.userId === currentUser.id;
-                      case "CUSTOMER":
-                        return n.userId === currentUser.id;
-                      default:
-                        return false;
-                    }
-                  })
-                  .some((n) => !n.readBy.includes(currentUser.id)) && (
-                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white"></span>
-                )}
+  filteredNotifications.some(
+    (n) => !n.readBy.includes(currentUser.id)
+  ) && (
+    <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white"></span>
+  )}
+
             </div>
             <h2 className="text-xl font-bold text-slate-800">Notifications</h2>
           </div>
@@ -358,7 +387,7 @@ export default function NotificationHub({
               <button
                 onClick={() =>
                   setSortOrder((prev) =>
-                    prev === "newest" ? "oldest" : "newest"
+                    prev === "newest" ? "oldest" : "newest",
                   )
                 }
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-indigo-600 transition-colors"
@@ -415,7 +444,7 @@ export default function NotificationHub({
                   <div className="flex gap-4">
                     <div
                       className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg shrink-0 ${getColor(
-                        note.type
+                        note.type,
                       )}`}
                     >
                       {getIcon(note.type)}

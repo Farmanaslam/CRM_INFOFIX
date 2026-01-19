@@ -71,8 +71,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         .map((s) => s.name);
       result = result.filter((t) => zoneStoreNames.includes(t.store));
     }
-
-    // Role Specific Filter: Technicians only see their assigned tickets
     if (currentUser.role === "TECHNICIAN") {
       result = result.filter((t) => t.assignedToId === currentUser.id);
     }
@@ -91,14 +89,18 @@ const Dashboard: React.FC<DashboardProps> = ({
   const isSystemBlank = tickets.length === 0;
 
   // --- STATS ENGINE ---
-  
+
   const metrics = useMemo(() => {
     const activeTickets = zoneFilteredTickets.filter(
-      (t) => t.status !== "Resolved" && t.status !== "Rejected"
+      (t) => t.status !== "Resolved" && t.status !== "Rejected",
     );
-    const today = new Date().toLocaleDateString();
+    const today = new Date().toDateString();
     const resolvedToday = zoneFilteredTickets.filter(
-      (t) => t.status === "Resolved" && t.date === today
+      (t) =>
+        t.status === "Resolved" &&
+        (t.resolvedAt
+          ? new Date(t.resolvedAt).toDateString() === today
+          : new Date(t.date).toDateString() === today),
     ).length;
 
     // SLA Overdue Calculation
@@ -113,10 +115,10 @@ const Dashboard: React.FC<DashboardProps> = ({
     }).length;
 
     // Strict Zonal Customer Filter: Identify unique customers present in the current zone's ticket list
-    const customerIdsInZone  = new Set(
-       zoneFilteredTickets.map((t) => t.customerId)
+    const customerIdsInZone = new Set(
+      zoneFilteredTickets.map((t) => t.customerId),
     );
-    const totalCustomersInZone = customerIdsInZone .size;
+    const totalCustomersInZone = customerIdsInZone.size;
 
     return {
       openJobs: activeTickets.length,
@@ -128,10 +130,10 @@ const Dashboard: React.FC<DashboardProps> = ({
       brands: zoneFilteredTickets.filter((t) => t.brand).length,
       newIntake: zoneFilteredTickets.filter((t) => t.status === "New").length,
       allTimeResolved: zoneFilteredTickets.filter(
-        (t) => t.status === "Resolved"
+        (t) => t.status === "Resolved",
       ).length,
       pendingApprovals: zoneFilteredTickets.filter(
-        (t) => t.status === "Pending Approval"
+        (t) => t.status === "Pending Approval",
       ).length,
     };
   }, [zoneFilteredTickets, customers, settings.sla]);
@@ -164,17 +166,17 @@ const Dashboard: React.FC<DashboardProps> = ({
     zoneFilteredTickets
       .filter(
         (t) =>
-          t.status !== "Resolved" && t.status !== "Rejected" && t.assignedToId
+          t.status !== "Resolved" && t.status !== "Rejected" && t.assignedToId,
       )
       .forEach(
-        (t) => (loadMap[t.assignedToId!] = (loadMap[t.assignedToId!] || 0) + 1)
+        (t) => (loadMap[t.assignedToId!] = (loadMap[t.assignedToId!] || 0) + 1),
       );
 
     const relevantTechs =
       selectedZoneId === "all"
         ? settings.teamMembers.filter((m) => m.role === "TECHNICIAN")
         : settings.teamMembers.filter(
-            (m) => m.role === "TECHNICIAN" && m.zoneId === selectedZoneId
+            (m) => m.role === "TECHNICIAN" && m.zoneId === selectedZoneId,
           );
 
     return relevantTechs
@@ -201,7 +203,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       d.setDate(d.getDate() - i);
       const dateStr = d.toLocaleDateString();
       const count = zoneFilteredTickets.filter(
-        (t) => t.date === dateStr
+        (t) => t.date === dateStr,
       ).length;
       days.push({
         name: d.toLocaleDateString("en-US", { weekday: "short" }),
@@ -214,7 +216,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const deviceDistData = useMemo(() => {
     const counts: Record<string, number> = {};
     zoneFilteredTickets.forEach(
-      (t) => (counts[t.deviceType] = (counts[t.deviceType] || 0) + 1)
+      (t) => (counts[t.deviceType] = (counts[t.deviceType] || 0) + 1),
     );
     return Object.keys(counts)
       .map((k) => ({ name: k, value: counts[k] }))
@@ -228,7 +230,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         (t) =>
           (t.priority === "High" || t.status === "On Hold") &&
           t.status !== "Resolved" &&
-          t.status !== "Rejected"
+          t.status !== "Rejected",
       )
       .slice(0, 5);
   }, [zoneFilteredTickets]);
@@ -338,7 +340,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     );
   }
 
-  // --- OPERATIONAL COMMAND CENTER ---
   return (
     <div className="space-y-6 lg:space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-24">
       {/* GLOBAL ACTIONS HEADER */}

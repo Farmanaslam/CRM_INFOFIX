@@ -32,7 +32,7 @@ interface LoginProps {
   customers: Customer[];
   setCustomers: (customers: Customer[]) => void;
   pushNotification: (
-    notif: Omit<AppNotification, "id" | "timestamp" | "read" | "userId">
+    notif: Omit<AppNotification, "id" | "timestamp" | "userId" | "readBy">,
   ) => void;
 }
 
@@ -83,7 +83,7 @@ export default function Login({
       z: number,
       speedMult: number,
       sizeBase: number,
-      blur: string
+      blur: string,
     ) =>
       Array.from({ length: count }).map((_, i) => ({
         id: `${z}-${i}`,
@@ -300,7 +300,7 @@ export default function Login({
       JSON.stringify({
         u: email,
         p: password,
-      })
+      }),
     );
     // 1️⃣ Auth login
     const { data: authData, error: authError } =
@@ -391,7 +391,7 @@ export default function Login({
       JSON.stringify({
         u: email,
         p: password,
-      })
+      }),
     );
     const { data: authData, error } = await supabase.auth.signInWithPassword({
       email,
@@ -515,8 +515,8 @@ export default function Login({
                 {isSignUp
                   ? "New Member Registration"
                   : activeTab === "staff"
-                  ? "Internal System Access"
-                  : "Customer Service Portal"}
+                    ? "Internal System Access"
+                    : "Customer Service Portal"}
               </p>
             </div>
           </div>

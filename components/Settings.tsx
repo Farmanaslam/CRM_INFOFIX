@@ -86,10 +86,10 @@ interface SettingsProps {
   onUpdateLaptopReports: (reports: Report[]) => void;
   settings: AppSettings;
   onUpdateSettings: (settings: AppSettings) => void;
-  teamMembers: User[]; // NEW
-  zones: OperationalZone[]; // NEW
-  stores: Store[]; // NEW
-  onRefreshTeamData: () => void; // NEW
+  teamMembers: User[];
+  zones: OperationalZone[];
+  stores: Store[];
+  onRefreshTeamData: () => void;
 }
 
 // --- SUB-COMPONENTS ---
@@ -149,7 +149,7 @@ const DealerManager: React.FC<{
     let updatedDealers;
     if (editingDealer) {
       updatedDealers = dealers.map((d) =>
-        d.id === editingDealer.id ? ({ ...d, ...formData } as Dealer) : d
+        d.id === editingDealer.id ? ({ ...d, ...formData } as Dealer) : d,
       );
     } else {
       updatedDealers = [
@@ -463,7 +463,6 @@ const DealerManager: React.FC<{
   );
 };
 
-// ... ZoneManager (no changes needed) ...
 interface ZoneModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -487,7 +486,7 @@ const ZoneModal: React.FC<ZoneModalProps> = ({
   const [address, setAddress] = useState("");
   const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"identity" | "hq" | "stores">(
-    "identity"
+    "identity",
   );
 
   useEffect(() => {
@@ -498,7 +497,6 @@ const ZoneModal: React.FC<ZoneModalProps> = ({
         setHeadBranchId(zone.headBranchId || "");
         setAddress(zone.address || "");
       } else {
-        // Reset
         setName("");
         setColor("indigo");
         setHeadBranchId("");
@@ -514,7 +512,7 @@ const ZoneModal: React.FC<ZoneModalProps> = ({
     if (!name) return;
 
     const newZone: OperationalZone = {
-      id: zone ? zone.id : ``, // Don't generate ID here - let Supabase generate UUID
+      id: zone ? zone.id : ``,
       name,
       color,
       headBranchId: headBranchId || undefined,
@@ -533,7 +531,6 @@ const ZoneModal: React.FC<ZoneModalProps> = ({
   };
 
   const employeeCount = useMemo(() => {
-    // If editing, count actual members. If creating new, 0 until saved and assigned.
     if (!zone) return 0;
     return allMembers.filter((m) => m.zoneId === zone.id).length;
   }, [zone, allMembers]);
@@ -594,8 +591,8 @@ const ZoneModal: React.FC<ZoneModalProps> = ({
                 {tab === "identity"
                   ? "Identity"
                   : tab === "hq"
-                  ? "Headquarters"
-                  : "Assignments"}
+                    ? "Headquarters"
+                    : "Assignments"}
               </button>
             ))}
           </div>
@@ -811,21 +808,19 @@ const ZoneManager: React.FC<{
 }> = ({ zones, stores, teamMembers, onUpdate }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingZone, setEditingZone] = useState<OperationalZone | undefined>(
-    undefined
+    undefined,
   );
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const handleSaveZone = async (
     newZone: OperationalZone,
-    selectedStoreIds: string[]
+    selectedStoreIds: string[],
   ) => {
     try {
-      // 1. Save or update zone in Supabase
       const { data: savedZone, error: zoneError } = await supabase
         .from("operational_zones")
         .upsert({
-          // Don't include id for new zones - let Supabase generate UUID
-          ...(newZone.id && { id: newZone.id }), // Only include if editing
+          ...(newZone.id && { id: newZone.id }),
           name: newZone.name,
           color: newZone.color,
           address: newZone.address,
@@ -836,15 +831,12 @@ const ZoneManager: React.FC<{
 
       if (zoneError) throw zoneError;
 
-      // 2. Use the ID that Supabase generated
       const zoneId = savedZone.id;
 
-      // 3. Update store zone assignments in Supabase
       for (const store of stores) {
         const shouldBeAssigned = selectedStoreIds.includes(store.id);
         const currentZoneId = store.zoneId;
 
-        // Only update if assignment changed
         if (
           (shouldBeAssigned && currentZoneId !== zoneId) ||
           (!shouldBeAssigned && currentZoneId === zoneId)
@@ -857,23 +849,19 @@ const ZoneManager: React.FC<{
             .eq("id", store.id);
         }
       }
-
-      // 4. Update local state with the zone from Supabase
       let updatedZones = [...zones];
       const existingIdx = zones.findIndex((z) => z.id === zoneId);
       if (existingIdx > -1) {
         updatedZones[existingIdx] = {
           ...newZone,
-          id: zoneId, // Use the database ID
+          id: zoneId,
         };
       } else {
         updatedZones.push({
           ...newZone,
-          id: zoneId, // Use the database ID
+          id: zoneId,
         });
       }
-
-      // 5. Update stores with new zone assignments
       const updatedStores = stores.map((store) => {
         if (selectedStoreIds.includes(store.id)) {
           return { ...store, zoneId: zoneId };
@@ -897,7 +885,6 @@ const ZoneManager: React.FC<{
     if (!deleteId) return;
 
     try {
-      // Delete zone from Supabase
       const { error } = await supabase
         .from("operational_zones")
         .delete()
@@ -905,15 +892,13 @@ const ZoneManager: React.FC<{
 
       if (error) throw error;
 
-      // Unassign stores from this zone in Supabase
       await supabase
         .from("stores")
         .update({ zone_id: null })
         .eq("zone_id", deleteId);
 
-      // Update local state
       const updatedStores = stores.map((s) =>
-        s.zoneId === deleteId ? { ...s, zoneId: undefined } : s
+        s.zoneId === deleteId ? { ...s, zoneId: undefined } : s,
       );
       const updatedZones = zones.filter((z) => z.id !== deleteId);
 
@@ -962,7 +947,7 @@ const ZoneManager: React.FC<{
         {zones.map((zone) => {
           const storeCount = stores.filter((s) => s.zoneId === zone.id).length;
           const memberCount = teamMembers.filter(
-            (m) => m.zoneId === zone.id
+            (m) => m.zoneId === zone.id,
           ).length;
           const headBranchName =
             stores.find((s) => s.id === zone.headBranchId)?.name ||
@@ -1162,7 +1147,7 @@ const SimpleListManager: React.FC<SimpleListManagerProps> = ({
     if (!newItemName.trim()) return;
     if (
       items.some(
-        (i) => i.name.toLowerCase() === newItemName.trim().toLowerCase()
+        (i) => i.name.toLowerCase() === newItemName.trim().toLowerCase(),
       )
     ) {
       setError("Item already exists");
@@ -1297,7 +1282,7 @@ const SimpleListManager: React.FC<SimpleListManagerProps> = ({
     </div>
   );
 };
-// ... StoreManager (no changes needed) ...
+
 const StoreManager: React.FC<{
   stores: Store[];
   zones: OperationalZone[];
@@ -1321,7 +1306,6 @@ const StoreManager: React.FC<{
 
     try {
       if (editingStore) {
-        // Update existing store in Supabase
         const { error } = await supabase
           .from("stores")
           .update(storeData)
@@ -1329,7 +1313,6 @@ const StoreManager: React.FC<{
 
         if (error) throw error;
       } else {
-        // Create new store in Supabase
         const { error } = await supabase.from("stores").insert({
           ...storeData,
           id: Date.now().toString(),
@@ -1337,10 +1320,6 @@ const StoreManager: React.FC<{
 
         if (error) throw error;
       }
-
-      // Refresh stores from Supabase
-      // You need to pass a function to fetch stores
-      // For now, update local state
       const newStore: Store = {
         id: editingStore ? editingStore.id : Date.now().toString(),
         name: data.name as string,
@@ -1360,7 +1339,7 @@ const StoreManager: React.FC<{
       alert(
         editingStore
           ? "Store updated successfully!"
-          : "Store created successfully!"
+          : "Store created successfully!",
       );
     } catch (error: any) {
       console.error("Error saving store:", error);
@@ -1372,7 +1351,6 @@ const StoreManager: React.FC<{
     if (!deleteId) return;
 
     try {
-      // Delete store from Supabase
       const { error } = await supabase
         .from("stores")
         .delete()
@@ -1380,7 +1358,6 @@ const StoreManager: React.FC<{
 
       if (error) throw error;
 
-      // Update local state
       onUpdate(stores.filter((s) => s.id !== deleteId));
       setDeleteId(null);
       alert("Store deleted successfully!");
@@ -1590,7 +1567,7 @@ const TeamManager: React.FC<{
   const [photoUrl, setPhotoUrl] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isLoading, setIsLoading] = useState(false); // Add this line
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (editingMember) {
@@ -1647,15 +1624,12 @@ const TeamManager: React.FC<{
 
     try {
       if (editingMember) {
-        // Update existing user in Supabase
         const { error } = await supabase
           .from("users")
           .update(userData)
           .eq("id", editingMember.id);
 
         if (error) throw error;
-
-        // If password is provided and not empty, update it
         if (data.password && data.password.toString().trim() !== "") {
           const { error: authError } = await supabase.auth.updateUser({
             password: data.password as string,
@@ -1663,11 +1637,9 @@ const TeamManager: React.FC<{
 
           if (authError) {
             console.error("Password update failed:", authError);
-            // Continue even if password update fails
           }
         }
       } else {
-        // Create new user
         const { data: authData, error: authError } = await supabase.auth.signUp(
           {
             email: data.email as string,
@@ -1678,12 +1650,10 @@ const TeamManager: React.FC<{
                 role: data.role,
               },
             },
-          }
+          },
         );
 
         if (authError) throw authError;
-
-        // Create user profile in users table
         const { error: dbError } = await supabase.from("users").insert({
           auth_id: authData.user?.id,
           ...userData,
@@ -1692,16 +1662,13 @@ const TeamManager: React.FC<{
 
         if (dbError) throw dbError;
       }
-
-      // Use the onUpdate prop to refresh team members
       onUpdate(members);
-
       setIsModalOpen(false);
       setEditingMember(null);
       alert(
         editingMember
           ? "Team member updated successfully!"
-          : "Team member created successfully!"
+          : "Team member created successfully!",
       );
     } catch (err: any) {
       console.error("Error saving team member:", err);
@@ -1715,15 +1682,12 @@ const TeamManager: React.FC<{
 
     setIsLoading(true);
     try {
-      // Delete from Supabase
       const { error } = await supabase
         .from("users")
         .delete()
         .eq("id", deleteId);
 
       if (error) throw error;
-
-      // Refresh the team members list
       onUpdate(members.filter((m) => m.id !== deleteId));
       setDeleteId(null);
       alert("Team member deleted successfully!");
@@ -1776,7 +1740,7 @@ const TeamManager: React.FC<{
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {members.map((member) => {
           const activeTickets = tickets.filter(
-            (t) => t.assignedToId === member.id && t.status !== "Resolved"
+            (t) => t.assignedToId === member.id && t.status !== "Resolved",
           ).length;
           return (
             <div
@@ -1796,7 +1760,7 @@ const TeamManager: React.FC<{
                 </div>
                 <span
                   className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${getRoleColor(
-                    member.role
+                    member.role,
                   )}`}
                 >
                   {member.role.replace("_", " ")}
@@ -2068,29 +2032,26 @@ export default function Settings({
   onUpdateLaptopReports,
   settings,
   onUpdateSettings,
-  teamMembers, // NEW
-  zones, // NEW
-  stores, // NEW
+  teamMembers,
+  zones,
+  stores,
   onRefreshTeamData,
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<string>("team");
 
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<User | undefined>(
-    undefined
+    undefined,
   );
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
 
-  // Fetch team members from Supabase when component mounts
-
   const handleZoneUpdate = async (
     updatedZones: OperationalZone[],
-    updatedStores: Store[]
+    updatedStores: Store[],
   ) => {
-    // Update zone metadata
     for (const z of updatedZones) {
       await supabase.from("operational_zones").upsert({
         id: z.id,
@@ -2100,21 +2061,16 @@ export default function Settings({
         head_branch_id: z.headBranchId ?? null,
       });
     }
-
-    // Update store zone assignments
     for (const s of updatedStores) {
       await supabase
         .from("stores")
         .update({ zone_id: s.zoneId ?? null })
         .eq("id", s.id);
     }
-
-    // Refresh all team data from parent
     onRefreshTeamData();
   };
 
   const handleStoreUpdate = async (updatedStores: Store[]) => {
-    // Update stores in Supabase
     for (const store of updatedStores) {
       await supabase.from("stores").upsert({
         id: store.id,
@@ -2124,8 +2080,6 @@ export default function Settings({
         zone_id: store.zoneId ?? null,
       });
     }
-
-    // Refresh all team data from parent
     onRefreshTeamData();
   };
 
@@ -2138,7 +2092,7 @@ export default function Settings({
 
     if (
       !window.confirm(
-        "You are about to force-sync all local data to the Supabase Cloud. This will overwrite existing cloud data for current keys. Proceed?"
+        "You are about to force-sync all local data to the Supabase Cloud. This will overwrite existing cloud data for current keys. Proceed?",
       )
     )
       return;
@@ -2147,7 +2101,7 @@ export default function Settings({
     try {
       const collections = [
         { key: "settings", data: settings, zone: "global" },
-        { key: "customers", data: customers, zone: "global" }, // Global for simplistic registry
+        { key: "customers", data: customers, zone: "global" },
         { key: "tickets", data: tickets, zone: "global" },
         { key: "tasks", data: tasks, zone: "global" },
         { key: "laptop_reports", data: laptopReports, zone: "global" },
@@ -2161,7 +2115,7 @@ export default function Settings({
             zone_id: col.zone,
             updated_at: new Date().toISOString(),
           },
-          { onConflict: "key,zone_id" }
+          { onConflict: "key,zone_id" },
         );
 
         if (error) throw error;
@@ -2177,7 +2131,7 @@ export default function Settings({
 
   const createListHandlers = (
     listKey: keyof AppSettings,
-    dependencyKey?: keyof Ticket
+    dependencyKey?: keyof Ticket,
   ) => {
     const list = settings[listKey] as any[];
     return {
@@ -2193,14 +2147,14 @@ export default function Settings({
         onUpdateSettings({
           ...settings,
           [listKey]: list.map((item) =>
-            item.id === id ? { ...item, name: newName } : item
+            item.id === id ? { ...item, name: newName } : item,
           ),
         });
         if (oldItem && dependencyKey) {
           const updatedTickets = tickets.map((t) =>
             t[dependencyKey] === oldItem.name
               ? { ...t, [dependencyKey]: newName }
-              : t
+              : t,
           );
           onUpdateTickets(updatedTickets);
         }
@@ -2217,25 +2171,20 @@ export default function Settings({
   };
   const handleSaveMember = async (member: User) => {
     try {
-      // 1️⃣ SIGN UP THE USER (CLIENT-SIDE, WITH AUTO-CONFIRMATION ENABLED IN SUPABASE)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: member.email.toLowerCase(),
-        password: member.password, // Supabase will handle hashing securely
+        password: member.password,
         options: {
           data: {
             name: member.name,
             role: member.role,
-            // Add other metadata if needed
           },
         },
       });
 
       if (authError) throw authError;
-
-      // 2️⃣ INSERT PROFILE DATA INTO USERS TABLE (WITHOUT PASSWORD)
       const { error: dbError } = await supabase.from("users").insert({
-        auth_id: authData.user?.id, // Use the ID from sign-up
-        name: member.name,
+        auth_id: authData.user?.id,
         email: member.email.toLowerCase(),
         role: member.role,
         mobile: member.mobile,
@@ -2244,7 +2193,6 @@ export default function Settings({
         store_id: member.storeId,
         photo: member.photo,
         experience: member.experience,
-        // Do NOT store password here—Supabase handles it
       });
 
       if (dbError) throw dbError;
@@ -2278,7 +2226,7 @@ export default function Settings({
     downloadAnchorNode.setAttribute("href", dataStr);
     downloadAnchorNode.setAttribute(
       "download",
-      `infofix_vault_${new Date().toISOString().slice(0, 10)}.json`
+      `infofix_vault_${new Date().toISOString().slice(0, 10)}.json`,
     );
     document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
@@ -2309,7 +2257,7 @@ export default function Settings({
         inputElement.value = "";
       } catch (err) {
         alert(
-          "Failed to parse backup file. Please ensure it is a valid JSON export."
+          "Failed to parse backup file. Please ensure it is a valid JSON export.",
         );
         console.error(err);
       }
@@ -2507,7 +2455,7 @@ export default function Settings({
                     onChange={(e) =>
                       handleSlaUpdate(
                         p as keyof SLAConfig,
-                        parseInt(e.target.value)
+                        parseInt(e.target.value),
                       )
                     }
                     className="w-20 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center font-bold outline-none focus:ring-2 ring-indigo-500/20"

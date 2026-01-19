@@ -102,7 +102,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     deviceDescription: "",
     issueDescription: "",
     store: "",
-
+    resolvedAt: "",
     estimatedAmount: "",
     warranty: "No",
     billNumber: "",
@@ -168,6 +168,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           progressNote: editingTicket.progressNote || "",
           scheduledDate: editingTicket.scheduledDate || "",
           assignedToId: editingTicket.assignedToId || "",
+          resolvedAt: editingTicket.resolvedAt || "",
         });
       } else {
         setFormData(initialFormState);
@@ -176,10 +177,19 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     }
   }, [isOpen, editingTicket]);
 
+  useEffect(() => {
+    if (formData.status === "Resolved" && !formData.resolvedAt) {
+      setFormData((prev) => ({
+        ...prev,
+        resolvedAt: new Date().toLocaleDateString(), // Set to current date when resolved
+      }));
+    }
+  }, [formData.status]);
+
   // Check if selected brand is a Service Brand
   const isServiceBrand = useMemo(() => {
     return settings.serviceBrands.some(
-      (b) => b.name.toLowerCase() === formData.brand.trim().toLowerCase()
+      (b) => b.name.toLowerCase() === formData.brand.trim().toLowerCase(),
     );
   }, [formData.brand, settings.serviceBrands]);
 
@@ -200,7 +210,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
 
   const createHistoryEntry = (
     action: string,
-    details: string
+    details: string,
   ): TicketHistory => ({
     id: Date.now().toString() + Math.random().toString().slice(2, 5),
     date: new Date().toLocaleString(),
@@ -267,7 +277,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         doc.text(
           `By: ${h.actorName} (${h.actorRole})`,
           25,
-          y + 8 + details.length * 4 + 2
+          y + 8 + details.length * 4 + 2,
         );
 
         y += 20 + details.length * 4;
@@ -317,9 +327,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         customerId = existingCustomer.id;
         customerUserId = existingCustomer.auth_id || null;
       } else {
-        // ==========================
-        // STEP 2 — NEW CUSTOMER → CREATE AUTH FIRST
-        // ==========================
         const { data: authData, error: authErr } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.mobile, // phone as default password
@@ -404,6 +411,9 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             warranty: formData.warranty === "Yes",
             bill_number: formData.billNumber || null,
             scheduled_date: formData.scheduledDate || null,
+            resolved_at: formData.resolvedAt
+              ? new Date(formData.resolvedAt).toISOString()
+              : null,
           })
           .eq("id", editingTicket.id);
 
@@ -429,32 +439,13 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                   warranty: formData.warranty === "Yes",
                   billNumber: formData.billNumber || "",
                   scheduledDate: formData.scheduledDate || "",
+                  resolvedAt: formData.resolvedAt,
                 }
-              : t
-          )
+              : t,
+          ),
         );
 
         if (onSuccess) onSuccess();
-
-        // Email (UNCHANGED)
-        const assignedTechnician = teamMembers.find(
-          (t) => t.id === formData.assignedToId
-        );
-
-        if (assignedTechnician) {
-          const ticketPayload = {
-            ticketId: editingTicket.id,
-            customerName: formData.name,
-            customerEmail: formData.email,
-            issueDescription: formData.issueDescription,
-            priority: formData.priority,
-          };
-
-          await sendEmail("TICKET_CREATED", ticketPayload, {
-            name: assignedTechnician.name,
-            email: assignedTechnician.email,
-          });
-        }
       } else {
         // Insert new ticket (YOUR CODE — unchanged)
         const { data: newTicket, error: insertError } = await supabase
@@ -477,14 +468,14 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
               bill_number: formData.billNumber || null,
               scheduled_date: formData.scheduledDate || null,
               user_id: customerUserId,
-
-              // ✅ CRITICAL FIELDS FOR RECEIPT
               email: formData.email,
               name: formData.name,
               mobile: formData.mobile,
               address: formData.address,
-
               created_at: new Date().toISOString(),
+              resolved_at: formData.resolvedAt
+                ? new Date(formData.resolvedAt).toISOString()
+                : null,
             },
           ])
           .select(
@@ -510,14 +501,14 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
   mobile,
   address,
   created_at
-`
+`,
           )
           .single();
 
         if (insertError) throw insertError;
 
         const assignedTechnician = teamMembers.find(
-          (t) => t.id === formData.assignedToId
+          (t) => t.id === formData.assignedToId,
         );
 
         // 🔥 1) GENERATE RECEIPT AFTER TICKET CREATION
@@ -543,7 +534,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             date: new Date(newTicket.created_at).toLocaleDateString(), // Map 'created_at' to 'date'
             // Add other fields as needed (e.g., assignedToId, etc.) if they exist in newTicket
           } as Ticket, // Cast to Ticket type for type safety
-          settings
+          settings,
         );
 
         // 🔥 2) PREPARE EMAIL PAYLOAD WITH ATTACHMENT
@@ -612,7 +603,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
   const sendEmail = async (
     type: "TICKET_CREATED" | "TASK_ASSIGNED",
     payload: any,
-    user: { name: string; email: string }
+    user: { name: string; email: string },
   ) => {
     try {
       const res = await fetch(SUPABASE_FUNCTION_URL, {
@@ -1280,16 +1271,16 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                             entry.action.includes("Transfer")
                               ? "bg-purple-500"
                               : entry.action.includes("Resolved")
-                              ? "bg-emerald-500"
-                              : entry.action.includes("Hold")
-                              ? "bg-orange-500"
-                              : "bg-slate-300"
+                                ? "bg-emerald-500"
+                                : entry.action.includes("Hold")
+                                  ? "bg-orange-500"
+                                  : "bg-slate-300"
                           }`}
                         ></div>
 
                         <div
                           className={`p-4 rounded-xl border transition-colors ${getEventColor(
-                            entry.action
+                            entry.action,
                           )}`}
                         >
                           <div className="flex justify-between items-start mb-2">

@@ -44,7 +44,15 @@ import {
 import { CloudOff } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
 import ResetPassword from "./components/ResetPasssword";
+declare global {
+  interface Window {
+    supabase: typeof supabase;
+  }
+}
 
+if (supabase) {
+  window.supabase = supabase;
+}
 type SyncStatus = "checking" | "connected" | "local" | "error";
 
 const safeStringify = (v: any) => JSON.stringify(v);
@@ -58,7 +66,7 @@ const safeParse = <T,>(json: string | null, fallback: T): T => {
 };
 function useSessionStorage<T>(
   key: string,
-  initialValue: T
+  initialValue: T,
 ): [T, (value: T | ((prev: T) => T)) => void] {
   const [storedValue, setStoredValue] = useState<T>(() => {
     try {
@@ -98,13 +106,13 @@ function useSmartSync<T>(
   initialValue: T,
   activeZoneId: string,
   onStatusChange?: (status: SyncStatus) => void,
-  onUpdateReceived?: (newData: T) => void
+  onUpdateReceived?: (newData: T) => void,
 ): [T, (val: T | ((prev: T) => T)) => void] {
   const [data, setData] = useState<T>(() => {
     try {
       return safeParse(
         localStorage.getItem(`${docName}_${activeZoneId}`),
-        initialValue
+        initialValue,
       );
     } catch {
       return initialValue;
@@ -128,7 +136,7 @@ function useSmartSync<T>(
             zone_id: activeZoneId,
             updated_at: new Date().toISOString(),
           },
-          { onConflict: "key,zone_id" }
+          { onConflict: "key,zone_id" },
         )
         .then(({ error }) => {
           onStatusChange?.(error ? "local" : "connected");
@@ -192,7 +200,7 @@ function App() {
   const [isGlobalTicketModalOpen, setIsGlobalTicketModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useSessionStorage<User | null>(
     "nexus_current_user_v1",
-    null
+    null,
   );
   const [isNotificationHubOpen, setIsNotificationHubOpen] = useState(false);
   const [teamMembers, setTeamMembers] = useState<User[]>([]);
@@ -339,50 +347,53 @@ function App() {
     "notifications",
     [],
     "global",
-    setSyncStatus
+    setSyncStatus,
   );
 
   const [selectedZoneId, setSelectedZoneId] = useState<string>("all");
 
-  const pushNotification = (
-    notif: Omit<
-      AppNotification,
-      "id" | "timestamp" | "read" | "userId" | "userRole"
-    >
+  const pushNotification = async (
+    notif: Omit<AppNotification, "id" | "timestamp" | "userId" | "readBy">,
+    forceUser?: User,
   ) => {
-    if (!currentUser) return;
+    const user = forceUser || currentUser;
+    if (!user) {
+      console.warn("⚠️ Cannot push notification: No user available");
+      return;
+    }
 
     const newNotif: AppNotification = {
       ...notif,
       id: Date.now().toString() + Math.random().toString().slice(2, 5),
-      userId: currentUser.id,
-      userRole: currentUser.role,
+      userId: user.id,
       timestamp: Date.now(),
-
-      // 🔥 NEW
       readBy: [],
     };
 
-    // --- Notification Permission Logic ---
-    setNotifications((prev) => {
-      // Super admin sees all
-      if (currentUser.role === "SUPER_ADMIN")
-        return [newNotif, ...prev].slice(0, 50);
+    // ✅ Save to Supabase FIRST
+    if (supabase) {
+      try {
+        await supabase.from("notifications").insert({
+          id: newNotif.id,
+          type: newNotif.type,
+          title: newNotif.title,
+          message: newNotif.message,
+          user_id: newNotif.userId,
+          user_name: newNotif.userName,
+          user_role: newNotif.userRole,
+          read_by: newNotif.readBy,
+          link: newNotif.link,
+          created_at: new Date(newNotif.timestamp).toISOString(),
+        });
 
-      // Admin sees all except notifications from SUPER_ADMIN
-      if (currentUser.role === "ADMIN") {
-        return [
-          newNotif,
-          ...prev.filter((n) => n.userRole !== "SUPER_ADMIN"),
-        ].slice(0, 50);
+        console.log("✅ Notification saved to Supabase:", newNotif.title);
+      } catch (err) {
+        console.error("❌ Failed to save notification:", err);
       }
+    }
 
-      // Other roles only see self notifications
-      return [
-        newNotif,
-        ...prev.filter((n) => n.userId === currentUser.id),
-      ].slice(0, 50);
-    });
+    // Update local state
+    setNotifications((prev) => [newNotif, ...prev].slice(0, 50));
   };
 
   const syncZone = selectedZoneId === "all" ? "global" : selectedZoneId;
@@ -390,27 +401,24 @@ function App() {
     "settings",
     DEFAULT_SETTINGS,
     "global",
-    setSyncStatus
+    setSyncStatus,
   );
-  // ✅ GLOBAL customers (used ONLY for Dashboard KPIs)
   const [globalCustomers, setGlobalCustomers] = useSmartSync<Customer[]>(
     "customers",
     [],
     "global",
-    setSyncStatus
+    setSyncStatus,
   );
 
   const [customers, setCustomers] = useSmartSync<Customer[]>(
     "customers",
     [],
     syncZone,
-    setSyncStatus
+    setSyncStatus,
   );
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoadingTickets, setIsLoadingTickets] = useState(false);
-
-  // 🔥 FIX: Fetch tickets function with proper loading state
   const fetchTickets = useCallback(async () => {
     if (!supabase) {
       console.log("Supabase not configured");
@@ -462,6 +470,9 @@ function App() {
         date: new Date(t.created_at).toLocaleDateString(),
         zoneId: t.zone_id ?? "",
         history: [],
+        resolvedAt: t.resolved_at
+          ? new Date(t.resolved_at).toLocaleDateString()
+          : undefined,
       }));
 
       setTickets(mapped);
@@ -479,10 +490,50 @@ function App() {
       setSyncStatus("local");
       return;
     }
-
-    // Add a small delay to ensure all state updates have propagated
     fetchTickets();
   }, [currentUser, fetchTickets]);
+
+  const fetchNotifications = useCallback(async () => {
+    if (!supabase) {
+      console.log("Supabase not configured for notifications");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error("❌ Notification fetch error:", error);
+        return;
+      }
+
+      const mapped: AppNotification[] = data.map((n) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        userId: n.user_id,
+        userName: n.user_name,
+        userRole: n.user_role,
+        timestamp: new Date(n.created_at).getTime(),
+        readBy: n.read_by || [],
+        link: n.link,
+      }));
+
+      setNotifications(mapped);
+    } catch (err) {
+      console.error("❌ Error fetching notifications:", err);
+    }
+  }, []);
+  useEffect(() => {
+    if (!supabase || !currentUser) return;
+
+    fetchNotifications();
+  }, [currentUser, fetchNotifications]);
 
   useEffect(() => {
     if (!supabase || !currentUser) return;
@@ -494,7 +545,7 @@ function App() {
         { event: "*", schema: "public", table: "tickets" },
         (payload) => {
           fetchTickets();
-        }
+        },
       )
       .subscribe();
 
@@ -507,53 +558,72 @@ function App() {
     "tasks",
     [],
     syncZone,
-    setSyncStatus
+    setSyncStatus,
   );
+
+  useEffect(() => {
+    if (!supabase || !currentUser) return;
+
+    const channel = supabase
+      .channel("notifications-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications" },
+        (payload) => {
+          console.log("🔔 Notification update:", payload);
+          fetchNotifications();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, fetchNotifications]);
+
   const [laptopReports, setLaptopReports] = useState<Report[]>([]);
 
-  // 🔥 FIX: handleLogin now properly triggers ticket fetch
   const handleLogin = async (user: User) => {
     setCurrentUser(user);
 
     setCurrentView(
-      user.role === "CUSTOMER" ? "customer_dashboard" : "dashboard"
+      user.role === "CUSTOMER" ? "customer_dashboard" : "dashboard",
     );
 
-    // 🔥 FIX: Clear any stale tickets before fetching fresh data from Supabase
     setTickets([]);
-    // ✅ SYSTEM LOGIN NOTIFICATION (OLD APP STYLE)
-    setNotifications((prev) => [
+    await pushNotification(
       {
-        id: Date.now().toString(),
         type: "info",
         title: "System Access",
         message: `${user.name} logged into the system.`,
-        userId: user.id,
         userName: user.name,
         userRole: user.role,
-        timestamp: Date.now(),
-        readBy: [],
       },
-      ...prev,
-    ]);
+      user,
+    );
   };
 
   const visibleNotifications = useMemo(() => {
     if (!currentUser) return [];
 
     return notifications.filter((n) => {
-      // TECHNICIAN: only own notifications
-      if (currentUser.role === "TECHNICIAN") {
-        return n.userId === currentUser.id;
-      }
+      switch (currentUser.role) {
+        case "SUPER_ADMIN":
+          return true;
 
-      // MANAGER: exclude admin & customer
-      if (currentUser.role === "MANAGER") {
-        return !["SUPER_ADMIN", "ADMIN", "CUSTOMER"].includes(n.userRole);
-      }
+        case "ADMIN":
+          return n.userRole !== "SUPER_ADMIN";
 
-      // ADMIN & SUPER_ADMIN: see all
-      return true;
+        case "MANAGER":
+          return !["SUPER_ADMIN", "ADMIN", "CUSTOMER"].includes(n.userRole);
+
+        case "TECHNICIAN":
+        case "CUSTOMER":
+          return n.userId === currentUser.id;
+
+        default:
+          return false;
+      }
     });
   }, [notifications, currentUser]);
 
@@ -850,22 +920,16 @@ function App() {
         isMobileOpen={isMobileOpen}
         setIsMobileOpen={setIsMobileOpen}
         currentUser={currentUser}
-        onLogout={() => {
+        onLogout={async () => {
           if (currentUser) {
-            setNotifications((prev) => [
-              {
-                id: Date.now().toString(),
-                type: "info",
-                title: "Session Ended",
-                message: `${currentUser.name} logged out.`,
-                userId: currentUser.id,
-                userName: currentUser.name,
-                userRole: currentUser.role,
-                timestamp: Date.now(),
-                readBy: [],
-              },
-              ...prev,
-            ]);
+            // ✅ PUSH LOGOUT NOTIFICATION TO SUPABASE
+            await pushNotification({
+              type: "info",
+              title: "Session Ended",
+              message: `${currentUser.name} logged out.`,
+              userName: currentUser.name,
+              userRole: currentUser.role,
+            });
           }
 
           setCurrentUser(null);
