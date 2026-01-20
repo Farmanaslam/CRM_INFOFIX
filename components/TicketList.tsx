@@ -48,7 +48,7 @@ interface TicketListProps {
 
 // Add this helper function right after the imports and before the TicketList component
 const fetchCustomerForTicket = async (
-  customerId: string
+  customerId: string,
 ): Promise<Customer | null> => {
   if (!supabase) return null;
 
@@ -75,7 +75,7 @@ const fetchCustomerForTicket = async (
 export const generateTicketReceipt = async (
   ticket: Ticket,
   settings: AppSettings,
-  shouldSave: boolean = false
+  shouldSave: boolean = false,
 ) => {
   // 🔥 FETCH CUSTOMER DATA
   const customer = await fetchCustomerForTicket(ticket.customerId);
@@ -145,7 +145,7 @@ export const generateTicketReceipt = async (
   doc.setFontSize(10);
   const issueLines = doc.splitTextToSize(
     ticket.issueDescription,
-    pageWidth - 40
+    pageWidth - 40,
   );
   doc.text(issueLines, 20, 115);
 
@@ -165,7 +165,7 @@ export const generateTicketReceipt = async (
     "Log in to our portal to check your work status, history, and more.",
     pageWidth / 2,
     157,
-    { align: "center" }
+    { align: "center" },
   );
 
   doc.setFontSize(11);
@@ -182,17 +182,17 @@ export const generateTicketReceipt = async (
   doc.text(
     "1. Devices not collected within 30 days of resolution may incur storage fees.",
     15,
-    205
+    205,
   );
   doc.text(
     "2. Please backup all data before submission. We are not responsible for data loss.",
     15,
-    210
+    210,
   );
   doc.text(
     "3. Minimum inspection charge applicable if repair is rejected.",
     15,
-    215
+    215,
   );
 
   doc.setDrawColor(200);
@@ -460,7 +460,7 @@ const TicketList: React.FC<TicketListProps> = ({
 
   const availableTechs = useMemo(() => {
     let techs = teamMembers.filter(
-      (m) => m.role === "TECHNICIAN" || m.role === "MANAGER"
+      (m) => m.role === "TECHNICIAN" || m.role === "MANAGER",
     );
     if (selectedZoneId !== "all") {
       techs = techs.filter((t) => t.zoneId === selectedZoneId);
@@ -732,12 +732,12 @@ const TicketList: React.FC<TicketListProps> = ({
                         ticket.status === "New"
                           ? "bg-blue-100 text-blue-700"
                           : ticket.status === "Resolved"
-                          ? "bg-green-100 text-green-700"
-                          : ticket.status === "Rejected"
-                          ? "bg-red-100 text-red-700"
-                          : ticket.status === "On Hold"
-                          ? "bg-orange-100 text-orange-700"
-                          : "bg-slate-100 text-slate-600"
+                            ? "bg-green-100 text-green-700"
+                            : ticket.status === "Rejected"
+                              ? "bg-red-100 text-red-700"
+                              : ticket.status === "On Hold"
+                                ? "bg-orange-100 text-orange-700"
+                                : "bg-slate-100 text-slate-600"
                       }`}
                     >
                       {ticket.status}
@@ -842,12 +842,12 @@ const TicketList: React.FC<TicketListProps> = ({
                               ticket.status === "New"
                                 ? "bg-blue-100 text-blue-700"
                                 : ticket.status === "Resolved"
-                                ? "bg-green-100 text-green-700"
-                                : ticket.status === "Rejected"
-                                ? "bg-red-100 text-red-700"
-                                : ticket.status === "On Hold"
-                                ? "bg-orange-100 text-orange-700"
-                                : "bg-slate-100 text-slate-600"
+                                  ? "bg-green-100 text-green-700"
+                                  : ticket.status === "Rejected"
+                                    ? "bg-red-100 text-red-700"
+                                    : ticket.status === "On Hold"
+                                      ? "bg-orange-100 text-orange-700"
+                                      : "bg-slate-100 text-slate-600"
                             }`}
                           >
                             {ticket.status}
@@ -859,8 +859,8 @@ const TicketList: React.FC<TicketListProps> = ({
                               ticket.priority === "High"
                                 ? "bg-red-50 text-red-700 border-red-100"
                                 : ticket.priority === "Medium"
-                                ? "bg-yellow-50 text-yellow-700 border-yellow-100"
-                                : "bg-green-50 text-green-700 border-green-100"
+                                  ? "bg-yellow-50 text-yellow-700 border-yellow-100"
+                                  : "bg-green-50 text-green-700 border-green-100"
                             }`}
                           >
                             {ticket.priority === "High" && (
@@ -952,6 +952,7 @@ const TicketList: React.FC<TicketListProps> = ({
         teamMembers={teamMembers}
         stores={stores}
         zones={zones}
+        onEditingTicketUpdate={setEditingTicket}
       />
 
       <DeleteConfirmationModal

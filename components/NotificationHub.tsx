@@ -22,8 +22,11 @@ import {
   SortDesc,
   Shield,
   UserCheck,
+  Calendar,
+  ArrowRight,
+  AlertTriangle,
 } from "lucide-react";
-import { AppNotification, View, User as AppUser, Role } from "../types";
+import { AppNotification, View, User as AppUser, Role, Ticket } from "../types";
 
 interface NotificationHubProps {
   notifications: AppNotification[];
@@ -32,6 +35,7 @@ interface NotificationHubProps {
   onClose: () => void;
   onNavigate: (view: View) => void;
   currentUser: AppUser | null;
+  tickets: Ticket[];
 }
 
 // A short, valid base64 MP3 "ping" sound
@@ -45,6 +49,7 @@ export default function NotificationHub({
   onClose,
   onNavigate,
   currentUser,
+  tickets,
 }: NotificationHubProps) {
   const [activeFilter, setActiveFilter] = useState<"all" | "urgent" | "system">(
     "all",
@@ -54,7 +59,10 @@ export default function NotificationHub({
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [permissionStatus, setPermissionStatus] =
     useState<NotificationPermission>(Notification.permission);
-
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [viewedTicketIds, setViewedTicketIds] = useState<Set<string>>(
+    new Set(),
+  );
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevCount = useRef(notifications.length);
 
@@ -141,6 +149,13 @@ export default function NotificationHub({
           return false;
       }
 
+      if (selectedDate) {
+        const notificationDate = new Date(n.timestamp)
+          .toISOString()
+          .split("T")[0]; // Get YYYY-MM-DD
+        if (notificationDate !== selectedDate) return false;
+      }
+
       // Type filtering
       if (
         activeFilter === "urgent" &&
@@ -176,6 +191,7 @@ export default function NotificationHub({
     isAdmin,
     currentUser,
     userRoleFilter,
+    selectedDate,
   ]);
 
   // REPLACE the markAllRead function in NotificationHub (around line 170)
@@ -305,12 +321,11 @@ export default function NotificationHub({
               <Bell size={24} className="text-indigo-600" />
               {/* Bell Indicator */}
               {currentUser &&
-  filteredNotifications.some(
-    (n) => !n.readBy.includes(currentUser.id)
-  ) && (
-    <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white"></span>
-  )}
-
+                filteredNotifications.some(
+                  (n) => !n.readBy.includes(currentUser.id),
+                ) && (
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white"></span>
+                )}
             </div>
             <h2 className="text-xl font-bold text-slate-800">Notifications</h2>
           </div>
@@ -384,6 +399,19 @@ export default function NotificationHub({
                   <option value="CUSTOMER">Customers</option>
                 </select>
               </div>
+              <div className="relative flex-1">
+                <Calendar
+                  size={12}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full pl-6 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 outline-none appearance-none"
+                  placeholder="Filter by date"
+                />
+              </div>
               <button
                 onClick={() =>
                   setSortOrder((prev) =>
@@ -421,6 +449,89 @@ export default function NotificationHub({
 
         {/* List */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2 bg-slate-50/50">
+          {/* NEW: Urgent Tickets Section (only when urgent filter is active) */}
+          {/* NEW: Urgent Tickets Section (only when urgent filter is active) */}
+          {activeFilter === "urgent" && (
+            <div className="mb-4">
+              <div className="space-y-2">
+                {tickets
+                  .filter(
+                    (t) =>
+                      t.priority === "High" &&
+                      t.status !== "Resolved" &&
+                      t.status !== "Rejected",
+                  )
+                  .slice(0, 5) // Limit to 5 for brevity
+                  .map((ticket) => {
+                    const isViewed = viewedTicketIds.has(ticket.id);
+                    return (
+                      <div
+                        key={ticket.id}
+                        onClick={() => {
+                          setViewedTicketIds((prev) =>
+                            new Set(prev).add(ticket.id),
+                          ); // Mark as viewed on click
+                          onNavigate("tickets"); // Navigate to tickets view
+                        }}
+                        className={`relative p-4 rounded-xl border transition-all group ${
+                          isViewed
+                            ? "bg-white border-slate-100 opacity-70 cursor-default"
+                            : "bg-white border-indigo-100 shadow-sm ring-1 ring-indigo-50 cursor-pointer hover:shadow-md"
+                        }`}
+                      >
+                        {!isViewed && (
+                          <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+                        )}
+
+                        <div className="flex gap-4">
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg shrink-0 bg-rose-500 shadow-rose-200">
+                            <AlertTriangle size={18} className="text-white" />
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start mb-1">
+                              <h4
+                                className={`text-sm font-bold truncate ${isViewed ? "text-slate-600" : "text-slate-900"}`}
+                              >
+                                {ticket.deviceType} • {ticket.brand}
+                              </h4>
+                              <span className="text-[10px] font-black text-rose-600 uppercase bg-rose-200 px-2 py-0.5 rounded">
+                                {ticket.priority}
+                              </span>
+                            </div>
+
+                            <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 mb-2">
+                              Issue: {ticket.issueDescription}
+                            </p>
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                <Clock size={10} />
+                                {ticket.date}
+                              </span>
+                              <span className="text-[10px] font-bold text-indigo-600 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                View <ChevronRight size={10} />
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                {tickets.filter(
+                  (t) =>
+                    t.priority === "High" &&
+                    t.status !== "Resolved" &&
+                    t.status !== "Rejected",
+                ).length === 0 && (
+                  <div className="text-center py-6 text-slate-400 text-xs">
+                    No high-priority tickets found.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {filteredNotifications.length > 0 ? (
             filteredNotifications.map((note) => {
               const isRead = currentUser

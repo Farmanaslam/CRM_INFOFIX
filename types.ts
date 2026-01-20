@@ -119,6 +119,7 @@ export interface Ticket {
   history?: TicketHistory[];
   zoneId?: string;
   resolvedAt?: string;
+  jobId?: string;
 }
 
 export interface Task {

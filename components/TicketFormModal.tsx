@@ -66,6 +66,7 @@ interface TicketFormModalProps {
   teamMembers: AppUser[];
   zones: OperationalZone[];
   stores: Store[];
+  onEditingTicketUpdate?: (updatedTicket: Ticket) => void;
 }
 
 export const TicketFormModal: React.FC<TicketFormModalProps> = ({
@@ -83,6 +84,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
   teamMembers,
   zones,
   stores = [],
+  onEditingTicketUpdate,
 }) => {
   // UI State
   const [activeTab, setActiveTab] = useState<"details" | "history">("details");
@@ -113,6 +115,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     progressNote: "",
     scheduledDate: "",
     assignedToId: "",
+    jobId: "",
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -146,24 +149,25 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
       setIsSubmitting(false);
       if (editingTicket) {
         setFormData({
-          email: editingTicket.email,
-          name: editingTicket.name,
-          mobile: editingTicket.number,
-          address: editingTicket.address,
-          deviceType: editingTicket.deviceType,
+          email: editingTicket.email || "",
+          name: editingTicket.name || "",
+          mobile: editingTicket.number || "",
+          address: editingTicket.address || "",
+          deviceType: editingTicket.deviceType || "Smartphone",
           brand: editingTicket.brand || "",
           model: editingTicket.model || "",
-          serial: editingTicket.serial || "",
+          serial: editingTicket.serial || "", // Explicit fallback
+          jobId: editingTicket.jobId || "", // Explicit fallback
           chargerIncluded: editingTicket.chargerIncluded ? "Yes" : "No",
           deviceDescription: editingTicket.deviceDescription || "",
-          issueDescription: editingTicket.issueDescription,
-          store: editingTicket.store,
+          issueDescription: editingTicket.issueDescription || "",
+          store: editingTicket.store || "",
           estimatedAmount: editingTicket.estimatedAmount?.toString() || "",
           warranty: editingTicket.warranty ? "Yes" : "No",
           billNumber: editingTicket.billNumber || "",
-          priority: editingTicket.priority,
-          status: editingTicket.status,
-          holdReason: editingTicket.holdReason || "",
+          priority: editingTicket.priority || "Medium",
+          status: editingTicket.status || "New",
+          holdReason: editingTicket.holdReason || "", // Explicit fallback
           progressReason: editingTicket.progressReason || "",
           progressNote: editingTicket.progressNote || "",
           scheduledDate: editingTicket.scheduledDate || "",
@@ -341,12 +345,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         if (authErr) throw authErr;
         if (!authData.user) throw new Error("Auth user creation failed");
 
-        // Store the customer's auth user ID (IMPORTANT FIX)
         customerUserId = authData.user.id;
-
-        // ==========================
-        // STEP 3 — CREATE CUSTOMER WITH auth_id
-        // ==========================
         const { data: newCustomer, error: custErr } = await supabase
           .from("customers")
           .insert([
@@ -365,13 +364,9 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
 
         customerId = newCustomer.id;
 
-        // Keep UI in sync
         setCustomers([...customers, newCustomer as Customer]);
       }
 
-      // ==========================
-      // STEP 4 — GENERATE TICKET ID (UNCHANGED)
-      // ==========================
       const { data: lastTicket, error: lastErr } = await supabase
         .from("tickets")
         .select("id")
@@ -390,10 +385,70 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
 
       const ticketId = `TKT-IF-${nextNumber.toString().padStart(3, "0")}`;
 
-      // ==========================
-      // STEP 5 — CREATE OR UPDATE TICKET (YOUR ORIGINAL LOGIC)
-      // ==========================
       if (editingTicket) {
+        const historyLogs: TicketHistory[] = [];
+
+        if (editingTicket.status !== formData.status) {
+          let details = `Status changed from ${editingTicket.status} to ${formData.status}`;
+          if (formData.status === "On Hold" && formData.holdReason) {
+            details += `. Hold reason: ${formData.holdReason}`;
+          }
+          historyLogs.push(createHistoryEntry("Status Updated", details));
+        }
+
+        if (
+          formData.holdReason &&
+          formData.holdReason !== editingTicket.holdReason
+        ) {
+          historyLogs.push(
+            createHistoryEntry(
+              "Hold Reason",
+              `Hold reason set to: ${formData.holdReason}`,
+            ),
+          );
+        }
+        if (
+          formData.progressReason &&
+          formData.progressReason !== editingTicket.progressReason
+        ) {
+          historyLogs.push(
+            createHistoryEntry(
+              "Progress Stage",
+              `Stage updated to: ${formData.progressReason}`,
+            ),
+          );
+        }
+
+        // Track Store Transfer (separate entry like old code)
+        if (isStoreChanged) {
+          historyLogs.push(
+            createHistoryEntry(
+              "Store Transfer",
+              `Location changed from ${editingTicket.store} to ${formData.store}. Reason: ${transferReason}. Authorized by ${currentUser.name}.`,
+            ),
+          );
+        }
+
+        // Track Assignment Change
+        if (editingTicket.assignedToId !== formData.assignedToId) {
+          const newAssignee = settings.teamMembers.find(
+            (m) => m.id === formData.assignedToId,
+          );
+          const oldAssignee = settings.teamMembers.find(
+            (m) => m.id === editingTicket.assignedToId,
+          );
+          historyLogs.push(
+            createHistoryEntry(
+              "Technician Assigned",
+              `Reassigned from ${oldAssignee?.name || "Unassigned"} to ${newAssignee?.name || "Unassigned"}`,
+            ),
+          );
+        }
+        const updatedHistory = [
+          ...(editingTicket.history || []),
+          ...historyLogs,
+        ]; // Append new logs
+
         const { error: updateError } = await supabase
           .from("tickets")
           .update({
@@ -414,12 +469,16 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             resolved_at: formData.resolvedAt
               ? new Date(formData.resolvedAt).toISOString()
               : null,
+            history: JSON.stringify(updatedHistory),
+            hold_reason: formData.holdReason || null,
+            device_serial_number: formData.serial || null,
+            device_brand_service: formData.jobId || null,
           })
           .eq("id", editingTicket.id);
 
         if (updateError) throw updateError;
 
-        // Update state (your logic unchanged)
+        // Update local state
         setTickets((prev) =>
           prev.map((t) =>
             t.id === editingTicket.id
@@ -440,14 +499,51 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                   billNumber: formData.billNumber || "",
                   scheduledDate: formData.scheduledDate || "",
                   resolvedAt: formData.resolvedAt,
+                  history: updatedHistory,
+                  serial: formData.serial || "",
+                  jobId: formData.jobId || "",
+                  holdReason: formData.holdReason || "",
                 }
               : t,
           ),
         );
 
+        // 🔥 NEW: Construct the updated ticket object and notify parent to refresh editingTicket
+        const updatedTicket: Ticket = {
+          ...editingTicket,
+          ...formData,
+          number: formData.mobile,
+          zoneId: selectedStoreZone?.id || editingTicket.zoneId,
+          chargerIncluded: formData.chargerIncluded === "Yes",
+          estimatedAmount: formData.estimatedAmount
+            ? parseFloat(formData.estimatedAmount)
+            : undefined,
+          warranty: formData.warranty === "Yes",
+          assignedToId: formData.assignedToId || undefined,
+          history: updatedHistory,
+          serial: formData.serial || "",
+          jobId: formData.jobId || "",
+          holdReason: formData.holdReason || "",
+        };
+
+        if (onEditingTicketUpdate) {
+          onEditingTicketUpdate(updatedTicket);
+        }
+
         if (onSuccess) onSuccess();
       } else {
-        // Insert new ticket (YOUR CODE — unchanged)
+        const initialHistory = [
+          {
+            id: Date.now().toString(),
+            date: new Date().toLocaleString(),
+            timestamp: Date.now(),
+            actorName: currentUser.name,
+            actorRole: currentUser.role,
+            action: "Ticket Created",
+            details: `New ${formData.deviceType} repair ticket created for ${formData.name}`,
+          },
+        ];
+
         const { data: newTicket, error: insertError } = await supabase
           .from("tickets")
           .insert([
@@ -476,31 +572,38 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
               resolved_at: formData.resolvedAt
                 ? new Date(formData.resolvedAt).toISOString()
                 : null,
+              history: JSON.stringify(initialHistory),
+              hold_reason: formData.holdReason || null,
+              device_serial_number: formData.serial || null,
+              device_brand_service: formData.jobId || null,
             },
           ])
           .select(
             `
-  id,
-  customer_id,
-  user_id,
-  subject,
-  status,
-  priority,
-  assigned_to,
-  device_type,
-  device_brand,
-  device_model,
-  device_description,
-  store,
-  amount_estimate,
-  warranty,
-  bill_number,
-  scheduled_date,
-  email,
-  name,
-  mobile,
-  address,
-  created_at
+id,
+customer_id,
+user_id,
+subject,
+status,
+priority,
+assigned_to,
+device_type,
+device_brand,
+device_model,
+device_description,
+store,
+amount_estimate,
+warranty,
+bill_number,
+scheduled_date,
+email,
+name,
+mobile,
+address,
+  hold_reason,
+    device_serial_number,
+    device_brand_service,
+created_at
 `,
           )
           .single();
@@ -574,18 +677,18 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     return <History size={14} />;
   };
 
-  const getEventColor = (action: string) => {
-    if (action.includes("Resolved"))
+  const getEventColor = (action: string, details?: string) => {
+    const textToCheck = `${action} ${details || ""}`.toLowerCase();
+    if (textToCheck.includes("resolved"))
       return "bg-emerald-50 border-emerald-200 text-emerald-700";
-    if (action.includes("Hold"))
+    if (textToCheck.includes("hold"))
       return "bg-orange-50 border-orange-200 text-orange-700";
-    if (action.includes("Rejected"))
+    if (textToCheck.includes("rejected"))
       return "bg-red-50 border-red-200 text-red-700";
-    if (action.includes("Transfer"))
+    if (textToCheck.includes("transfer"))
       return "bg-purple-50 border-purple-200 text-purple-700";
     return "bg-slate-50 border-slate-200 text-slate-700";
   };
-
   const deviceIcons: Record<string, any> = {
     Smartphone: Smartphone,
     Laptop: Laptop,
@@ -1267,21 +1370,21 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                       <div key={idx} className="relative pl-6">
                         {/* Dot */}
                         <div
-                          className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-sm z-10 flex items-center justify-center ${
-                            entry.action.includes("Transfer")
-                              ? "bg-purple-500"
-                              : entry.action.includes("Resolved")
-                                ? "bg-emerald-500"
-                                : entry.action.includes("Hold")
-                                  ? "bg-orange-500"
-                                  : "bg-slate-300"
+                          className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-sm z-10 ${
+                            entry.action.includes("Resolved")
+                              ? "bg-emerald-500"
+                              : entry.action.includes("Hold")
+                                ? "bg-orange-500"
+                                : entry.action.includes("Rejected")
+                                  ? "bg-red-500"
+                                  : entry.action.includes("Transfer")
+                                    ? "bg-purple-500"
+                                    : "bg-slate-300"
                           }`}
                         ></div>
 
                         <div
-                          className={`p-4 rounded-xl border transition-colors ${getEventColor(
-                            entry.action,
-                          )}`}
+                          className={`p-4 rounded-xl border transition-colors ${getEventColor(entry.action, entry.details)}`}
                         >
                           <div className="flex justify-between items-start mb-2">
                             <span className="text-xs font-black uppercase tracking-wider flex items-center gap-2">

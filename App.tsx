@@ -463,13 +463,28 @@ function App() {
         priority: t.priority,
         status: t.status,
         holdReason: t.hold_reason,
+        jobId: t.device_brand_service || undefined,
         progressReason: t.internal_progress_reason,
         progressNote: t.internal_progress_note,
         scheduledDate: t.scheduled_date,
         assignedToId: t.assigned_to ?? "",
         date: new Date(t.created_at).toLocaleDateString(),
         zoneId: t.zone_id ?? "",
-        history: [],
+        history: (() => {
+          try {
+            if (!t.history) return [];
+            if (typeof t.history === "string") {
+              const trimmed = t.history.trim();
+              if (trimmed === "" || trimmed === "null") return [];
+              return JSON.parse(trimmed);
+            }
+            if (Array.isArray(t.history)) return t.history;
+            return [];
+          } catch (e) {
+            console.warn(`Failed to parse history for ticket ${t.id}:`, e);
+            return [];
+          }
+        })(),
         resolvedAt: t.resolved_at
           ? new Date(t.resolved_at).toLocaleDateString()
           : undefined,
@@ -991,6 +1006,7 @@ function App() {
           setNotifications={setNotifications}
           onNavigate={setCurrentView}
           currentUser={currentUser}
+          tickets={tickets}
         />
       </div>
     </div>
