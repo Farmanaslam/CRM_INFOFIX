@@ -396,9 +396,11 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           historyLogs.push(createHistoryEntry("Status Updated", details));
         }
 
+        // Track Hold Reason Change (only if not already covered by status change to On Hold)
         if (
           formData.holdReason &&
-          formData.holdReason !== editingTicket.holdReason
+          formData.holdReason !== editingTicket.holdReason &&
+          !(formData.status === "On Hold" && editingTicket.status !== "On Hold") // Skip if status is changing to On Hold
         ) {
           historyLogs.push(
             createHistoryEntry(

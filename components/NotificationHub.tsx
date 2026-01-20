@@ -199,34 +199,53 @@ export default function NotificationHub({
   const markAllRead = async () => {
     if (!currentUser) return;
 
-    const visibleIds = filteredNotifications
+    // Handle notifications (existing logic)
+    const visibleNotificationIds = filteredNotifications
       .filter((n) => !n.readBy.includes(currentUser.id))
       .map((n) => n.id);
 
-    if (visibleIds.length === 0) return;
-
-    // Update in Supabase
-    if (window.supabase) {
-      for (const id of visibleIds) {
-        const notif = notifications.find((n) => n.id === id);
-        if (notif) {
-          const updatedReadBy = [...notif.readBy, currentUser.id];
-          await window.supabase
-            .from("notifications")
-            .update({ read_by: updatedReadBy })
-            .eq("id", id);
+    if (visibleNotificationIds.length > 0) {
+      // Update in Supabase
+      if (window.supabase) {
+        for (const id of visibleNotificationIds) {
+          const notif = notifications.find((n) => n.id === id);
+          if (notif) {
+            const updatedReadBy = [...notif.readBy, currentUser.id];
+            await window.supabase
+              .from("notifications")
+              .update({ read_by: updatedReadBy })
+              .eq("id", id);
+          }
         }
       }
+
+      // Update local state for notifications
+      setNotifications((prev) =>
+        prev.map((n) =>
+          visibleNotificationIds.includes(n.id)
+            ? { ...n, readBy: [...n.readBy, currentUser.id] }
+            : n,
+        ),
+      );
     }
 
-    // Update local state
-    setNotifications((prev) =>
-      prev.map((n) =>
-        visibleIds.includes(n.id)
-          ? { ...n, readBy: [...n.readBy, currentUser.id] }
-          : n,
-      ),
-    );
+    // NEW: Handle urgent tickets if urgent filter is active
+    if (activeFilter === "urgent") {
+      const visibleTicketIds = tickets
+        .filter(
+          (t) =>
+            t.priority === "High" &&
+            t.status !== "Resolved" &&
+            t.status !== "Rejected" &&
+            !viewedTicketIds.has(t.id), // Only mark unviewed ones
+        )
+        .map((t) => t.id);
+
+      if (visibleTicketIds.length > 0) {
+        // Update local state for tickets (no Supabase needed since it's local)
+        setViewedTicketIds((prev) => new Set([...prev, ...visibleTicketIds]));
+      }
+    }
   };
 
   // REPLACE the clearAll function (around line 190)
