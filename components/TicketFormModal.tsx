@@ -325,51 +325,146 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
       let customerUserId: string | null = null;
 
       // STEP 1 — CHECK IF CUSTOMER EXISTS
-      const { data: existingCustomer, error: fetchErr } = await supabase
-        .from("customers")
-        .select("id, email, auth_id")
-        .eq("email", formData.email)
-        .maybeSingle();
+      if (editingTicket) {
+        // ✅ FOR EDITING: Just use the existing customer ID
+        customerId = editingTicket.customerId;
 
-      if (fetchErr) throw fetchErr;
-
-      if (existingCustomer) {
-        // ✅ EXISTING CUSTOMER
-        customerId = existingCustomer.id;
-        customerUserId = existingCustomer.auth_id || null;
-      } else {
-        const { data: authData, error: authErr } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.mobile,
-          options: {
-            data: {
-              role: "CUSTOMER",
-              name: formData.name,
-            },
-          },
-        });
-
-        if (authErr) throw authErr;
-        if (!authData.user) throw new Error("Auth user creation failed");
-
-        customerUserId = authData.user.id;
-        const { data: newCustomer, error: custErr } = await supabase
+        // Fetch customer data to get auth_id
+        const { data: existingCustomer, error: fetchErr } = await supabase
           .from("customers")
-          .insert([
-            {
-              auth_id: authData.user.id,
+          .select("id, email, auth_id")
+          .eq("id", customerId)
+          .maybeSingle();
+
+        if (fetchErr) throw fetchErr;
+
+        customerUserId = existingCustomer?.auth_id || null;
+
+        // 🔥 UPDATE customer info if changed
+        if (existingCustomer) {
+          await supabase
+            .from("customers")
+            .update({
               name: formData.name,
-              email: formData.email,
               mobile: formData.mobile,
               address: formData.address,
-            },
-          ])
-          .select("id")
-          .single();
+            })
+            .eq("id", customerId);
+        }
+      } else {
+        // ✅ FOR NEW TICKETS: Check if customer exists or create new
+        const { data: existingCustomer, error: fetchErr } = await supabase
+          .from("customers")
+          .select("id, email, auth_id")
+          .eq("email", formData.email)
+          .maybeSingle();
 
-        if (custErr) throw custErr;
-        customerId = newCustomer.id;
-        setCustomers([...customers, newCustomer as Customer]);
+        if (fetchErr) throw fetchErr;
+
+        if (existingCustomer) {
+          // ✅ Customer already exists - just use their ID
+          customerId = existingCustomer.id;
+          customerUserId = existingCustomer.auth_id || null;
+
+          console.log("✅ Using existing customer:", existingCustomer.email);
+        } else {
+          // 🔥 Create new customer - with better error handling
+          try {
+            const { data: authData, error: authErr } =
+              await supabase.auth.signUp({
+                email: formData.email,
+                password: formData.mobile,
+                options: {
+                  data: {
+                    role: "CUSTOMER",
+                    name: formData.name,
+                  },
+                },
+              });
+
+            // 🔥 Handle "User already registered" error
+            if (authErr) {
+              if (authErr.message.includes("User already registered")) {
+                // Auth user exists but customer profile doesn't - this is an edge case
+                console.warn(
+                  "⚠️ Auth user exists but customer profile missing. Attempting recovery...",
+                );
+
+                // Sign in to get the user ID
+                const { data: signInData, error: signInErr } =
+                  await supabase.auth.signInWithPassword({
+                    email: formData.email,
+                    password: formData.mobile,
+                  });
+
+                if (signInErr) {
+                  console.error("Sign in failed:", signInErr);
+                  throw new Error(
+                    "Cannot recover customer account. The password may have changed. Please contact support.",
+                  );
+                }
+
+                customerUserId = signInData.user.id;
+
+                // Create customer profile with existing auth ID
+                const { data: recoveredCustomer, error: recoverErr } =
+                  await supabase
+                    .from("customers")
+                    .insert([
+                      {
+                        auth_id: signInData.user.id,
+                        name: formData.name,
+                        email: formData.email,
+                        mobile: formData.mobile,
+                        address: formData.address,
+                      },
+                    ])
+                    .select("id")
+                    .single();
+
+                if (recoverErr) {
+                  console.error("Customer recovery failed:", recoverErr);
+                  throw recoverErr;
+                }
+
+                customerId = recoveredCustomer.id;
+                setCustomers([...customers, recoveredCustomer as Customer]);
+
+                // Sign out after recovery
+                await supabase.auth.signOut();
+
+                console.log("✅ Customer profile recovered successfully");
+              } else {
+                throw authErr;
+              }
+            } else if (authData.user) {
+              // ✅ Normal signup flow
+              customerUserId = authData.user.id;
+              const { data: newCustomer, error: custErr } = await supabase
+                .from("customers")
+                .insert([
+                  {
+                    auth_id: authData.user.id,
+                    name: formData.name,
+                    email: formData.email,
+                    mobile: formData.mobile,
+                    address: formData.address,
+                  },
+                ])
+                .select("id")
+                .single();
+
+              if (custErr) throw custErr;
+              customerId = newCustomer.id;
+              setCustomers([...customers, newCustomer as Customer]);
+            } else {
+              throw new Error("Auth user creation failed");
+            }
+          } catch (innerErr: any) {
+            console.error("❌ Customer creation error:", innerErr);
+            throw new Error(`Failed to create customer: ${innerErr.message}`);
+          }
+        }
       }
 
       const { data: lastTicket, error: lastErr } = await supabase
