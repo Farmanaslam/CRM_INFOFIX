@@ -46,6 +46,7 @@ import {
   TicketHistory,
   OperationalZone,
   Store,
+  AppNotification,
 } from "../types";
 import { supabase } from "../supabaseClient";
 import jsPDF from "jspdf";
@@ -67,6 +68,10 @@ interface TicketFormModalProps {
   zones: OperationalZone[];
   stores: Store[];
   onEditingTicketUpdate?: (updatedTicket: Ticket) => void;
+  pushNotification: (
+    notif: Omit<AppNotification, "id" | "timestamp" | "userId" | "readBy">,
+    forceUser?: AppUser,
+  ) => void;
 }
 
 export const TicketFormModal: React.FC<TicketFormModalProps> = ({
@@ -85,6 +90,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
   zones,
   stores = [],
   onEditingTicketUpdate,
+  pushNotification,
 }) => {
   // UI State
   const [activeTab, setActiveTab] = useState<"details" | "history">("details");
@@ -292,6 +298,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
 
   const isStoreChanged =
     editingTicket && formData.store !== editingTicket.store;
+  // Replace the handleSubmit function in TicketFormModal.tsx with this fixed version:
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
@@ -333,7 +340,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
       } else {
         const { data: authData, error: authErr } = await supabase.auth.signUp({
           email: formData.email,
-          password: formData.mobile, // phone as default password
+          password: formData.mobile,
           options: {
             data: {
               role: "CUSTOMER",
@@ -361,9 +368,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           .single();
 
         if (custErr) throw custErr;
-
         customerId = newCustomer.id;
-
         setCustomers([...customers, newCustomer as Customer]);
       }
 
@@ -396,11 +401,10 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           historyLogs.push(createHistoryEntry("Status Updated", details));
         }
 
-        // Track Hold Reason Change (only if not already covered by status change to On Hold)
         if (
           formData.holdReason &&
           formData.holdReason !== editingTicket.holdReason &&
-          !(formData.status === "On Hold" && editingTicket.status !== "On Hold") // Skip if status is changing to On Hold
+          !(formData.status === "On Hold" && editingTicket.status !== "On Hold")
         ) {
           historyLogs.push(
             createHistoryEntry(
@@ -409,6 +413,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             ),
           );
         }
+
         if (
           formData.progressReason &&
           formData.progressReason !== editingTicket.progressReason
@@ -421,7 +426,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           );
         }
 
-        // Track Store Transfer (separate entry like old code)
         if (isStoreChanged) {
           historyLogs.push(
             createHistoryEntry(
@@ -431,7 +435,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           );
         }
 
-        // Track Assignment Change
         if (editingTicket.assignedToId !== formData.assignedToId) {
           const newAssignee = settings.teamMembers.find(
             (m) => m.id === formData.assignedToId,
@@ -446,10 +449,30 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             ),
           );
         }
+        if (editingTicket.priority !== "High" && formData.priority === "High") {
+          historyLogs.push(
+            createHistoryEntry(
+              "Priority Escalated",
+              `Priority changed from ${editingTicket.priority} to High - marked as urgent`,
+            ),
+          );
+          await pushNotification(
+            {
+              type: "urgent",
+              title: `🔴 URGENT: ${formData.deviceType} • ${formData.brand}`,
+              message: `Ticket ${editingTicket.ticketId} escalated to HIGH priority. Issue: ${formData.issueDescription}`,
+              userName: currentUser.name,
+              userRole: currentUser.role,
+              link: "tickets",
+            },
+            currentUser,
+          );
+        }
+
         const updatedHistory = [
           ...(editingTicket.history || []),
           ...historyLogs,
-        ]; // Append new logs
+        ];
 
         const { error: updateError } = await supabase
           .from("tickets")
@@ -475,12 +498,13 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             hold_reason: formData.holdReason || null,
             device_serial_number: formData.serial || null,
             device_brand_service: formData.jobId || null,
+            internal_progress_reason: formData.progressReason || null,
+            internal_progress_note: formData.progressNote || null,
           })
           .eq("id", editingTicket.id);
 
         if (updateError) throw updateError;
 
-        // Update local state
         setTickets((prev) =>
           prev.map((t) =>
             t.id === editingTicket.id
@@ -510,7 +534,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           ),
         );
 
-        // 🔥 NEW: Construct the updated ticket object and notify parent to refresh editingTicket
         const updatedTicket: Ticket = {
           ...editingTicket,
           ...formData,
@@ -578,81 +601,94 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
               hold_reason: formData.holdReason || null,
               device_serial_number: formData.serial || null,
               device_brand_service: formData.jobId || null,
+              internal_progress_reason: formData.progressReason || null,
+              internal_progress_note: formData.progressNote || null,
             },
           ])
           .select(
             `
-id,
-customer_id,
-user_id,
-subject,
-status,
-priority,
-assigned_to,
-device_type,
-device_brand,
-device_model,
-device_description,
-store,
-amount_estimate,
-warranty,
-bill_number,
-scheduled_date,
-email,
-name,
-mobile,
-address,
-  hold_reason,
-    device_serial_number,
-    device_brand_service,
-created_at
-`,
+          id,
+          customer_id,
+          user_id,
+          subject,
+          status,
+          priority,
+          assigned_to,
+          device_type,
+          device_brand,
+          device_model,
+          device_description,
+          store,
+          amount_estimate,
+          warranty,
+          bill_number,
+          scheduled_date,
+          email,
+          name,
+          mobile,
+          address,
+          hold_reason,
+          device_serial_number,
+          device_brand_service,
+          internal_progress_reason,
+          internal_progress_note,
+          created_at
+        `,
           )
           .single();
 
         if (insertError) throw insertError;
-
+        if (formData.priority === "High") {
+          await pushNotification(
+            {
+              type: "urgent",
+              title: `🔴 URGENT: ${formData.deviceType} • ${formData.brand}`,
+              message: `New HIGH priority ticket created: ${ticketId}. Issue: ${formData.issueDescription}`,
+              userName: currentUser.name,
+              userRole: currentUser.role,
+              link: "tickets",
+            },
+            currentUser,
+          );
+        }
         const assignedTechnician = teamMembers.find(
           (t) => t.id === formData.assignedToId,
         );
 
-        // 🔥 1) GENERATE RECEIPT AFTER TICKET CREATION
+        // Generate receipt and send email
         const receipt = await generateTicketReceipt(
           {
-            ticketId: newTicket.id, // Map DB 'id' to 'ticketId'
+            ticketId: newTicket.id,
             customerId: newTicket.customer_id,
             name: newTicket.name,
             email: newTicket.email,
-            number: newTicket.mobile, // Assuming 'number' is the mobile field in Ticket type
+            number: newTicket.mobile,
             address: newTicket.address,
             deviceType: newTicket.device_type,
             brand: newTicket.device_brand,
             model: newTicket.device_model,
-            serial: newTicket.device_description || "", // Assuming serial is part of device_description or add if needed
-            issueDescription: newTicket.subject, // Map DB 'subject' to 'issueDescription'
+            serial: newTicket.device_description || "",
+            issueDescription: newTicket.subject,
             store: newTicket.store,
             estimatedAmount: newTicket.amount_estimate,
             warranty: newTicket.warranty,
             billNumber: newTicket.bill_number,
             priority: newTicket.priority,
             status: newTicket.status,
-            date: new Date(newTicket.created_at).toLocaleDateString(), // Map 'created_at' to 'date'
-            // Add other fields as needed (e.g., assignedToId, etc.) if they exist in newTicket
-          } as Ticket, // Cast to Ticket type for type safety
+            date: new Date(newTicket.created_at).toLocaleDateString(),
+          } as Ticket,
           settings,
         );
 
-        // 🔥 2) PREPARE EMAIL PAYLOAD WITH ATTACHMENT
         const ticketPayload = {
           ticketId: ticketId,
           customerName: formData.name,
           customerEmail: formData.email,
           issueDescription: formData.issueDescription,
           priority: formData.priority,
-          attachment: receipt, // ✅ ATTACH PDF
+          attachment: receipt,
         };
 
-        // 🔥 3) SEND EMAIL VIA EDGE FUNCTION
         await sendEmail("TICKET_CREATED", ticketPayload, {
           name: assignedTechnician ? assignedTechnician.name : formData.name,
           email: assignedTechnician ? assignedTechnician.email : formData.email,
@@ -670,7 +706,6 @@ created_at
       setIsSubmitting(false);
     }
   };
-
   const getEventIcon = (action: string) => {
     if (action.includes("Resolved")) return <CheckCircle size={14} />;
     if (action.includes("Hold")) return <PauseCircle size={14} />;
@@ -725,7 +760,6 @@ created_at
         console.error("Failed to send email:", text);
         return false;
       } else {
-        console.log("Email sent successfully");
         return true;
       }
     } catch (err) {

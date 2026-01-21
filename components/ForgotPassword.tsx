@@ -33,9 +33,6 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
         ? 'http://localhost:3000/#reset-password'
         : 'https://service.infofixcomputer.in/#reset-password';
 
-      console.log('Sending password reset to:', email);
-      console.log('Redirect URL:', redirectUrl);
-
       const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: redirectUrl,
       });

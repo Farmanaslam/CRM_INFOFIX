@@ -27,6 +27,7 @@ import {
   User as AppUser,
   Store,
   OperationalZone,
+  AppNotification,
 } from "../types";
 import { TicketFormModal } from "./TicketFormModal";
 import { jsPDF } from "jspdf";
@@ -44,6 +45,11 @@ interface TicketListProps {
   teamMembers: AppUser[];
   zones: OperationalZone[];
   stores: Store[];
+  pushNotification: (
+    // 🔥 ADD THIS
+    notif: Omit<AppNotification, "id" | "timestamp" | "userId" | "readBy">,
+    forceUser?: AppUser,
+  ) => void;
 }
 
 // Add this helper function right after the imports and before the TicketList component
@@ -271,6 +277,7 @@ const TicketList: React.FC<TicketListProps> = ({
   teamMembers,
   zones,
   stores = [],
+  pushNotification,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -350,7 +357,6 @@ const TicketList: React.FC<TicketListProps> = ({
       if (filterStartDate || filterEndDate) {
         const ticketDate = new Date(ticket.date);
 
-        // Ensure valid date comparison by stripping time or handling string format
         if (!isNaN(ticketDate.getTime())) {
           ticketDate.setHours(0, 0, 0, 0);
 
@@ -452,7 +458,6 @@ const TicketList: React.FC<TicketListProps> = ({
   const canDelete =
     currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN";
 
-  // Filter options should respect the current Zone if set
   const availableStores = useMemo(() => {
     if (selectedZoneId === "all") return stores;
     return stores.filter((s) => s.zoneId === selectedZoneId);
@@ -953,6 +958,7 @@ const TicketList: React.FC<TicketListProps> = ({
         stores={stores}
         zones={zones}
         onEditingTicketUpdate={setEditingTicket}
+        pushNotification={pushNotification}
       />
 
       <DeleteConfirmationModal

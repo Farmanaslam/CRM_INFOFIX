@@ -370,7 +370,6 @@ function App() {
       readBy: [],
     };
 
-    // ✅ Save to Supabase FIRST
     if (supabase) {
       try {
         await supabase.from("notifications").insert({
@@ -385,8 +384,6 @@ function App() {
           link: newNotif.link,
           created_at: new Date(newNotif.timestamp).toISOString(),
         });
-
-        console.log("✅ Notification saved to Supabase:", newNotif.title);
       } catch (err) {
         console.error("❌ Failed to save notification:", err);
       }
@@ -585,7 +582,6 @@ function App() {
         "postgres_changes",
         { event: "*", schema: "public", table: "notifications" },
         (payload) => {
-          console.log("🔔 Notification update:", payload);
           fetchNotifications();
         },
       )
@@ -721,6 +717,7 @@ function App() {
             teamMembers={teamMembers}
             zones={zones}
             stores={stores || []}
+            pushNotification={pushNotification}
           />
         );
       case "review_reports":
@@ -998,6 +995,7 @@ function App() {
           teamMembers={teamMembers}
           zones={zones}
           stores={stores || []}
+          pushNotification={pushNotification}
         />
         <NotificationHub
           isOpen={isNotificationHubOpen}

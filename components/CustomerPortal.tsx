@@ -413,7 +413,6 @@ export default function CustomerPortal({
         console.error("Failed to send email:", text);
         return false;
       } else {
-        console.log("Email sent successfully");
         return true;
       }
     } catch (err) {
