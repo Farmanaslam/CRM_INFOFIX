@@ -38,7 +38,6 @@ interface NotificationHubProps {
   tickets: Ticket[];
 }
 
-// A short, valid base64 MP3 "ping" sound
 const NOTIFICATION_SOUND =
   "data:audio/mp3;base64,//uQRAAAAWMSLwUIYAAsYkXgoQwAEaYLWfkWgAI0wWs/ItAAAGDgYtAgAyN+QWaAAihwMWm4G8QQRDiMcCBcH3Cc+CDv/7kVAAAAARIHRJqWAABiBCiTXAAACqgCZYourAAcABWOkXmpf725LLeSNwjah4L/2oZ/MFmkB+at8A+GF1JaaNgVqAvGz/l75D9x8//7kVAAAAAAAoaJTwAAAEwKJPAAAAG175D9x8/9+M2//5feD78/7/9/4f/8A8//7kVAAAAAAAoaJTwAAAEwKJPAAAAG175D9x8/9+M2//5feD78/7/9/4f/8A8//7kVAAAAAAAoaJTwAAAEwKJPAAAAG175D9x8/9+M2//5feD78/7/9/4f/8A8";
 
@@ -60,7 +59,7 @@ export default function NotificationHub({
   const [permissionStatus, setPermissionStatus] =
     useState<NotificationPermission>(Notification.permission);
   const [selectedDate, setSelectedDate] = useState<string>("");
-const [clearedByUser, setClearedByUser] = useState<string[]>([]);
+  const [clearedByUser, setClearedByUser] = useState<string[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevCount = useRef(notifications.length);
 
@@ -72,28 +71,24 @@ const [clearedByUser, setClearedByUser] = useState<string[]>([]);
     audioRef.current = new Audio(NOTIFICATION_SOUND);
     audioRef.current.volume = 0.5;
   }, []);
-
-  // Load cleared notifications from localStorage on mount
-useEffect(() => {
-  if (!currentUser) return;
-  const storageKey = `cleared_notifications_${currentUser.id}`;
-  const stored = localStorage.getItem(storageKey);
-  if (stored) {
-    try {
-      setClearedByUser(JSON.parse(stored));
-    } catch (e) {
-      console.error("Failed to parse cleared notifications:", e);
+  useEffect(() => {
+    if (!currentUser) return;
+    const storageKey = `cleared_notifications_${currentUser.id}`;
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      try {
+        setClearedByUser(JSON.parse(stored));
+      } catch (e) {
+        console.error("Failed to parse cleared notifications:", e);
+      }
     }
-  }
-}, [currentUser]);
+  }, [currentUser]);
+  useEffect(() => {
+    if (!currentUser) return;
+    const storageKey = `cleared_notifications_${currentUser.id}`;
+    localStorage.setItem(storageKey, JSON.stringify(clearedByUser));
+  }, [clearedByUser, currentUser]);
 
-// Save cleared notifications to localStorage whenever it changes
-useEffect(() => {
-  if (!currentUser) return;
-  const storageKey = `cleared_notifications_${currentUser.id}`;
-  localStorage.setItem(storageKey, JSON.stringify(clearedByUser));
-}, [clearedByUser, currentUser]);
-  // Request Permissions
   const requestPermissions = async () => {
     const perm = await Notification.requestPermission();
     setPermissionStatus(perm);
@@ -104,7 +99,6 @@ useEffect(() => {
       // New notification arrived
       const latest = notifications[0];
 
-      // 1. Play Sound
       if (soundEnabled && audioRef.current) {
         audioRef.current.currentTime = 0;
         audioRef.current
@@ -112,7 +106,6 @@ useEffect(() => {
           .catch((e) => console.log("Audio play failed", e));
       }
 
-      // 2. Vibrate
       if (navigator.vibrate) {
         if (latest.type === "urgent") navigator.vibrate([200, 100, 200]);
         else navigator.vibrate(200);
@@ -136,7 +129,7 @@ useEffect(() => {
 
     let result = notifications.filter((n) => {
       if (!currentUser) return false;
-if (clearedByUser.includes(n.id)) return false;
+      if (clearedByUser.includes(n.id)) return false;
       // Role-based access
       switch (currentUser.role) {
         case "SUPER_ADMIN":
@@ -212,15 +205,11 @@ if (clearedByUser.includes(n.id)) return false;
     currentUser,
     userRoleFilter,
     selectedDate,
-     clearedByUser,
+    clearedByUser,
   ]);
-
-  // REPLACE the markAllRead function in NotificationHub (around line 170)
 
   const markAllRead = async () => {
     if (!currentUser) return;
-
-    // Handle notifications (existing logic)
     const visibleNotificationIds = filteredNotifications
       .filter((n) => !n.readBy.includes(currentUser.id))
       .map((n) => n.id);
@@ -239,8 +228,6 @@ if (clearedByUser.includes(n.id)) return false;
           }
         }
       }
-
-      // Update local state for notifications
       setNotifications((prev) =>
         prev.map((n) =>
           visibleNotificationIds.includes(n.id)
@@ -251,21 +238,17 @@ if (clearedByUser.includes(n.id)) return false;
     }
   };
 
-const clearAll = async () => {
-  if (!currentUser) return;
-  
-  const visibleIds = filteredNotifications.map((n) => n.id);
-  
-  if (visibleIds.length === 0) {
-    alert("No notifications to clear");
-    return;
-  }
+  const clearAll = async () => {
+    if (!currentUser) return;
 
-  // Add all visible notification IDs to cleared list for this user
-  // This hides them from THIS user's view only, doesn't affect other users
-  setClearedByUser((prev) => [...new Set([...prev, ...visibleIds])]);
-};
-  // REPLACE the handleItemClick function (around line 200)
+    const visibleIds = filteredNotifications.map((n) => n.id);
+
+    if (visibleIds.length === 0) {
+      alert("No notifications to clear");
+      return;
+    }
+    setClearedByUser((prev) => [...new Set([...prev, ...visibleIds])]);
+  };
 
   const handleItemClick = async (n: AppNotification) => {
     if (!currentUser) return;
@@ -337,9 +320,6 @@ const clearAll = async () => {
           <div className="flex items-center gap-3">
             <div className="relative">
               <Bell size={24} className="text-indigo-600" />
-              {/* Bell Indicator */}
-              {/* Bell Indicator */}
-              {/* Bell Indicator */}
               {currentUser &&
                 filteredNotifications.some(
                   (n) => !n.readBy.includes(currentUser.id),
@@ -374,7 +354,7 @@ const clearAll = async () => {
                   {f}
                 </button>
               ))}
-              {currentUser?.role !== "CUSTOMER" && ( // NEW: Hide urgent for customers
+              {currentUser?.role !== "CUSTOMER" && (
                 <button
                   key="urgent"
                   onClick={() => setActiveFilter("urgent")}
@@ -432,22 +412,21 @@ const clearAll = async () => {
                   <option value="CUSTOMER">Customers</option>
                 </select>
               </div>
-              {isAdmin &&
-                activeFilter !== "urgent" && ( // NEW: Hide date filter in urgent tab
-                  <div className="relative flex-1">
-                    <Calendar
-                      size={12}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
-                    />
-                    <input
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      className="w-full pl-6 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 outline-none appearance-none"
-                      placeholder="Filter by date"
-                    />
-                  </div>
-                )}
+              {isAdmin && activeFilter !== "urgent" && (
+                <div className="relative flex-1">
+                  <Calendar
+                    size={12}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="w-full pl-6 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 outline-none appearance-none"
+                    placeholder="Filter by date"
+                  />
+                </div>
+              )}
               <button
                 onClick={() =>
                   setSortOrder((prev) =>
@@ -485,9 +464,6 @@ const clearAll = async () => {
 
         {/* List */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2 bg-slate-50/50">
-          {/* Urgent Tickets Section (show in "all" or "urgent" tab) */}
-
-          {/* Existing Notifications List */}
           {filteredNotifications.length > 0 ? (
             filteredNotifications.map((note) => {
               const isRead = currentUser

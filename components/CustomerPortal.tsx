@@ -96,8 +96,8 @@ const TicketTimeline: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
                 event.action.includes("Resolved")
                   ? "bg-emerald-500"
                   : event.action.includes("Hold")
-                  ? "bg-orange-500"
-                  : "bg-indigo-500"
+                    ? "bg-orange-500"
+                    : "bg-indigo-500"
               }`}
             ></div>
           </div>
@@ -105,7 +105,7 @@ const TicketTimeline: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
           {/* Card Content */}
           <div
             className={`p-4 rounded-xl border ${getEventColor(
-              event.action
+              event.action,
             )} relative group hover:shadow-md transition-shadow`}
           >
             <div className="flex justify-between items-start mb-2">
@@ -245,7 +245,7 @@ export default function CustomerPortal({
   const stats = {
     total: myTickets.length,
     active: myTickets.filter(
-      (t) => t.status !== "Resolved" && t.status !== "Rejected"
+      (t) => t.status !== "Resolved" && t.status !== "Rejected",
     ).length,
     resolved: myTickets.filter((t) => t.status === "Resolved").length,
   };
@@ -373,7 +373,7 @@ export default function CustomerPortal({
             status: "Pending Approval",
             source: "CUSTOMER",
           },
-          null
+          null,
         );
         setIsModalOpen(false);
         setIssue("");
@@ -396,7 +396,7 @@ export default function CustomerPortal({
   const sendEmail = async (
     type: "TICKET_CREATED" | "TASK_ASSIGNED",
     payload: any,
-    user: { name: string; email: string }
+    user: { name: string; email: string },
   ) => {
     try {
       const res = await fetch(SUPABASE_FUNCTION_URL, {
@@ -602,10 +602,10 @@ export default function CustomerPortal({
                           ticket.status === "Resolved"
                             ? "bg-emerald-100 text-emerald-600"
                             : ticket.status === "Rejected"
-                            ? "bg-red-100 text-red-600"
-                            : ticket.status === "On Hold"
-                            ? "bg-orange-100 text-orange-600"
-                            : "bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white"
+                              ? "bg-red-100 text-red-600"
+                              : ticket.status === "On Hold"
+                                ? "bg-orange-100 text-orange-600"
+                                : "bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white"
                         }`}
                       >
                         {ticket.deviceType === "Laptop" ? (
@@ -618,7 +618,7 @@ export default function CustomerPortal({
                       </div>
                       <span
                         className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${getStatusColor(
-                          ticket.status
+                          ticket.status,
                         )}`}
                       >
                         {ticket.status}
@@ -730,7 +730,7 @@ export default function CustomerPortal({
                           <td className="px-6 py-4">
                             <span
                               className={`px-2 py-1 rounded text-xs font-bold uppercase border ${getStatusColor(
-                                ticket.status
+                                ticket.status,
                               )}`}
                             >
                               {ticket.status}
@@ -819,8 +819,8 @@ export default function CustomerPortal({
                         selectedTicket.status === "Resolved"
                           ? "text-emerald-600"
                           : selectedTicket.status === "On Hold"
-                          ? "text-orange-600"
-                          : "text-indigo-600"
+                            ? "text-orange-600"
+                            : "text-indigo-600"
                       }`}
                     >
                       {selectedTicket.status}

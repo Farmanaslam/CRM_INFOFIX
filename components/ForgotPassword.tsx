@@ -29,9 +29,9 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
 
     try {
       // Use dynamic redirect URL based on environment
-      const redirectUrl = window.location.origin.includes('localhost')
-        ? 'http://localhost:3000/#reset-password'
-        : 'https://service.infofixcomputer.in/#reset-password';
+      const redirectUrl = window.location.origin.includes("localhost")
+        ? "http://localhost:3000/#reset-password"
+        : "https://service.infofixcomputer.in/#reset-password";
 
       const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: redirectUrl,
@@ -39,9 +39,9 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
 
       if (error) {
         // Handle specific error cases
-        if (error.message.includes('SMTP') || error.message.includes('email')) {
+        if (error.message.includes("SMTP") || error.message.includes("email")) {
           throw new Error(
-            'Email service temporarily unavailable. Please contact admin or try again later.'
+            "Email service temporarily unavailable. Please contact admin or try again later.",
           );
         }
         throw error;
@@ -51,16 +51,25 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
     } catch (err: any) {
       console.error("Password reset error:", err);
       setStatus("error");
-      
+
       // Provide user-friendly error messages
-      if (err.message.includes('User not found')) {
-        setErrorMessage('No account found with this email address.');
-      } else if (err.message.includes('rate limit')) {
-        setErrorMessage('Too many requests. Please wait a few minutes and try again.');
-      } else if (err.message.includes('SMTP') || err.message.includes('unexpected_failure')) {
-        setErrorMessage('Email service configuration error. Please contact your system administrator.');
+      if (err.message.includes("User not found")) {
+        setErrorMessage("No account found with this email address.");
+      } else if (err.message.includes("rate limit")) {
+        setErrorMessage(
+          "Too many requests. Please wait a few minutes and try again.",
+        );
+      } else if (
+        err.message.includes("SMTP") ||
+        err.message.includes("unexpected_failure")
+      ) {
+        setErrorMessage(
+          "Email service configuration error. Please contact your system administrator.",
+        );
       } else {
-        setErrorMessage(err.message || 'Failed to send reset email. Please try again.');
+        setErrorMessage(
+          err.message || "Failed to send reset email. Please try again.",
+        );
       }
     } finally {
       setIsLoading(false);
@@ -139,7 +148,8 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
                   <span className="font-bold text-white">{email}</span>
                 </p>
                 <p className="text-xs text-slate-400 mt-3">
-                  Check your inbox and spam folder. The link expires in 24 hours.
+                  Check your inbox and spam folder. The link expires in 24
+                  hours.
                 </p>
               </div>
               <button
@@ -163,10 +173,13 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
                   <AlertCircle size={16} className="shrink-0 mt-0.5" />
                   <div>
                     <p className="mb-1">{errorMessage}</p>
-                    {errorMessage.includes('administrator') && (
+                    {errorMessage.includes("administrator") && (
                       <p className="text-[10px] text-rose-300 mt-2 flex items-start gap-1">
                         <Info size={12} className="shrink-0 mt-0.5" />
-                        <span>The email service needs to be configured in Supabase. Contact your admin for assistance.</span>
+                        <span>
+                          The email service needs to be configured in Supabase.
+                          Contact your admin for assistance.
+                        </span>
                       </p>
                     )}
                   </div>
