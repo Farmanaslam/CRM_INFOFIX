@@ -39,6 +39,7 @@ import {
   Edit,
   Delete,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import {
   User,
@@ -69,8 +70,8 @@ export default function StaffRatingsView({
   // --- STATE ---
   const initialTechId = useMemo(() => {
     if (currentUser.role === "TECHNICIAN") return currentUser.id;
-    const firstTech = teamMembers.find((m) => m.role === "TECHNICIAN");
-    return firstTech?.id || "";
+    const firstStaff = teamMembers.find((m) => m.role !== "SUPER_ADMIN");
+    return firstStaff?.id || "";
   }, [currentUser, teamMembers]);
 
   const [selectedTechId, setSelectedTechId] = useState<string>(initialTechId);
@@ -90,14 +91,14 @@ export default function StaffRatingsView({
   const [adminBonusInput, setAdminBonusInput] = useState(1);
   const [adminBonusReasonInput, setAdminBonusReasonInput] = useState("");
   const [dutyRecords, setDutyRecords] = useState<OfficialPerformanceRecord[]>(
-    []
+    [],
   );
   const [localReports, setLocalReports] = useState<Report[]>([]);
   // ---- NEW: Editing State ----
   const [editingRecord, setEditingRecord] =
     useState<OfficialPerformanceRecord | null>(null);
   const [editingType, setEditingType] = useState<"attendance" | "merit" | null>(
-    null
+    null,
   );
 
   const isAdmin =
@@ -111,7 +112,6 @@ export default function StaffRatingsView({
       const { data, error } = await supabase.from("laptop_reports").select("*");
 
       if (!error && data) {
-        // 🔥 NORMALIZE device_info (convert all strings → objects)
         const normalized = (data as any[]).map((r) => {
           let deviceInfo = r.device_info;
 
@@ -125,7 +125,7 @@ export default function StaffRatingsView({
 
           return {
             ...r,
-            deviceInfo, // <-- normalized field your UI actually uses
+            deviceInfo,
           };
         });
 
@@ -192,30 +192,26 @@ export default function StaffRatingsView({
         );
       return d.getFullYear() === navDate.getFullYear();
     };
-
-    // ✅ Attendance from Supabase
     const attendanceList = dutyRecords.filter((r) => {
       const rDate = new Date(r.year, r.month, r.day || 1);
       return (
         r.techId === selectedTechId &&
-        r.type === "attendance" && // <-- only attendance
+        r.type === "attendance" &&
         filterFn(rDate.getTime()) &&
         typeof r.attendanceDays === "number"
       );
     });
 
-    // ✅ Merit from Supabase
     const bonusRecords = dutyRecords.filter((r) => {
       const rDate = new Date(r.year, r.month, r.day || 1);
       return (
         r.techId === selectedTechId &&
-        r.type === "merit" && // <-- only merit
+        r.type === "merit" &&
         filterFn(rDate.getTime()) &&
-        (r.adminBonus || 0) > 0
+        typeof r.adminBonus === "number"
       );
     });
 
-    // ✅ QC Passed from laptop_reports
     const fixedUnitsList = (
       localReports.length ? localReports : savedReports || []
     ).filter((r) => {
@@ -230,20 +226,19 @@ export default function StaffRatingsView({
       const reportDate = r.date
         ? new Date(r.date)
         : r.created_at
-        ? new Date(r.created_at)
-        : null;
+          ? new Date(r.created_at)
+          : null;
 
       const passesDate = reportDate ? filterFn(reportDate.getTime()) : true;
 
       return isMyReport && passesDate && r.progress >= 50;
     });
 
-    // Tasks remain same
     const deadlineTasksList = (tasks || []).filter(
       (t) =>
         t.assignedToId === selectedTechId &&
         t.status === "completed" &&
-        filterFn(t.date)
+        filterFn(t.date),
     );
 
     return { fixedUnitsList, deadlineTasksList, attendanceList, bonusRecords };
@@ -261,11 +256,11 @@ export default function StaffRatingsView({
   const performance = useMemo(() => {
     const attendancePoints = attributionData.attendanceList.reduce(
       (acc, r) => acc + (r.attendanceDays || 0),
-      0
+      0,
     );
     const bonusPoints = attributionData.bonusRecords.reduce(
       (acc, r) => acc + (r.adminBonus || 0),
-      0
+      0,
     );
     const qcPoints = attributionData.fixedUnitsList.length;
     const taskPoints = attributionData.deadlineTasksList.length;
@@ -281,7 +276,6 @@ export default function StaffRatingsView({
     };
   }, [attributionData]);
 
-  // --- TIER SYSTEM ---
   const getTier = (score: number) => {
     if (score >= 70)
       return {
@@ -366,8 +360,8 @@ export default function StaffRatingsView({
       attendanceForm.status === "full"
         ? 1.0
         : attendanceForm.status === "half"
-        ? 0.5
-        : 0;
+          ? 0.5
+          : 0;
 
     const isEdit = editingType === "attendance" && editingRecord;
 
@@ -389,7 +383,7 @@ export default function StaffRatingsView({
       setDutyRecords((prev) =>
         isEdit
           ? prev.map((r) => (r.id === record.id ? record : r))
-          : [record, ...prev]
+          : [record, ...prev],
       );
       setShowAttendanceModal(false);
       setEditingRecord(null);
@@ -411,7 +405,7 @@ export default function StaffRatingsView({
       adminBonus: adminBonusInput,
       adminBonusReason: adminBonusReasonInput.trim(),
       attendanceDays: 0,
-      type: "merit", // <-- mark type
+      type: "merit",
     };
 
     const { error } = isEdit
@@ -422,9 +416,10 @@ export default function StaffRatingsView({
       setDutyRecords((prev) =>
         isEdit
           ? prev.map((r) => (r.id === record.id ? record : r))
-          : [record, ...prev]
+          : [record, ...prev],
       );
       setShowGoalConfig(false);
+      setAdminBonusInput(1);
       setAdminBonusReasonInput("");
       setEditingRecord(null);
       setEditingType(null);
@@ -468,10 +463,10 @@ export default function StaffRatingsView({
                 className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-800 focus:ring-4 ring-indigo-500/5 focus:bg-white outline-none appearance-none transition-all cursor-pointer"
               >
                 {teamMembers
-                  .filter((m) => m.role === "TECHNICIAN")
+                  .filter((m) => m.role !== "SUPER_ADMIN")
                   .map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name}
+                      {m.name} ({m.role})
                     </option>
                   ))}
               </select>
@@ -601,7 +596,13 @@ export default function StaffRatingsView({
                     Registry
                   </button>
                   <button
-                    onClick={() => setShowGoalConfig(true)}
+                    onClick={() => {
+                      setAdminBonusInput(1);
+                      setAdminBonusReasonInput("");
+                      setEditingRecord(null);
+                      setEditingType(null);
+                      setShowGoalConfig(true);
+                    }}
                     className="flex-1 sm:flex-none px-5 py-2 bg-indigo-600 text-white font-black rounded-lg text-[9px] uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-md"
                   >
                     <Zap size={14} className="text-amber-300" /> Merit Award
@@ -640,11 +641,17 @@ export default function StaffRatingsView({
               },
               {
                 label: "Merit Pts",
-                val: `+${performance.bonusPoints}`,
+                val:
+                  performance.bonusPoints >= 0
+                    ? `+${performance.bonusPoints}`
+                    : `${performance.bonusPoints}`,
                 sub: "Direct Credit",
                 icon: Medal,
-                color: "text-amber-600",
-                bg: "bg-amber-50",
+                color:
+                  performance.bonusPoints >= 0
+                    ? "text-amber-600"
+                    : "text-rose-600",
+                bg: performance.bonusPoints >= 0 ? "bg-amber-50" : "bg-rose-50",
               },
             ].map((kpi, i) => (
               <div
@@ -736,7 +743,7 @@ export default function StaffRatingsView({
                       b.year * 10000 +
                       b.month * 100 +
                       (b.day || 0) -
-                      (a.year * 10000 + a.month * 100 + (a.day || 0))
+                      (a.year * 10000 + a.month * 100 + (a.day || 0)),
                   )
                   .map((r) => (
                     <div
@@ -765,8 +772,8 @@ export default function StaffRatingsView({
                                   r.attendanceDays === 1
                                     ? "full"
                                     : r.attendanceDays === 0.5
-                                    ? "half"
-                                    : "absent",
+                                      ? "half"
+                                      : "absent",
                               });
                               setShowAttendanceModal(true);
                             }}
@@ -784,7 +791,7 @@ export default function StaffRatingsView({
                                 .eq("type", "attendance");
                               if (!error) {
                                 setDutyRecords((prev) =>
-                                  prev.filter((rec) => rec.id !== r.id)
+                                  prev.filter((rec) => rec.id !== r.id),
                                 );
                               }
                             }}
@@ -801,8 +808,8 @@ export default function StaffRatingsView({
                             {r.attendanceDays === 1
                               ? "Full"
                               : r.attendanceDays === 0.5
-                              ? "Half"
-                              : "Off"}
+                                ? "Half"
+                                : "Off"}
                           </p>
                           <p className="text-[7px] font-bold text-slate-400 uppercase italic">
                             Verified
@@ -845,7 +852,7 @@ export default function StaffRatingsView({
                   .filter((r) =>
                     (r.deviceInfo?.laptopNo || "")
                       .toLowerCase()
-                      .includes(attributionSearch.toLowerCase())
+                      .includes(attributionSearch.toLowerCase()),
                   )
                   .map((r) => (
                     <div
@@ -909,7 +916,7 @@ export default function StaffRatingsView({
                       b.year * 10000 +
                       b.month * 100 +
                       (b.day || 0) -
-                      (a.year * 10000 + a.month * 100 + (a.day || 0))
+                      (a.year * 10000 + a.month * 100 + (a.day || 0)),
                   )
                   .map((b) => (
                     <div key={b.id} className="relative pl-16 group">
@@ -925,8 +932,14 @@ export default function StaffRatingsView({
                       <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all duration-500 flex flex-col sm:flex-row gap-6 justify-between items-start relative overflow-hidden border-l-4 border-l-amber-400">
                         <div className="space-y-3 flex-1 relative z-10">
                           <div className="flex items-center gap-2">
-                            <div className="px-3 py-0.5 bg-amber-50 text-amber-600 rounded-full border border-amber-100 text-[8px] font-black uppercase tracking-widest shadow-sm">
-                              Awarded
+                            <div
+                              className={`px-3 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest shadow-sm ${
+                                (b.adminBonus || 0) < 0
+                                  ? "bg-rose-50 text-rose-600 border-rose-100"
+                                  : "bg-amber-50 text-amber-600 border-amber-100"
+                              }`}
+                            >
+                              {(b.adminBonus || 0) < 0 ? "Deducted" : "Awarded"}
                             </div>
                             <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest italic flex items-center gap-1.5">
                               <Zap size={10} /> Performance Bonus
@@ -938,14 +951,19 @@ export default function StaffRatingsView({
                         </div>
 
                         <div className="shrink-0 text-center bg-indigo-50/50 p-4 rounded-xl border border-indigo-100/50 min-w-[120px] shadow-inner relative z-10 flex flex-col items-center justify-center">
-                          <span className="text-4xl font-black text-indigo-600 tabular-nums tracking-tighter leading-none">
-                            +{b.adminBonus}
+                          <span
+                            className={`text-4xl font-black tabular-nums tracking-tighter leading-none ${
+                              (b.adminBonus || 0) < 0
+                                ? "text-rose-600"
+                                : "text-indigo-600"
+                            }`}
+                          >
+                            {(b.adminBonus || 0) > 0 ? "+" : ""}
+                            {b.adminBonus}
                           </span>
                           <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mt-3">
                             Multiplier
                           </p>
-
-                          {/* EDIT / DELETE BUTTONS */}
                           <div className="flex gap-2 mt-4">
                             <button
                               type="button"
@@ -954,7 +972,7 @@ export default function StaffRatingsView({
                                 setEditingType("merit");
                                 setAdminBonusInput(b.adminBonus || 1);
                                 setAdminBonusReasonInput(
-                                  b.adminBonusReason || ""
+                                  b.adminBonusReason || "",
                                 );
                                 setShowGoalConfig(true);
                               }}
@@ -974,7 +992,7 @@ export default function StaffRatingsView({
 
                                 if (!error) {
                                   setDutyRecords((prev) =>
-                                    prev.filter((rec) => rec.id !== b.id)
+                                    prev.filter((rec) => rec.id !== b.id),
                                   );
                                 }
                               }}
@@ -1039,10 +1057,10 @@ export default function StaffRatingsView({
                       className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none appearance-none cursor-pointer focus:ring-4 ring-indigo-500/5 transition-all"
                     >
                       {teamMembers
-                        .filter((m) => m.role === "TECHNICIAN")
+                        .filter((m) => m.role !== "SUPER_ADMIN")
                         .map((m) => (
                           <option key={m.id} value={m.id}>
-                            {m.name}
+                            {m.name} ({m.role})
                           </option>
                         ))}
                     </select>
@@ -1156,25 +1174,38 @@ export default function StaffRatingsView({
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[#020617]/85 backdrop-blur-md">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in fade-in zoom-in-95 duration-500 overflow-hidden border border-white/20">
             <div className="p-10 border-b border-slate-100 bg-slate-50/50 text-center relative overflow-hidden">
-              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-amber-500 shadow-inner group border border-amber-100">
-                <Sparkles
-                  size={32}
-                  className="animate-pulse group-hover:scale-110 transition-transform duration-700"
-                />
+              <div
+                className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner group border transition-all ${
+                  adminBonusInput < 0
+                    ? "bg-rose-50 text-rose-500 border-rose-100"
+                    : "bg-amber-50 text-amber-500 border-amber-100"
+                }`}
+              >
+                {adminBonusInput < 0 ? (
+                  <AlertTriangle
+                    size={32}
+                    className="animate-pulse group-hover:scale-110 transition-transform duration-700"
+                  />
+                ) : (
+                  <Sparkles
+                    size={32}
+                    className="animate-pulse group-hover:scale-110 transition-transform duration-700"
+                  />
+                )}
               </div>
               <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-2">
-                Merit Recognition
+                {adminBonusInput < 0 ? "Point Deduction" : "Merit Recognition"}
               </h3>
               <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
-                Technical Contribution Credit
+                {adminBonusInput < 0
+                  ? "Performance Penalty"
+                  : "Technical Contribution Credit"}
               </p>
             </div>
             <div className="p-10 space-y-8">
               <div className="flex items-center justify-center gap-10 bg-slate-100/50 p-8 rounded-[2rem] border border-slate-200/80 shadow-inner relative overflow-hidden group/multiplier">
                 <button
-                  onClick={() =>
-                    setAdminBonusInput((prev) => Math.max(1, prev - 1))
-                  }
+                  onClick={() => setAdminBonusInput((prev) => prev - 1)}
                   className="w-12 h-12 bg-white rounded-xl hover:bg-indigo-50 text-slate-300 hover:text-indigo-600 shadow-md active:scale-90 transition-all border border-slate-100 relative z-10 flex items-center justify-center"
                 >
                   <MinusCircle size={24} />
@@ -1184,14 +1215,14 @@ export default function StaffRatingsView({
                     type="number"
                     value={adminBonusInput}
                     onChange={(e) =>
-                      setAdminBonusInput(
-                        Math.max(1, parseInt(e.target.value) || 0)
-                      )
+                      setAdminBonusInput(parseInt(e.target.value) || 0)
                     }
-                    className="w-full text-center font-black text-7xl lg:text-8xl text-indigo-600 bg-transparent outline-none tabular-nums tracking-tighter focus:ring-0"
+                    className={`w-full text-center font-black text-7xl lg:text-8xl bg-transparent outline-none tabular-nums tracking-tighter focus:ring-0 ${
+                      adminBonusInput < 0 ? "text-rose-600" : "text-indigo-600"
+                    }`}
                   />
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">
-                    Multiplier
+                    {adminBonusInput < 0 ? "Deduction" : "Multiplier"}
                   </p>
                 </div>
                 <button
@@ -1226,9 +1257,23 @@ export default function StaffRatingsView({
                 <button
                   onClick={handleSaveMerit}
                   disabled={!adminBonusReasonInput.trim()}
-                  className="flex-[2] py-4 bg-indigo-600 text-white font-black rounded-xl shadow-xl hover:bg-indigo-700 transition-all text-[10px] uppercase tracking-widest flex items-center justify-center gap-4 active:scale-[0.98] disabled:opacity-50 border border-white/20"
+                  className={`flex-[2] py-4 text-white font-black rounded-xl shadow-xl transition-all text-[10px] uppercase tracking-widest flex items-center justify-center gap-4 active:scale-[0.98] disabled:opacity-50 border border-white/20 ${
+                    adminBonusInput < 0
+                      ? "bg-rose-600 hover:bg-rose-700"
+                      : "bg-indigo-600 hover:bg-indigo-700"
+                  }`}
                 >
-                  <Zap size={20} className="text-amber-300" /> Authorize Asset
+                  {adminBonusInput < 0 ? (
+                    <>
+                      <AlertTriangle size={20} className="text-rose-200" />{" "}
+                      Apply Deduction
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={20} className="text-amber-300" /> Authorize
+                      Asset
+                    </>
+                  )}
                 </button>
               </div>
             </div>

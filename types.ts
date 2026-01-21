@@ -120,6 +120,8 @@ export interface Ticket {
   zoneId?: string;
   resolvedAt?: string;
   jobId?: string;
+  rejectionReasonStaff?: string;
+  rejectionReasonCustomer?: string;
 }
 
 export interface Task {
@@ -135,8 +137,17 @@ export interface Task {
   createdBy: string;
   zoneId?: string;
   technicianNote?: string;
+  history?: TaskHistory[];
 }
-
+export interface TaskHistory {
+  id: string;
+  date: string;
+  timestamp: number;
+  actorName: string;
+  actorRole: string;
+  action: string;
+  details: string;
+}
 export interface ChecklistItem {
   id: string;
   label: string;

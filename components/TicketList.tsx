@@ -184,23 +184,22 @@ export const generateTicketReceipt = async (
   // Footer / Terms
   doc.setTextColor(148, 163, 184);
   doc.setFontSize(8);
-  doc.text("Terms & Conditions:", 15, 200);
-  doc.text(
-    "1. Devices not collected within 30 days of resolution may incur storage fees.",
-    15,
-    205,
-  );
-  doc.text(
-    "2. Please backup all data before submission. We are not responsible for data loss.",
-    15,
-    210,
-  );
-  doc.text(
-    "3. Minimum inspection charge applicable if repair is rejected.",
-    15,
-    215,
-  );
+  doc.text("Terms & Conditions:", 15, 195);
+  const terms = [
+    "1. We kindly request that you collect the device within 30 days of resolution, as it may sometimes be lost afterwards.",
+    "2. While we take care during your entire resolution time, minor scratches may sometimes occur.",
+    "3. Please note that the estimated amount may change after a detailed diagnosis of the device.",
+    "4. Occasionally, the device may be unresponsive/dead at the time of diagnosis.",
+    "5. I have read and agreed to all the terms and conditions.",
+  ];
 
+  let termY = 202;
+  terms.forEach((term) => {
+    // Split long text
+    const lines = doc.splitTextToSize(term, pageWidth - 30);
+    doc.text(lines, 15, termY);
+    termY += lines.length * 4 + 1;
+  });
   doc.setDrawColor(200);
   doc.line(15, 250, 80, 250);
   doc.text("Customer Signature", 30, 255);

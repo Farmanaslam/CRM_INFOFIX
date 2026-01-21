@@ -21,8 +21,15 @@ import {
   AlertTriangle,
   StickyNote,
   ChevronDown,
+  History,
 } from "lucide-react";
-import { Ticket, Task, AppSettings, User as AppUser } from "../types";
+import {
+  Ticket,
+  Task,
+  AppSettings,
+  User as AppUser,
+  TaskHistory,
+} from "../types";
 import { supabase } from "@/supabaseClient";
 
 interface ScheduleProps {
@@ -91,7 +98,7 @@ export default function Schedule({
 }: ScheduleProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string>(
-    new Date().toISOString().split("T")[0]
+    new Date().toISOString().split("T")[0],
   );
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -123,7 +130,7 @@ export default function Schedule({
     tickets.forEach((ticket) => {
       if (ticket.scheduledDate) {
         const assignee = settings.teamMembers.find(
-          (m) => m.id === ticket.assignedToId
+          (m) => m.id === ticket.assignedToId,
         );
 
         allEvents.push({
@@ -148,7 +155,7 @@ export default function Schedule({
       // Manager rules
       if (currentUser.role === "MANAGER") {
         const assignedUser = settings.teamMembers.find(
-          (m) => m.id === t.assignedToId
+          (m) => m.id === t.assignedToId,
         );
 
         // Created by manager
@@ -176,7 +183,7 @@ export default function Schedule({
     // ---- MAP TASKS TO EVENTS ----
     visibleTasks.forEach((task) => {
       const assignee = settings.teamMembers.find(
-        (m) => m.id === task.assignedToId
+        (m) => m.id === task.assignedToId,
       );
 
       allEvents.push({
@@ -203,6 +210,18 @@ export default function Schedule({
     setIsTaskModalOpen(true);
   };
 
+  const createHistoryEntry = (
+    action: string,
+    details: string,
+  ): TaskHistory => ({
+    id: Date.now().toString() + Math.random().toString().slice(2, 5),
+    date: new Date().toLocaleString(),
+    timestamp: Date.now(),
+    actorName: currentUser.name,
+    actorRole: currentUser.role,
+    action,
+    details,
+  });
   function mapDbTask(db: any): Task {
     return {
       id: db.id,
@@ -216,6 +235,21 @@ export default function Schedule({
       createdBy: db.created_by,
       status: db.status,
       priority: db.priority,
+      history: (() => {
+        try {
+          if (!db.history) return [];
+          if (typeof db.history === "string") {
+            const trimmed = db.history.trim();
+            if (trimmed === "" || trimmed === "null") return [];
+            return JSON.parse(trimmed);
+          }
+          if (Array.isArray(db.history)) return db.history;
+          return [];
+        } catch (e) {
+          console.warn(`Failed to parse history for task ${db.id}:`, e);
+          return [];
+        }
+      })(),
     };
   }
 
@@ -246,7 +280,6 @@ export default function Schedule({
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
-    // Technician restriction
     if (
       currentUser.role === "TECHNICIAN" &&
       task.assignedToId !== currentUser.id
@@ -255,9 +288,24 @@ export default function Schedule({
 
     const newStatus = task.status === "completed" ? "pending" : "completed";
 
+    const newHistoryEntry: TaskHistory = {
+      id: Date.now().toString() + Math.random().toString().slice(2, 5),
+      date: new Date().toLocaleString(),
+      timestamp: Date.now(),
+      actorName: currentUser.name,
+      actorRole: currentUser.role,
+      action: "Status Changed",
+      details: `Status changed from ${task.status} to ${newStatus}`,
+    };
+
+    const updatedHistory = [...(task.history || []), newHistoryEntry];
+
     const { data, error } = await supabase
       .from("tasks")
-      .update({ status: newStatus })
+      .update({
+        status: newStatus,
+        history: JSON.stringify(updatedHistory), // ✅ SAVE HISTORY
+      })
       .eq("id", taskId)
       .select()
       .single();
@@ -272,7 +320,7 @@ export default function Schedule({
   const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
   const notifyTaskAssignment = async (
     task: Task,
-    assignee: AppUser | undefined
+    assignee: AppUser | undefined,
   ) => {
     if (!assignee?.email) return;
 
@@ -309,52 +357,115 @@ export default function Schedule({
   };
 
   const handleSaveTask = async (task: Task) => {
-    // Validate assigned user exists in profiles
+    // Validation
     if (task.assignedToId) {
       const userExists = settings.teamMembers.some(
-        (m) => m.id === task.assignedToId
+        (m) => m.id === task.assignedToId,
       );
       if (!userExists) {
         alert(
-          "The assigned user is not valid. Please select a valid team member."
+          "The assigned user is not valid. Please select a valid team member.",
         );
         return;
       }
     }
 
-    // Determine and validate creator
     let creatorId = editingTask ? editingTask.createdBy : currentUser.id;
     const creatorExists = settings.teamMembers.some((m) => m.id === creatorId);
 
     if (!creatorExists) {
-      // Fallback: Use the first available admin/manager or any team member
       const fallbackUser =
         settings.teamMembers.find(
           (m) =>
             m.role === "SUPER_ADMIN" ||
             m.role === "ADMIN" ||
-            m.role === "MANAGER"
+            m.role === "MANAGER",
         ) || settings.teamMembers[0];
 
       if (!fallbackUser) {
         alert(
-          "Error: No valid users found in the system. Please contact support."
-        );
-        console.error(
-          "No team members available, current user:",
-          currentUser.id
+          "Error: No valid users found in the system. Please contact support.",
         );
         return;
       }
-
       creatorId = fallbackUser.id;
-      console.warn(
-        `Current user ${currentUser.id} not in users. Using fallback: ${creatorId}`
-      );
     }
 
     if (editingTask) {
-      // UPDATE
+      // ✅ EDITING - TRACK ALL CHANGES
+      const historyLogs: TaskHistory[] = [];
+
+      if (editingTask.title !== task.title) {
+        historyLogs.push(
+          createHistoryEntry(
+            "Title Updated",
+            `Title changed from "${editingTask.title}" to "${task.title}"`,
+          ),
+        );
+      }
+
+      if (editingTask.date !== task.date || editingTask.time !== task.time) {
+        historyLogs.push(
+          createHistoryEntry(
+            "Schedule Changed",
+            `Date/Time changed from ${editingTask.date} ${editingTask.time || ""} to ${task.date} ${task.time || ""}`,
+          ),
+        );
+      }
+
+      if (editingTask.description !== task.description) {
+        historyLogs.push(
+          createHistoryEntry(
+            "Description Updated",
+            "Task description was modified",
+          ),
+        );
+      }
+
+      if (editingTask.technicianNote !== task.technicianNote) {
+        historyLogs.push(
+          createHistoryEntry(
+            "Technician Note Added",
+            `Note: ${task.technicianNote}`,
+          ),
+        );
+      }
+
+      if (editingTask.type !== task.type) {
+        historyLogs.push(
+          createHistoryEntry(
+            "Category Changed",
+            `Type changed from ${editingTask.type} to ${task.type}`,
+          ),
+        );
+      }
+
+      if (editingTask.assignedToId !== task.assignedToId) {
+        const newAssignee = settings.teamMembers.find(
+          (m) => m.id === task.assignedToId,
+        );
+        const oldAssignee = settings.teamMembers.find(
+          (m) => m.id === editingTask.assignedToId,
+        );
+        historyLogs.push(
+          createHistoryEntry(
+            "Assignment Changed",
+            `Reassigned from ${oldAssignee?.name || "Unassigned"} to ${newAssignee?.name || "Unassigned"}`,
+          ),
+        );
+      }
+
+      if (editingTask.status !== task.status) {
+        historyLogs.push(
+          createHistoryEntry(
+            "Status Updated",
+            `Status changed from ${editingTask.status} to ${task.status}`,
+          ),
+        );
+      }
+
+      const updatedHistory = [...(editingTask.history || []), ...historyLogs];
+
       const { data, error } = await supabase
         .from("tasks")
         .update({
@@ -366,6 +477,7 @@ export default function Schedule({
           type: task.type,
           assigned_to: task.assignedToId || null,
           status: task.status,
+          history: JSON.stringify(updatedHistory), // ✅ SAVE HISTORY
         })
         .eq("id", task.id)
         .select()
@@ -373,30 +485,35 @@ export default function Schedule({
 
       if (error) {
         console.error("Error updating task:", error);
-        if (error.code === "23503") {
-          alert(
-            "Failed to update task: Invalid user reference. Please ensure all assigned users are valid team members."
-          );
-        } else {
-          alert("Failed to update task: " + error.message);
-        }
+        alert("Failed to update task: " + error.message);
         return;
       }
 
       if (data) {
         const updatedTask = mapDbTask(data);
-
         setTasks(tasks.map((t) => (t.id === data.id ? updatedTask : t)));
-
-        // 🔥 SEND EMAIL IF ASSIGNEE CHANGED OR TASK UPDATED
         const assignee = settings.teamMembers.find(
-          (m) => m.id === updatedTask.assignedToId
+          (m) => m.id === updatedTask.assignedToId,
         );
-
         await notifyTaskAssignment(updatedTask, assignee);
       }
     } else {
-      // INSERT
+      // ✅ NEW TASK - CREATE INITIAL HISTORY
+      const initialHistory: TaskHistory[] = [
+        {
+          id: Date.now().toString(),
+          date: new Date().toLocaleString(),
+          timestamp: Date.now(),
+          actorName: currentUser.name,
+          actorRole: currentUser.role,
+          action: "Task Created",
+          details: `Task "${task.title}" created and assigned to ${
+            settings.teamMembers.find((m) => m.id === task.assignedToId)
+              ?.name || "Unassigned"
+          }`,
+        },
+      ];
+
       const { data, error } = await supabase
         .from("tasks")
         .insert({
@@ -409,29 +526,22 @@ export default function Schedule({
           assigned_to: task.assignedToId || null,
           status: task.status,
           created_by: creatorId,
+          history: JSON.stringify(initialHistory), // ✅ SAVE INITIAL HISTORY
         })
         .select()
         .single();
 
       if (error) {
         console.error("Error creating task:", error);
-        if (error.code === "23503") {
-          alert(
-            "Failed to create task: Invalid user reference. Your profile may not be properly set up. Please contact support."
-          );
-        } else {
-          alert("Failed to create task: " + error.message);
-        }
+        alert("Failed to create task: " + error.message);
         return;
       }
 
       if (data) {
         const newTask = mapDbTask(data);
         setTasks([...tasks, newTask]);
-
-        // 🔥 SEND EMAIL TO ASSIGNED PERSON
         const assignee = settings.teamMembers.find(
-          (m) => m.id === newTask.assignedToId
+          (m) => m.id === newTask.assignedToId,
         );
         await notifyTaskAssignment(newTask, assignee);
       }
@@ -460,11 +570,11 @@ export default function Schedule({
         <div
           key={`empty-${i}`}
           className="h-24 sm:h-32 bg-slate-50/30 border border-slate-100/50"
-        ></div>
+        ></div>,
       );
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(
-        day
+        day,
       ).padStart(2, "0")}`;
       const dayEvents = events.filter((e) => e.date === dateStr);
       const isSelected = selectedDateStr === dateStr;
@@ -518,7 +628,7 @@ export default function Schedule({
               </div>
             )}
           </div>
-        </div>
+        </div>,
       );
     }
     return days;
@@ -807,10 +917,11 @@ const TaskModal: React.FC<TaskModalProps> = ({
     assignedToId: currentUser.id,
     status: "pending",
   });
-
+  const [activeTab, setActiveTab] = useState<"details" | "history">("details");
   useEffect(() => {
     if (taskToEdit) {
       setFormData(taskToEdit);
+      setActiveTab("details"); // ✅ RESET TO DETAILS
     } else {
       setFormData({
         title: "",
@@ -822,9 +933,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
         assignedToId: currentUser.id,
         status: "pending",
       });
+      setActiveTab("details"); // ✅ RESET TO DETAILS
     }
   }, [taskToEdit, initialDate, currentUser]);
-
   const isAdmin =
     currentUser.role === "SUPER_ADMIN" ||
     currentUser.role === "ADMIN" ||
@@ -842,14 +953,14 @@ const TaskModal: React.FC<TaskModalProps> = ({
       // Admin can assign to Admin, Manager, Technician (not Super Admin)
       return teamMembers.filter(
         (m) =>
-          m.role === "ADMIN" || m.role === "MANAGER" || m.role === "TECHNICIAN"
+          m.role === "ADMIN" || m.role === "MANAGER" || m.role === "TECHNICIAN",
       );
     }
 
     if (currentUser.role === "MANAGER") {
       // Manager can assign only to Manager and Technician
       return teamMembers.filter(
-        (m) => m.role === "MANAGER" || m.role === "TECHNICIAN"
+        (m) => m.role === "MANAGER" || m.role === "TECHNICIAN",
       );
     }
 
@@ -883,11 +994,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white z-10 shrink-0">
           <div className="flex items-center gap-3">
             <div
-              className={`p-2 rounded-lg ${
-                taskToEdit
-                  ? "bg-amber-50 text-amber-600"
-                  : "bg-indigo-50 text-indigo-600"
-              }`}
+              className={`p-2 rounded-lg ${taskToEdit ? "bg-amber-50 text-amber-600" : "bg-indigo-50 text-indigo-600"}`}
             >
               {taskToEdit ? <Edit size={20} /> : <CheckCircle2 size={20} />}
             </div>
@@ -906,178 +1013,291 @@ const TaskModal: React.FC<TaskModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-3">
+            {/* ✅ ADD TAB SWITCHER FOR EDITING MODE */}
+            {taskToEdit && (
+              <div className="flex bg-slate-100 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("details")}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    activeTab === "details"
+                      ? "bg-white shadow-sm text-slate-800"
+                      : "text-slate-500"
+                  }`}
+                >
+                  Details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("history")}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    activeTab === "history"
+                      ? "bg-white shadow-sm text-slate-800"
+                      : "text-slate-500"
+                  }`}
+                >
+                  History
+                </button>
+              </div>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2.5 bg-white border border-slate-200 rounded-full text-slate-400 hover:text-rose-500 transition-all shadow-sm"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <form
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/50 p-6 space-y-5"
         >
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1">
-              Task Title
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <Tag size={16} />
-              </div>
-              <input
-                required
-                value={formData.title}
-                onChange={(e) =>
-                  setFormData({ ...formData, title: e.target.value })
-                }
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all disabled:opacity-60"
-                placeholder="e.g. Shop Inventory Check"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-5">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1">
-                Date
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <CalendarIcon size={16} />
+          {activeTab === "details" ? (
+            <>
+              {/* ✅ YOUR EXISTING FORM FIELDS - KEEP THEM AS IS */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1">
+                  Task Title
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Tag size={16} />
+                  </div>
+                  <input
+                    required
+                    value={formData.title}
+                    onChange={(e) =>
+                      setFormData({ ...formData, title: e.target.value })
+                    }
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all disabled:opacity-60"
+                    placeholder="e.g. Shop Inventory Check"
+                  />
                 </div>
-                <input
-                  type="date"
-                  required
-                  value={formData.date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, date: e.target.value })
-                  }
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all disabled:opacity-60"
-                />
               </div>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1">
-                Time
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Clock size={16} />
+
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1">
+                    Date
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <CalendarIcon size={16} />
+                    </div>
+                    <input
+                      type="date"
+                      required
+                      value={formData.date}
+                      onChange={(e) =>
+                        setFormData({ ...formData, date: e.target.value })
+                      }
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all disabled:opacity-60"
+                    />
+                  </div>
                 </div>
-                <input
-                  type="time"
-                  value={formData.time}
-                  onChange={(e) =>
-                    setFormData({ ...formData, time: e.target.value })
-                  }
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all disabled:opacity-60"
-                />
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1">
+                    Time
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <Clock size={16} />
+                    </div>
+                    <input
+                      type="time"
+                      value={formData.time}
+                      onChange={(e) =>
+                        setFormData({ ...formData, time: e.target.value })
+                      }
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all disabled:opacity-60"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1">
+                  Task Category
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: "general", label: "General", icon: CheckCircle2 },
+                    { id: "meeting", label: "Meeting", icon: Users },
+                    { id: "maintenance", label: "Maint.", icon: Wrench },
+                  ].map((type) => (
+                    <button
+                      key={type.id}
+                      type="button"
+                      onClick={() =>
+                        setFormData({ ...formData, type: type.id as any })
+                      }
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${
+                        formData.type === type.id
+                          ? "bg-indigo-50 border-indigo-200 text-indigo-700 ring-1 ring-indigo-200 shadow-sm"
+                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <type.icon size={20} className="mb-1.5" />
+                      <span className="text-xs font-bold">{type.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1">
+                  Assign To
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <User size={16} />
+                  </div>
+                  <select
+                    disabled={isTechnician}
+                    value={formData.assignedToId || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, assignedToId: e.target.value })
+                    }
+                    className="w-full pl-10 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none transition-all disabled:bg-slate-50 disabled:text-slate-500"
+                  >
+                    <option value="">-- Unassigned --</option>
+                    {assignableMembers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.role.replace("_", " ")})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                    <ChevronDown size={16} />
+                  </div>
+                </div>
+                {isTechnician && (
+                  <p className="text-[10px] text-slate-400 mt-1 ml-1 italic">
+                    Technicians can only create personal tasks.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1">
+                  Admin Notes / Description
+                </label>
+                <div className="relative">
+                  <div className="absolute top-3 left-3 pointer-events-none text-slate-400">
+                    <AlignLeft size={16} />
+                  </div>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData({ ...formData, description: e.target.value })
+                    }
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none h-20 transition-all disabled:opacity-60"
+                    placeholder="Task description..."
+                  />
+                </div>
+              </div>
+
+              <hr className="border-slate-200" />
+
+              <div>
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide mb-1.5 ml-1 flex items-center gap-2">
+                  <StickyNote size={14} className="text-indigo-600" />{" "}
+                  Technician Feedback
+                </label>
+                <div className="relative">
+                  <textarea
+                    value={formData.technicianNote}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        technicianNote: e.target.value,
+                      })
+                    }
+                    className="w-full px-4 py-3 bg-indigo-50/30 border border-indigo-100 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none h-24 transition-all italic placeholder:text-slate-300"
+                    placeholder="Technician feedback or completion notes (internal only)..."
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            /* ✅ HISTORY TAB - SAME UI AS TICKET HISTORY */
+            <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-8 min-h-[400px]">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                    <History size={20} className="text-indigo-600" />
+                    Task History
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Timeline of all changes and updates
+                  </p>
+                </div>
+              </div>
+
+              <div className="relative pl-6 border-l-2 border-slate-100 space-y-8">
+                {taskToEdit?.history && taskToEdit.history.length > 0 ? (
+                  [...taskToEdit.history]
+                    .sort((a, b) => b.timestamp - a.timestamp)
+                    .map((entry, idx) => (
+                      <div key={idx} className="relative pl-6">
+                        {/* Dot */}
+                        <div
+                          className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-sm z-10 ${
+                            entry.action.includes("Created")
+                              ? "bg-emerald-500"
+                              : entry.action.includes("Assignment")
+                                ? "bg-purple-500"
+                                : entry.action.includes("Status")
+                                  ? "bg-blue-500"
+                                  : entry.action.includes("Title")
+                                    ? "bg-orange-500"
+                                    : "bg-slate-300"
+                          }`}
+                        ></div>
+
+                        <div
+                          className={`p-4 rounded-xl border transition-colors ${
+                            entry.action.includes("Created")
+                              ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                              : entry.action.includes("Assignment")
+                                ? "bg-purple-50 border-purple-200 text-purple-700"
+                                : entry.action.includes("Status")
+                                  ? "bg-blue-50 border-blue-200 text-blue-700"
+                                  : entry.action.includes("Title")
+                                    ? "bg-orange-50 border-orange-200 text-orange-700"
+                                    : "bg-slate-50 border-slate-200 text-slate-700"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="text-xs font-black uppercase tracking-wider flex items-center gap-2">
+                              {entry.action}
+                            </span>
+                            <span className="text-[10px] font-mono opacity-70">
+                              {entry.date}
+                            </span>
+                          </div>
+                          <p className="text-sm font-medium leading-relaxed opacity-90">
+                            {entry.details}
+                          </p>
+                          <div className="mt-3 pt-2 border-t border-black/5 flex items-center gap-1.5 text-[10px] font-bold uppercase opacity-60">
+                            <User size={10} /> {entry.actorName}{" "}
+                            <span className="opacity-50">
+                              ({entry.actorRole})
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                ) : (
+                  <div className="text-center py-10 text-slate-400 text-sm">
+                    No history records found.
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1">
-              Task Category
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { id: "general", label: "General", icon: CheckCircle2 },
-                { id: "meeting", label: "Meeting", icon: Users },
-                { id: "maintenance", label: "Maint.", icon: Wrench },
-              ].map((type) => (
-                <button
-                  key={type.id}
-                  type="button"
-                  onClick={() =>
-                    setFormData({ ...formData, type: type.id as any })
-                  }
-                  className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${
-                    formData.type === type.id
-                      ? "bg-indigo-50 border-indigo-200 text-indigo-700 ring-1 ring-indigo-200 shadow-sm"
-                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                  }`}
-                >
-                  <type.icon size={20} className="mb-1.5" />
-                  <span className="text-xs font-bold">{type.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1">
-              Assign To
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <User size={16} />
-              </div>
-              <select
-                disabled={isTechnician}
-                value={formData.assignedToId || ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, assignedToId: e.target.value })
-                }
-                className="w-full pl-10 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none transition-all disabled:bg-slate-50 disabled:text-slate-500"
-              >
-                <option value="">-- Unassigned --</option>
-                {assignableMembers.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} ({m.role.replace("_", " ")})
-                  </option>
-                ))}
-              </select>
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-                <ChevronDown size={16} />
-              </div>
-            </div>
-            {isTechnician && (
-              <p className="text-[10px] text-slate-400 mt-1 ml-1 italic">
-                Technicians can only create personal tasks.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 ml-1">
-              Admin Notes / Description
-            </label>
-            <div className="relative">
-              <div className="absolute top-3 left-3 pointer-events-none text-slate-400">
-                <AlignLeft size={16} />
-              </div>
-              <textarea
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none h-20 transition-all disabled:opacity-60"
-                placeholder="Task description..."
-              />
-            </div>
-          </div>
-
-          <hr className="border-slate-200" />
-
-          <div>
-            <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide mb-1.5 ml-1 flex items-center gap-2">
-              <StickyNote size={14} className="text-indigo-600" /> Technician
-              Feedback
-            </label>
-            <div className="relative">
-              <textarea
-                value={formData.technicianNote}
-                onChange={(e) =>
-                  setFormData({ ...formData, technicianNote: e.target.value })
-                }
-                className="w-full px-4 py-3 bg-indigo-50/30 border border-indigo-100 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none h-24 transition-all italic placeholder:text-slate-300"
-                placeholder="Technician feedback or completion notes (internal only)..."
-              />
-            </div>
-          </div>
+          )}
 
           <div className="pt-2 flex gap-3 pb-4">
             <button

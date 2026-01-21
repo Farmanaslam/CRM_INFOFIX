@@ -96,7 +96,6 @@ export default function NotificationHub({
 
   useEffect(() => {
     if (notifications.length > prevCount.current) {
-      // New notification arrived
       const latest = notifications[0];
 
       if (soundEnabled && audioRef.current) {
@@ -110,8 +109,6 @@ export default function NotificationHub({
         if (latest.type === "urgent") navigator.vibrate([200, 100, 200]);
         else navigator.vibrate(200);
       }
-
-      // 3. System Notification (if backgrounded)
       if (document.hidden && permissionStatus === "granted") {
         new Notification(latest.title, {
           body: latest.message,
@@ -142,18 +139,15 @@ export default function NotificationHub({
           break;
 
         case "MANAGER":
-          // Manager sees only other managers and techs
           if (["SUPER_ADMIN", "ADMIN", "CUSTOMER"].includes(n.userRole))
             return false;
           break;
 
         case "TECHNICIAN":
-          // Tech sees only own notifications
           if (n.userId !== currentUser.id) return false;
           break;
 
         case "CUSTOMER":
-          // Customer sees only own notifications
           if (n.userId !== currentUser.id) return false;
           break;
 
@@ -164,11 +158,9 @@ export default function NotificationHub({
       if (selectedDate) {
         const notificationDate = new Date(n.timestamp)
           .toISOString()
-          .split("T")[0]; // Get YYYY-MM-DD
+          .split("T")[0];
         if (notificationDate !== selectedDate) return false;
       }
-
-      // Type filtering
       if (
         activeFilter === "urgent" &&
         n.type !== "urgent" &&
@@ -181,15 +173,11 @@ export default function NotificationHub({
         n.type !== "success"
       )
         return false;
-
-      // Admin-specific role filter dropdown
       if (isAdmin && userRoleFilter !== "ALL" && n.userRole !== userRoleFilter)
         return false;
 
       return true;
     });
-
-    // 4. Sorting
     result = result.sort((a, b) => {
       if (sortOrder === "newest") return b.timestamp - a.timestamp;
       return a.timestamp - b.timestamp;
@@ -215,7 +203,6 @@ export default function NotificationHub({
       .map((n) => n.id);
 
     if (visibleNotificationIds.length > 0) {
-      // Update in Supabase
       if (window.supabase) {
         for (const id of visibleNotificationIds) {
           const notif = notifications.find((n) => n.id === id);

@@ -160,6 +160,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     { id: "st1", name: "New", isSystem: true },
     { id: "st2", name: "In Progress" },
     { id: "st3", name: "Resolved", isSystem: true },
+    { id: "st4", name: "Rejected", isSystem: true },
     { id: "st6", name: "On Hold", isSystem: true },
   ],
   priorities: [
@@ -416,6 +417,7 @@ function App() {
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoadingTickets, setIsLoadingTickets] = useState(false);
+
   const fetchTickets = useCallback(async () => {
     if (!supabase) {
       console.log("Supabase not configured");
@@ -467,6 +469,8 @@ function App() {
         assignedToId: t.assigned_to ?? "",
         date: new Date(t.created_at).toLocaleDateString(),
         zoneId: t.zone_id ?? "",
+        rejectionReasonStaff: t.rejection_reason_staff || undefined,
+        rejectionReasonCustomer: t.rejection_reason_customer || undefined,
         history: (() => {
           try {
             if (!t.history) return [];

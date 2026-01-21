@@ -37,6 +37,8 @@ import {
   Download,
   CheckCircle,
   XCircle,
+  MessageSquare,
+  UserX,
 } from "lucide-react";
 import {
   Ticket,
@@ -122,6 +124,8 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     scheduledDate: "",
     assignedToId: "",
     jobId: "",
+    rejectionReasonStaff: "",
+    rejectionReasonCustomer: "",
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -162,8 +166,8 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           deviceType: editingTicket.deviceType || "Smartphone",
           brand: editingTicket.brand || "",
           model: editingTicket.model || "",
-          serial: editingTicket.serial || "", // Explicit fallback
-          jobId: editingTicket.jobId || "", // Explicit fallback
+          serial: editingTicket.serial || "",
+          jobId: editingTicket.jobId || "",
           chargerIncluded: editingTicket.chargerIncluded ? "Yes" : "No",
           deviceDescription: editingTicket.deviceDescription || "",
           issueDescription: editingTicket.issueDescription || "",
@@ -173,12 +177,14 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           billNumber: editingTicket.billNumber || "",
           priority: editingTicket.priority || "Medium",
           status: editingTicket.status || "New",
-          holdReason: editingTicket.holdReason || "", // Explicit fallback
+          holdReason: editingTicket.holdReason || "",
           progressReason: editingTicket.progressReason || "",
           progressNote: editingTicket.progressNote || "",
           scheduledDate: editingTicket.scheduledDate || "",
           assignedToId: editingTicket.assignedToId || "",
           resolvedAt: editingTicket.resolvedAt || "",
+          rejectionReasonStaff: editingTicket.rejectionReasonStaff || "",
+          rejectionReasonCustomer: editingTicket.rejectionReasonCustomer || "",
         });
       } else {
         setFormData(initialFormState);
@@ -191,7 +197,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     if (formData.status === "Resolved" && !formData.resolvedAt) {
       setFormData((prev) => ({
         ...prev,
-        resolvedAt: new Date().toLocaleDateString(), // Set to current date when resolved
+        resolvedAt: new Date().toLocaleDateString(),
       }));
     }
   }, [formData.status]);
@@ -240,7 +246,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     const doc = new jsPDF();
 
     // Header
-    doc.setFillColor(79, 70, 229); // Indigo
+    doc.setFillColor(79, 70, 229);
     doc.rect(0, 0, 210, 24, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(16);
@@ -298,7 +304,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
 
   const isStoreChanged =
     editingTicket && formData.store !== editingTicket.store;
-  // Replace the handleSubmit function in TicketFormModal.tsx with this fixed version:
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
@@ -323,13 +328,8 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     try {
       let customerId: string;
       let customerUserId: string | null = null;
-
-      // STEP 1 — CHECK IF CUSTOMER EXISTS
       if (editingTicket) {
-        // ✅ FOR EDITING: Just use the existing customer ID
         customerId = editingTicket.customerId;
-
-        // Fetch customer data to get auth_id
         const { data: existingCustomer, error: fetchErr } = await supabase
           .from("customers")
           .select("id, email, auth_id")
@@ -339,8 +339,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         if (fetchErr) throw fetchErr;
 
         customerUserId = existingCustomer?.auth_id || null;
-
-        // 🔥 UPDATE customer info if changed
         if (existingCustomer) {
           await supabase
             .from("customers")
@@ -352,7 +350,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             .eq("id", customerId);
         }
       } else {
-        // ✅ FOR NEW TICKETS: Check if customer exists or create new
         const { data: existingCustomer, error: fetchErr } = await supabase
           .from("customers")
           .select("id, email, auth_id")
@@ -362,13 +359,11 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         if (fetchErr) throw fetchErr;
 
         if (existingCustomer) {
-          // ✅ Customer already exists - just use their ID
           customerId = existingCustomer.id;
           customerUserId = existingCustomer.auth_id || null;
 
           console.log("✅ Using existing customer:", existingCustomer.email);
         } else {
-          // 🔥 Create new customer - with better error handling
           try {
             const { data: authData, error: authErr } =
               await supabase.auth.signUp({
@@ -381,16 +376,11 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                   },
                 },
               });
-
-            // 🔥 Handle "User already registered" error
             if (authErr) {
               if (authErr.message.includes("User already registered")) {
-                // Auth user exists but customer profile doesn't - this is an edge case
                 console.warn(
                   "⚠️ Auth user exists but customer profile missing. Attempting recovery...",
                 );
-
-                // Sign in to get the user ID
                 const { data: signInData, error: signInErr } =
                   await supabase.auth.signInWithPassword({
                     email: formData.email,
@@ -405,8 +395,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                 }
 
                 customerUserId = signInData.user.id;
-
-                // Create customer profile with existing auth ID
                 const { data: recoveredCustomer, error: recoverErr } =
                   await supabase
                     .from("customers")
@@ -429,16 +417,11 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
 
                 customerId = recoveredCustomer.id;
                 setCustomers([...customers, recoveredCustomer as Customer]);
-
-                // Sign out after recovery
                 await supabase.auth.signOut();
-
-                console.log("✅ Customer profile recovered successfully");
               } else {
                 throw authErr;
               }
             } else if (authData.user) {
-              // ✅ Normal signup flow
               customerUserId = authData.user.id;
               const { data: newCustomer, error: custErr } = await supabase
                 .from("customers")
@@ -494,6 +477,20 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             details += `. Hold reason: ${formData.holdReason}`;
           }
           historyLogs.push(createHistoryEntry("Status Updated", details));
+        }
+
+        if (
+          editingTicket.status !== "Rejected" &&
+          formData.status === "Rejected"
+        ) {
+          historyLogs.push(
+            createHistoryEntry(
+              "Ticket Rejected",
+              `Rejected by ${currentUser.name}.
+Staff Reason: ${formData.rejectionReasonStaff || "N/A"}
+Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
+            ),
+          );
         }
 
         if (
@@ -564,6 +561,20 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           );
         }
 
+        if (editingTicket.status !== formData.status) {
+          await pushNotification(
+            {
+              type: "info",
+              title: `Status Update: ${editingTicket.ticketId}`,
+              message: `Ticket status changed from ${editingTicket.status} to ${formData.status}. ${formData.deviceType} • ${formData.brand}`,
+              userName: currentUser.name,
+              userRole: currentUser.role,
+              link: "tickets",
+            },
+            currentUser,
+          );
+        }
+
         const updatedHistory = [
           ...(editingTicket.history || []),
           ...historyLogs,
@@ -595,6 +606,8 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             device_brand_service: formData.jobId || null,
             internal_progress_reason: formData.progressReason || null,
             internal_progress_note: formData.progressNote || null,
+            rejection_reason_staff: formData.rejectionReasonStaff || null,
+            rejection_reason_customer: formData.rejectionReasonCustomer || null,
           })
           .eq("id", editingTicket.id);
 
@@ -624,6 +637,9 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                   serial: formData.serial || "",
                   jobId: formData.jobId || "",
                   holdReason: formData.holdReason || "",
+                  rejectionReasonStaff: formData.rejectionReasonStaff || "",
+                  rejectionReasonCustomer:
+                    formData.rejectionReasonCustomer || "",
                 }
               : t,
           ),
@@ -644,6 +660,8 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           serial: formData.serial || "",
           jobId: formData.jobId || "",
           holdReason: formData.holdReason || "",
+          rejectionReasonStaff: formData.rejectionReasonStaff,
+          rejectionReasonCustomer: formData.rejectionReasonCustomer,
         };
 
         if (onEditingTicketUpdate) {
@@ -749,8 +767,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         const assignedTechnician = teamMembers.find(
           (t) => t.id === formData.assignedToId,
         );
-
-        // Generate receipt and send email
         const receipt = await generateTicketReceipt(
           {
             ticketId: newTicket.id,
@@ -829,7 +845,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     Accessory: Keyboard,
     Other: Zap,
   };
-  // No import needed for fetch, but define your Supabase Function URL
   const SUPABASE_FUNCTION_URL =
     "https://jajnueotoourhmfupepb.supabase.co/functions/v1/sendEmail";
 
@@ -1281,11 +1296,11 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                             }
                             className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none cursor-pointer text-slate-700"
                           >
-                            {settings.ticketStatuses.map((s) => (
-                              <option key={s.id} value={s.name}>
-                                {s.name}
-                              </option>
-                            ))}
+                            <option value="New">New</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="On Hold">On Hold</option>
+                            <option value="Resolved">Resolved</option>
+                            <option value="Rejected">Rejected</option>
                           </select>
                           <ChevronDown
                             className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
@@ -1406,7 +1421,60 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                         </div>
                       </div>
                     )}
-
+                    {formData.status === "Rejected" && (
+                      <div className="col-span-full md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-2">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-red-500 uppercase tracking-widest ml-1">
+                            Internal Rejection Reason (Staff Only) *
+                          </label>
+                          <div className="relative">
+                            <UserX
+                              className="absolute left-4 top-4 text-red-400"
+                              size={18}
+                            />
+                            <textarea
+                              value={formData.rejectionReasonStaff}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  rejectionReasonStaff: e.target.value,
+                                })
+                              }
+                              className="w-full pl-12 pr-4 py-3 bg-red-50 border border-red-100 rounded-2xl text-sm font-bold text-red-800 focus:bg-white outline-none resize-none h-24"
+                              placeholder="Internal reason (visible to staff only)..."
+                            />
+                          </div>
+                          <p className="text-xs text-slate-500 italic ml-1">
+                            This reason will only be visible to staff members
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-red-500 uppercase tracking-widest ml-1">
+                            Customer-Facing Rejection Reason *
+                          </label>
+                          <div className="relative">
+                            <MessageSquare
+                              className="absolute left-4 top-4 text-red-400"
+                              size={18}
+                            />
+                            <textarea
+                              value={formData.rejectionReasonCustomer}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  rejectionReasonCustomer: e.target.value,
+                                })
+                              }
+                              className="w-full pl-12 pr-4 py-3 bg-red-50 border border-red-100 rounded-2xl text-sm font-bold text-red-800 focus:bg-white outline-none resize-none h-24"
+                              placeholder="Reason that will be shown to customer..."
+                            />
+                          </div>
+                          <p className="text-xs text-slate-500 italic ml-1">
+                            This message will be visible to the customer
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     {isStoreChanged && (
                       <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
                         <label className="text-[10px] font-black text-purple-600 uppercase tracking-widest ml-1 flex items-center gap-2">
@@ -1461,7 +1529,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                       </div>
                     </div>
 
-                    {/* ONLY SHOW ZONE SELECTION INFO TO SUPER ADMIN */}
                     {currentUser.role === "SUPER_ADMIN" &&
                       selectedStoreZone && (
                         <div className="bg-slate-50 p-4 rounded-2xl border border-indigo-100 flex items-center gap-3 text-xs font-black text-indigo-600">

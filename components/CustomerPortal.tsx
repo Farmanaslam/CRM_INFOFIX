@@ -36,12 +36,12 @@ interface CustomerPortalProps {
 }
 
 // --- TIMELINE COMPONENT ---
+// UPDATE the TicketTimeline component in CustomerPortal.tsx
+
 const TicketTimeline: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
-  // Merge explicit history with fallback if history is empty
   const timelineEvents = useMemo(() => {
     let events = ticket.history || [];
 
-    // If no history exists (legacy tickets), create a synthetic 'Created' event
     if (events.length === 0) {
       events = [
         {
@@ -56,7 +56,6 @@ const TicketTimeline: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
       ];
     }
 
-    // Sort: Newest First
     return [...events].sort((a, b) => b.timestamp - a.timestamp);
   }, [ticket]);
 
@@ -87,7 +86,6 @@ const TicketTimeline: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
           className="relative pl-6 animate-in slide-in-from-bottom-4 fade-in duration-500 fill-mode-both"
           style={{ animationDelay: `${index * 100}ms` }}
         >
-          {/* Timeline Dot */}
           <div
             className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-sm flex items-center justify-center bg-white z-10 ring-1 ring-slate-200`}
           >
@@ -97,12 +95,13 @@ const TicketTimeline: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
                   ? "bg-emerald-500"
                   : event.action.includes("Hold")
                     ? "bg-orange-500"
-                    : "bg-indigo-500"
+                    : event.action.includes("Rejected")
+                      ? "bg-red-500"
+                      : "bg-indigo-500"
               }`}
             ></div>
           </div>
 
-          {/* Card Content */}
           <div
             className={`p-4 rounded-xl border ${getEventColor(
               event.action,
@@ -122,7 +121,15 @@ const TicketTimeline: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
               {event.details}
             </p>
 
-            {/* Specific highlight for Hold Reasons if pertinent */}
+            {event.action.includes("Rejected") && (
+              <div className="mt-3 p-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 whitespace-pre-line">
+                <span className="font-bold block mb-1">
+                  Reason for Rejection
+                </span>
+                {event.details}
+              </div>
+            )}
+
             {event.action.includes("Hold") && (
               <div className="mt-2 text-xs text-orange-700 bg-orange-50/50 p-2 rounded-lg italic border border-orange-100/50">
                 Checking current status...
@@ -152,72 +159,6 @@ export default function CustomerPortal({
   const [issue, setIssue] = useState("");
   const [store, setStore] = useState(settings.stores[0]?.name || "");
   const [isLoading, setIsLoading] = useState(false);
-
-  const fetchCustomerTickets = async () => {
-    try {
-      setIsLoading(true);
-
-      const { data, error } = await supabase
-        .from("tickets")
-        .select("*")
-        .or(`user_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      if (data) {
-        const transformedTickets: Ticket[] = data.map((ticket) => ({
-          id: ticket.id || ticket.ticket_id || `TKT-${Date.now()}`,
-          ticketId:
-            ticket.id ||
-            ticket.ticket_id ||
-            `TKT-IF-${ticket.id?.slice(-3) || "000"}`,
-          customerId: ticket.customer_id || currentUser.id,
-          name: ticket.name || ticket.customer_name || currentUser.name,
-          email: ticket.email || ticket.customer_email || currentUser.email,
-          number:
-            ticket.mobile || ticket.customer_phone || currentUser.mobile || "",
-          address:
-            ticket.address ||
-            ticket.customer_address ||
-            currentUser.address ||
-            "",
-          date: new Date(ticket.created_at).toLocaleDateString(),
-          deviceType: ticket.device_type || "Unknown",
-          issueDescription:
-            ticket.subject || ticket.issue_description || "No description",
-          store: ticket.store || "SERVICE CENTER",
-          status: ticket.status || "Pending Approval",
-          priority: ticket.priority || "Medium",
-          warranty: ticket.warranty === "YES" ? true : false,
-          estimatedAmount: ticket.amount_estimate || ticket.estimated_amount,
-          holdReason: ticket.hold_reason,
-          brand: ticket.device_brand,
-          model: ticket.device_model,
-          serialNumber: ticket.device_serial_number,
-          history: ticket.history || [
-            {
-              id: ticket.id || Date.now().toString(),
-              timestamp: new Date(ticket.created_at).getTime(),
-              date: new Date(ticket.created_at).toLocaleString(),
-              actorName: ticket.name || currentUser.name || "Customer",
-              actorRole: "CUSTOMER",
-              action: "Ticket Created",
-              details: `Service request submitted for ${
-                ticket.device_type || "device"
-              }`,
-            },
-          ],
-        }));
-
-        setTickets(transformedTickets);
-      }
-    } catch (error) {
-      console.error("Error fetching tickets:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
   // --- FILTERING LOGIC ---
   const myTickets = useMemo(() => {
     return tickets
@@ -330,7 +271,7 @@ export default function CustomerPortal({
       if (finalData) {
         const newTicket: Ticket = {
           id: data.id,
-          ticketId: data.id, // In your table, id is the ticket ID
+          ticketId: data.id,
           customerId: data.customer_id || currentUser.id,
           name: data.name || currentUser.name,
           email: data.email || currentUser.email,
@@ -359,8 +300,6 @@ export default function CustomerPortal({
             },
           ],
         };
-
-        // Update local state
         setTickets([newTicket, ...tickets]);
         await sendEmail(
           "TICKET_CREATED",

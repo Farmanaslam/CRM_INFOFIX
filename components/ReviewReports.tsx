@@ -1,13 +1,14 @@
-import React, { useState, useMemo } from "react";
-import { Ticket, AppSettings, User } from "../types";
+import React, { useState } from "react";
+import { Ticket, User } from "../types";
 import {
   Check,
   X,
-  Clock,
-  FileText,
-  User as UserIcon,
   Calendar,
-  ArrowRight,
+  User as UserIcon,
+  FileText,
+  AlertTriangle,
+  MessageSquare,
+  UserX,
 } from "lucide-react";
 import { supabase } from "@/supabaseClient";
 
@@ -17,14 +18,154 @@ interface ReviewReportsProps {
   currentUser: User;
 }
 
+// Rejection Modal Component
+const RejectionModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  ticketId,
+  isSubmitting = false,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (staffReason: string, customerReason: string) => void;
+  ticketId: string;
+  isSubmitting?: boolean;
+}) => {
+  const [staffReason, setStaffReason] = useState("");
+  const [customerReason, setCustomerReason] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = () => {
+    if (!staffReason.trim() || !customerReason.trim()) {
+      setError("Both rejection reasons are required");
+      return;
+    }
+    onConfirm(staffReason, customerReason);
+    setStaffReason("");
+    setCustomerReason("");
+    setError("");
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-in fade-in zoom-in-95 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-red-50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-100 rounded-lg">
+              <AlertTriangle size={20} className="text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">
+                Reject Ticket
+              </h3>
+              <p className="text-xs text-slate-500">Ticket ID: {ticketId}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="p-2 hover:bg-red-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6 bg-slate-50">
+          {error && (
+            <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg text-red-800 text-sm font-medium">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+              <UserX size={14} />
+              Internal Rejection Reason (Staff Only) *
+            </label>
+            <textarea
+              value={staffReason}
+              onChange={(e) => setStaffReason(e.target.value)}
+              disabled={isSubmitting}
+              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none transition-all resize-none h-24"
+              placeholder="Enter the internal reason for rejection (visible to staff only)..."
+            />
+            <p className="text-xs text-slate-500 italic">
+              This reason will only be visible to staff members
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+              <MessageSquare size={14} />
+              Customer-Facing Rejection Reason *
+            </label>
+            <textarea
+              value={customerReason}
+              onChange={(e) => setCustomerReason(e.target.value)}
+              disabled={isSubmitting}
+              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none transition-all resize-none h-24"
+              placeholder="Enter the reason that will be shown to the customer..."
+            />
+            <p className="text-xs text-slate-500 italic">
+              This message will be visible to the customer in their timeline
+            </p>
+          </div>
+
+          <div className="bg-amber-50 p-4 rounded-xl text-xs text-amber-800 flex gap-3 border border-amber-100 items-start">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+            <p className="leading-relaxed">
+              <strong>Important:</strong> Once rejected, this ticket will be
+              marked as closed. The customer will be notified with the
+              customer-facing reason you provide above.
+            </p>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="px-6 py-2.5 text-slate-600 font-bold rounded-xl hover:bg-slate-100 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className="px-6 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-all shadow-lg shadow-red-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                Rejecting...
+              </>
+            ) : (
+              <>
+                <UserX size={18} />
+                Confirm Rejection
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function ReviewReports({
   tickets,
   setTickets,
   currentUser,
 }: ReviewReportsProps) {
-  // Filter for Pending Approval tickets
   const pendingTickets = tickets.filter((t) => t.status === "Pending Approval");
   const [loading, setLoading] = useState<string | null>(null);
+  const [rejectingTicketId, setRejectingTicketId] = useState<string | null>(
+    null,
+  );
+  const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
 
   const getNextTicketNumber = () => {
     const existingNumbers = tickets
@@ -80,9 +221,11 @@ export default function ReviewReports({
                   },
                 ],
               }
-            : t
-        )
+            : t,
+        ),
       );
+
+      alert("Ticket approved successfully!");
     } catch (err: any) {
       alert(err.message || "Approval failed");
     } finally {
@@ -90,53 +233,74 @@ export default function ReviewReports({
     }
   };
 
-  const handleReject = async (id: string) => {
-    setLoading(id);
+  const handleRejectClick = (ticketId: string) => {
+    setRejectingTicketId(ticketId);
+    setIsRejectionModalOpen(true);
+  };
+
+  const handleRejectConfirm = async (
+    staffReason: string,
+    customerReason: string,
+  ) => {
+    if (!rejectingTicketId) return;
+
+    setLoading(rejectingTicketId);
 
     try {
-      const ticketToReject = tickets.find((t) => t.id === id);
+      const ticketToReject = tickets.find((t) => t.id === rejectingTicketId);
       if (!ticketToReject) {
         throw new Error("Ticket not found");
       }
 
-      // Update status in Supabase
-      const { data, error } = await supabase
+      // ✅ Create rejection history entry
+      const rejectionHistory = {
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        date: new Date().toLocaleString(),
+        actorName: currentUser.name,
+        actorRole: currentUser.role,
+        action: "Ticket Rejected",
+        details: customerReason, // Customer-facing reason in details
+      };
+
+      // ✅ Build updated history array
+      const updatedHistory = [
+        ...(ticketToReject.history || []),
+        rejectionHistory,
+      ];
+
+      // ✅ Update in Supabase with history
+      const { error } = await supabase
         .from("tickets")
         .update({
           status: "Rejected",
+          rejection_reason_staff: staffReason,
+          rejection_reason_customer: customerReason,
+          history: JSON.stringify(updatedHistory), // ✅ Save history
         })
-        .eq("id", id)
-        .select()
-        .single();
+        .eq("id", rejectingTicketId);
 
       if (error) {
         console.error("Error rejecting ticket:", error);
         throw new Error(`Failed to reject ticket: ${error.message}`);
       }
 
-      // Update local state
+      // ✅ Update local state
       const updatedTickets = tickets.map((t) =>
-        t.id === id
+        t.id === rejectingTicketId
           ? {
               ...t,
               status: "Rejected",
-              history: [
-                ...(t.history || []),
-                {
-                  id: Date.now().toString(),
-                  timestamp: Date.now(),
-                  date: new Date().toLocaleString(),
-                  actorName: currentUser.name,
-                  actorRole: currentUser.role,
-                  action: "Ticket Rejected",
-                  details: `Ticket rejected by ${currentUser.name} (${currentUser.role})`,
-                },
-              ],
+              rejectionReasonStaff: staffReason,
+              rejectionReasonCustomer: customerReason,
+              history: updatedHistory, // ✅ Update local history
             }
-          : t
+          : t,
       );
 
       setTickets(updatedTickets);
+      setIsRejectionModalOpen(false);
+      setRejectingTicketId(null);
       alert("Ticket rejected successfully!");
     } catch (error: any) {
       console.error("Rejection error:", error);
@@ -145,7 +309,6 @@ export default function ReviewReports({
       setLoading(null);
     }
   };
-
   return (
     <div className="space-y-6">
       <div className="bg-indigo-600 rounded-2xl p-6 text-white shadow-lg flex justify-between items-center">
@@ -201,22 +364,40 @@ export default function ReviewReports({
 
               <div className="flex items-center gap-3 w-full md:w-auto">
                 <button
-                  onClick={() => handleReject(ticket.id)}
-                  className="flex-1 md:flex-none px-4 py-2 bg-red-50 text-red-600 font-bold rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+                  onClick={() => handleRejectClick(ticket.id)}
+                  disabled={loading === ticket.id}
+                  className="flex-1 md:flex-none px-4 py-2 bg-red-50 text-red-600 font-bold rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <X size={18} /> Reject
                 </button>
                 <button
                   onClick={() => handleApprove(ticket.id)}
-                  className="flex-1 md:flex-none px-6 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
+                  disabled={loading === ticket.id}
+                  className="flex-1 md:flex-none px-6 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Check size={18} /> Approve Ticket
+                  {loading === ticket.id ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  ) : (
+                    <Check size={18} />
+                  )}
+                  Approve Ticket
                 </button>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      <RejectionModal
+        isOpen={isRejectionModalOpen}
+        onClose={() => {
+          setIsRejectionModalOpen(false);
+          setRejectingTicketId(null);
+        }}
+        onConfirm={handleRejectConfirm}
+        ticketId={rejectingTicketId || ""}
+        isSubmitting={loading !== null}
+      />
     </div>
   );
 }

@@ -128,7 +128,7 @@ export default function StaffReportsFinancial({
           profitAmount: r.profit_amount,
           salaryAmount: r.salary_amount,
           otherExpenses: r.other_expenses,
-        }))
+        })),
       );
     }
   };
@@ -149,6 +149,7 @@ export default function StaffReportsFinancial({
     // ----- ROLE VISIBILITY BASED ON CURRENT USER -----
     switch (currentUser.role) {
       case "SUPER_ADMIN":
+        filtered = filtered.filter((m) => m.role !== "SUPER_ADMIN");
         break; // can see everyone
 
       case "ADMIN":
@@ -163,8 +164,6 @@ export default function StaffReportsFinancial({
         filtered = filtered.filter((m) => m.id === currentUser.id);
         break;
     }
-
-    // 🔥🔥🔥 NEW FIX: APPLY SELECTED ROLE FILTER TO DROPDOWN 🔥🔥🔥
     if (selectedRole !== "all") {
       filtered = filtered.filter((m) => m.role === selectedRole);
     }
@@ -285,11 +284,11 @@ export default function StaffReportsFinancial({
   const kpis = useMemo(() => {
     const totalSales = financialLogs.reduce(
       (acc, curr) => acc + (curr.sellAmount || 0),
-      0
+      0,
     );
     const totalNetProfit = financialLogs.reduce(
       (acc, curr) => acc + curr.netProfit,
-      0
+      0,
     );
     const totalBonus = financialLogs.reduce((acc, curr) => acc + curr.bonus, 0);
     const avgMargin =
@@ -388,19 +387,19 @@ export default function StaffReportsFinancial({
       setStartDate(
         new Date(now.getFullYear(), now.getMonth(), 1)
           .toISOString()
-          .split("T")[0]
+          .split("T")[0],
       );
       setEndDate(
         new Date(now.getFullYear(), now.getMonth() + 1, 0)
           .toISOString()
-          .split("T")[0]
+          .split("T")[0],
       );
     } else {
       setStartDate(
-        new Date(now.getFullYear(), 0, 1).toISOString().split("T")[0]
+        new Date(now.getFullYear(), 0, 1).toISOString().split("T")[0],
       );
       setEndDate(
-        new Date(now.getFullYear(), 11, 31).toISOString().split("T")[0]
+        new Date(now.getFullYear(), 11, 31).toISOString().split("T")[0],
       );
     }
   };
@@ -585,7 +584,7 @@ export default function StaffReportsFinancial({
                 <option value="TECHNICIAN">Technician</option>
                 <option value="MANAGER">Manager</option>
                 <option value="ADMIN">Admin</option>
-                <option value="SUPER_ADMIN">Super Admin</option>
+                {/* <option value="SUPER_ADMIN">Super Admin</option> */}
               </select>
             </div>
 
@@ -681,10 +680,10 @@ export default function StaffReportsFinancial({
                           log.tech.role === "SUPER_ADMIN"
                             ? "bg-purple-100 text-purple-700 border-purple-200"
                             : log.tech.role === "ADMIN"
-                            ? "bg-indigo-100 text-indigo-700 border-indigo-200"
-                            : log.tech.role === "MANAGER"
-                            ? "bg-blue-100 text-blue-700 border-blue-200"
-                            : "bg-slate-100 text-slate-600 border-slate-200"
+                              ? "bg-indigo-100 text-indigo-700 border-indigo-200"
+                              : log.tech.role === "MANAGER"
+                                ? "bg-blue-100 text-blue-700 border-blue-200"
+                                : "bg-slate-100 text-slate-600 border-slate-200"
                         }`}
                       >
                         {log.tech.role.replace("_", " ")}
@@ -756,7 +755,7 @@ export default function StaffReportsFinancial({
                             style={{
                               width: `${Math.min(
                                 Math.max(log.margin, 0),
-                                100
+                                100,
                               )}%`,
                             }}
                           ></div>
@@ -1043,7 +1042,7 @@ export default function StaffReportsFinancial({
                               <option key={d} value={d}>
                                 {d}
                               </option>
-                            )
+                            ),
                           )}
                         </select>
                         <select

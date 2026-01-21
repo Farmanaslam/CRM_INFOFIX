@@ -53,9 +53,8 @@ export default function TasksView({
 
   // --- DERIVED DATA & PERMISSIONS ---
   const accessibleMembers = useMemo(() => {
-    // SUPER_ADMIN should see ALL team members
     if (currentUser.role === "SUPER_ADMIN") {
-      return teamMembers; // Show all members including other SUPER_ADMINs
+      return teamMembers;
     }
 
     if (currentUser.role === "ADMIN") {
@@ -64,22 +63,22 @@ export default function TasksView({
 
     if (currentUser.role === "MANAGER") {
       return teamMembers.filter(
-        (m) => m.role === "MANAGER" || m.role === "TECHNICIAN"
+        (m) => m.role === "MANAGER" || m.role === "TECHNICIAN",
       );
     }
 
-    return [currentUser]; // TECHNICIAN only sees themselves
+    return [currentUser];
   }, [currentUser, teamMembers]);
   const accessibleTasks = useMemo(() => {
     const accessibleIds = accessibleMembers.map((m) => m.id);
     return tasks.filter(
-      (t) => t.assignedToId && accessibleIds.includes(t.assignedToId)
+      (t) => t.assignedToId && accessibleIds.includes(t.assignedToId),
     );
   }, [tasks, accessibleMembers]);
 
   const accessibleReports = useMemo(() => {
     const accessibleNames = accessibleMembers.map((m) =>
-      m.name.trim().toLowerCase()
+      m.name.trim().toLowerCase(),
     );
     return savedReports.filter((r) => {
       const techName = r.deviceInfo.technicianName?.trim().toLowerCase();
@@ -100,7 +99,7 @@ export default function TasksView({
       result = result.filter((t) => t.status === "completed");
     if (statusFilter === "urgent")
       result = result.filter(
-        (t) => t.priority === "urgent" && t.status === "pending"
+        (t) => t.priority === "urgent" && t.status === "pending",
       );
 
     return result.sort((a, b) => {
@@ -120,40 +119,49 @@ export default function TasksView({
     });
   }, [accessibleTasks, statusFilter, memberFilter]);
 
+  const technicianIds = useMemo(() => {
+    return accessibleMembers
+      .filter((m) => m.role === "TECHNICIAN")
+      .map((m) => m.id);
+  }, [accessibleMembers]);
+
   const kpiData = useMemo(() => {
     const baseTasks =
       memberFilter === "all"
-        ? accessibleTasks
-        : accessibleTasks.filter((t) => t.assignedToId === memberFilter);
+        ? accessibleTasks.filter(
+            (t) =>
+              t.status === "completed" &&
+              t.assignedToId &&
+              technicianIds.includes(t.assignedToId),
+          )
+        : accessibleTasks.filter(
+            (t) => t.status === "completed" && t.assignedToId === memberFilter,
+          );
 
     const total = baseTasks.length;
     const completed = baseTasks.filter((t) => t.status === "completed").length;
     const urgentPending = baseTasks.filter(
-      (t) => t.status === "pending" && t.priority === "urgent"
+      (t) => t.status === "pending" && t.priority === "urgent",
     ).length;
     const completionRate =
       total > 0 ? Math.round((completed / total) * 100) : 0;
-
-    // ✅ FIX: Calculate completed tasks this month from TASKS, not reports
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
 
     const reportsThisMonth = baseTasks.filter((t) => {
-      if (t.status !== "completed") return false;
       const taskDate = new Date(t.date);
       return (
         taskDate.getMonth() === currentMonth &&
         taskDate.getFullYear() === currentYear
       );
     }).length;
+
     const monthlyTarget =
-      memberFilter === "all"
-        ? accessibleMembers.length * 20 // All members: total members × 20
-        : 20; // Single member: 20
+      memberFilter === "all" ? accessibleMembers.length * 20 : 20;
 
     const targetProgress = Math.min(
       Math.round((reportsThisMonth / (monthlyTarget || 1)) * 100),
-      100
+      100,
     );
 
     return {
@@ -194,7 +202,7 @@ export default function TasksView({
       const daysInMonth = new Date(
         now.getFullYear(),
         now.getMonth() + 1,
-        0
+        0,
       ).getDate();
       for (let i = 1; i <= daysInMonth; i++) {
         data[i] = 0;
@@ -274,14 +282,14 @@ export default function TasksView({
       tasks.map((t) =>
         t.id === id
           ? { ...t, status: t.status === "completed" ? "pending" : "completed" }
-          : t
-      )
+          : t,
+      ),
     );
   };
 
   const updateTaskNote = (id: string, note: string) => {
     setTasks(
-      tasks.map((t) => (t.id === id ? { ...t, technicianNote: note } : t))
+      tasks.map((t) => (t.id === id ? { ...t, technicianNote: note } : t)),
     );
   };
 
@@ -295,7 +303,7 @@ export default function TasksView({
     if (confirm("Remove all completed tasks visible in this list?")) {
       const visibleIds = new Set(filteredTasks.map((t) => t.id));
       setTasks(
-        tasks.filter((t) => !visibleIds.has(t.id) || t.status !== "completed")
+        tasks.filter((t) => !visibleIds.has(t.id) || t.status !== "completed"),
       );
     }
   };
@@ -601,8 +609,8 @@ export default function TasksView({
                     task.status === "completed"
                       ? "bg-slate-50 border-transparent opacity-60"
                       : task.priority === "urgent"
-                      ? "bg-white border-red-100 shadow-md ring-1 ring-red-50"
-                      : "bg-white border-slate-100 hover:border-indigo-300 hover:shadow-lg hover:-translate-y-0.5"
+                        ? "bg-white border-red-100 shadow-md ring-1 ring-red-50"
+                        : "bg-white border-slate-100 hover:border-indigo-300 hover:shadow-lg hover:-translate-y-0.5"
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -613,8 +621,8 @@ export default function TasksView({
                           task.status === "completed"
                             ? "bg-emerald-500 border-emerald-500 text-white"
                             : task.priority === "urgent"
-                            ? "border-red-400 text-transparent hover:bg-red-50"
-                            : "border-slate-200 text-transparent hover:border-indigo-500 hover:bg-indigo-50"
+                              ? "border-red-400 text-transparent hover:bg-red-50"
+                              : "border-slate-200 text-transparent hover:border-indigo-500 hover:bg-indigo-50"
                         }`}
                       >
                         <Check size={16} strokeWidth={4} />
