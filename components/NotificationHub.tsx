@@ -60,7 +60,7 @@ export default function NotificationHub({
   const [permissionStatus, setPermissionStatus] =
     useState<NotificationPermission>(Notification.permission);
   const [selectedDate, setSelectedDate] = useState<string>("");
-
+const [clearedByUser, setClearedByUser] = useState<string[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevCount = useRef(notifications.length);
 
@@ -73,6 +73,26 @@ export default function NotificationHub({
     audioRef.current.volume = 0.5;
   }, []);
 
+  // Load cleared notifications from localStorage on mount
+useEffect(() => {
+  if (!currentUser) return;
+  const storageKey = `cleared_notifications_${currentUser.id}`;
+  const stored = localStorage.getItem(storageKey);
+  if (stored) {
+    try {
+      setClearedByUser(JSON.parse(stored));
+    } catch (e) {
+      console.error("Failed to parse cleared notifications:", e);
+    }
+  }
+}, [currentUser]);
+
+// Save cleared notifications to localStorage whenever it changes
+useEffect(() => {
+  if (!currentUser) return;
+  const storageKey = `cleared_notifications_${currentUser.id}`;
+  localStorage.setItem(storageKey, JSON.stringify(clearedByUser));
+}, [clearedByUser, currentUser]);
   // Request Permissions
   const requestPermissions = async () => {
     const perm = await Notification.requestPermission();
@@ -116,7 +136,7 @@ export default function NotificationHub({
 
     let result = notifications.filter((n) => {
       if (!currentUser) return false;
-
+if (clearedByUser.includes(n.id)) return false;
       // Role-based access
       switch (currentUser.role) {
         case "SUPER_ADMIN":
@@ -192,6 +212,7 @@ export default function NotificationHub({
     currentUser,
     userRoleFilter,
     selectedDate,
+     clearedByUser,
   ]);
 
   // REPLACE the markAllRead function in NotificationHub (around line 170)
@@ -230,23 +251,20 @@ export default function NotificationHub({
     }
   };
 
-  // REPLACE the clearAll function (around line 190)
+const clearAll = async () => {
+  if (!currentUser) return;
+  
+  const visibleIds = filteredNotifications.map((n) => n.id);
+  
+  if (visibleIds.length === 0) {
+    alert("No notifications to clear");
+    return;
+  }
 
-  const clearAll = async () => {
-    if (!confirm("Clear currently visible notifications?")) return;
-
-    const visibleIds = filteredNotifications.map((n) => n.id);
-
-    // Delete from Supabase
-    if (window.supabase) {
-      for (const id of visibleIds) {
-        await window.supabase.from("notifications").delete().eq("id", id);
-      }
-    }
-    // Update local state
-    setNotifications(notifications.filter((n) => !visibleIds.includes(n.id)));
-  };
-
+  // Add all visible notification IDs to cleared list for this user
+  // This hides them from THIS user's view only, doesn't affect other users
+  setClearedByUser((prev) => [...new Set([...prev, ...visibleIds])]);
+};
   // REPLACE the handleItemClick function (around line 200)
 
   const handleItemClick = async (n: AppNotification) => {
