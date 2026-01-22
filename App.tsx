@@ -45,8 +45,6 @@ import { CloudOff } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
 import ResetPassword from "./components/ResetPasssword";
 
-
-
 declare global {
   interface Window {
     supabase: typeof supabase;
@@ -329,51 +327,54 @@ function App() {
     }
   }, []);
   // Check for password reset route
-useEffect(() => {
-  const checkResetRoute = async () => {
-    if (!supabase) return;
+  useEffect(() => {
+    const checkResetRoute = async () => {
+      if (!supabase) return;
 
-    const hash = window.location.hash;
-    const pathname = window.location.pathname;
-    
-    console.log("🔍 Checking reset route...");
-    console.log("🔍 Pathname:", pathname);
-    console.log("🔍 Hash:", hash);
-    if (
-      pathname.includes("reset-password") || 
-      hash.includes("type=recovery") || 
-      hash.includes("access_token") ||
-      hash.length > 10  
-    ) {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error("❌ Session error:", error);
-          setIsResetPasswordRoute(false);
-          return;
-        }
+      const hash = window.location.hash;
+      const pathname = window.location.pathname;
 
-        if (session) {
-          console.log("✅ Valid reset session found:", session);
-          setIsResetPasswordRoute(true);
-        } else {
-          console.warn("❌ No valid session for password reset");
+      console.log("🔍 Checking reset route...");
+      console.log("🔍 Pathname:", pathname);
+      console.log("🔍 Hash:", hash);
+      if (
+        pathname.includes("reset-password") ||
+        hash.includes("type=recovery") ||
+        hash.includes("access_token") ||
+        hash.length > 10
+      ) {
+        try {
+          const {
+            data: { session },
+            error,
+          } = await supabase.auth.getSession();
+
+          if (error) {
+            console.error("❌ Session error:", error);
+            setIsResetPasswordRoute(false);
+            return;
+          }
+
+          if (session) {
+            console.log("✅ Valid reset session found:", session);
+            setIsResetPasswordRoute(true);
+          } else {
+            console.warn("❌ No valid session for password reset");
+            setIsResetPasswordRoute(false);
+          }
+        } catch (error) {
+          console.error("❌ Error checking reset route:", error);
           setIsResetPasswordRoute(false);
         }
-      } catch (error) {
-        console.error("❌ Error checking reset route:", error);
-        setIsResetPasswordRoute(false);
       }
-    }
-  };
+    };
 
-  checkResetRoute();
-  
-  // Also listen for hash changes
-  window.addEventListener('hashchange', checkResetRoute);
-  return () => window.removeEventListener('hashchange', checkResetRoute);
-}, []);
+    checkResetRoute();
+
+    // Also listen for hash changes
+    window.addEventListener("hashchange", checkResetRoute);
+    return () => window.removeEventListener("hashchange", checkResetRoute);
+  }, []);
   // NEW: global notifications synced across users
   const [notifications, setNotifications] = useSmartSync<AppNotification[]>(
     "notifications",
