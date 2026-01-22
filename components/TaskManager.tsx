@@ -138,7 +138,7 @@ export default function TaskManager({
     const completed = tasks.filter((t) => t.status === "completed").length;
     const pending = total - completed;
     const urgent = tasks.filter(
-      (t) => t.priority === "urgent" && t.status === "pending"
+      (t) => t.priority === "urgent" && t.status === "pending",
     ).length;
 
     // Group by assignee for ratings
@@ -199,29 +199,20 @@ export default function TaskManager({
 
     return { total, completed, pending, urgent, leaderboard, typeData };
   }, [tasks, teamMembers]);
-
-  // 1. Determine which users the current user is allowed to see
-const accessibleMembers = useMemo(() => {
+  const accessibleMembers = useMemo(() => {
     let members = teamMembers;
-    
-    // ✅ Role-based visibility
+
     if (currentUser.role === "SUPER_ADMIN") {
-      // SUPER_ADMIN sees everyone
       members = teamMembers;
     } else if (currentUser.role === "ADMIN") {
-      // ADMIN sees everyone except SUPER_ADMIN
       members = teamMembers.filter((m) => m.role !== "SUPER_ADMIN");
     } else if (currentUser.role === "MANAGER") {
-      // MANAGER sees only MANAGER and TECHNICIAN (no ADMIN or SUPER_ADMIN)
       members = teamMembers.filter(
-        (m) => m.role === "MANAGER" || m.role === "TECHNICIAN"
+        (m) => m.role === "MANAGER" || m.role === "TECHNICIAN",
       );
     } else if (currentUser.role === "TECHNICIAN") {
-      // TECHNICIAN sees only themselves
       members = [currentUser];
     }
-
-    // Zone-based filtering
     if (selectedZoneId !== "all") {
       members = members.filter((m) => m.zoneId === selectedZoneId);
     }
@@ -570,7 +561,7 @@ const accessibleMembers = useMemo(() => {
                             <User size={10} />{" "}
                             {
                               teamMembers.find(
-                                (m) => m.id === task.assignedToId
+                                (m) => m.id === task.assignedToId,
                               )?.name
                             }
                           </span>
@@ -708,7 +699,7 @@ const accessibleMembers = useMemo(() => {
               <tbody className="divide-y divide-slate-100">
                 {filteredTasks.map((task) => {
                   const assignee = teamMembers.find(
-                    (m) => m.id === task.assignedToId
+                    (m) => m.id === task.assignedToId,
                   );
                   return (
                     <tr
