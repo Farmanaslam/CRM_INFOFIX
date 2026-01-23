@@ -14,7 +14,7 @@ root.render(
   </React.StrictMode>
 );
 // ✅ PWA: Register Service Worker
-if ("serviceWorker" in navigator) {
+{/*if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/sw.js")
@@ -23,4 +23,4 @@ if ("serviceWorker" in navigator) {
         console.error("❌ Service Worker registration failed:", err);
       });
   });
-}
+}*/}
