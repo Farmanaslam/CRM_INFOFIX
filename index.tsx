@@ -11,10 +11,8 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <App />
-  </React.StrictMode>
+  </React.StrictMode>,
 );
-
-// ✅ Register Service Worker for PWA (with proper error handling)
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
@@ -23,8 +21,10 @@ if ("serviceWorker" in navigator) {
         console.log("✅ Service Worker registered:", registration.scope);
       })
       .catch((error) => {
-        // Silently fail - don't show errors in console
-        console.warn("Service Worker registration failed (this is okay):", error);
+        console.warn(
+          "Service Worker registration failed (this is okay):",
+          error,
+        );
       });
   });
 }

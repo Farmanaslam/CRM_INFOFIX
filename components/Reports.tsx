@@ -78,7 +78,7 @@ export default function Reports({
 }: ReportsProps) {
   // --- STATE ---
   const [timeFilter, setTimeFilter] = useState<"7d" | "30d" | "90d" | "all">(
-    "30d"
+    "30d",
   );
   const [storeFilter, setStoreFilter] = useState<string>("All");
   const [roleFilter, setRoleFilter] = useState<string>("All");
@@ -116,7 +116,7 @@ export default function Reports({
       // Role & Member Check
       if (roleFilter !== "All" || memberFilter !== "All") {
         const assignee = settings.teamMembers.find(
-          (m) => m.id === ticket.assignedToId
+          (m) => m.id === ticket.assignedToId,
         );
 
         if (roleFilter !== "All") {
@@ -140,11 +140,24 @@ export default function Reports({
   ]);
 
   const analytics = useMemo(() => {
+    if (!filteredData || filteredData.length === 0) {
+      return {
+        totalTickets: 0,
+        resolvedTickets: 0,
+        openTickets: 0,
+        avgTat: "0",
+        techPerformance: [],
+        trendData: [],
+        statusData: [],
+        deviceData: [],
+        resolutionRate: 0,
+      };
+    }
     // 1. KPI Stats
     const totalTickets = filteredData.length;
     const resolvedTickets = filteredData.filter((t) => t.status === "Resolved");
     const openTickets = filteredData.filter(
-      (t) => t.status !== "Resolved" && t.status !== "Rejected"
+      (t) => t.status !== "Resolved" && t.status !== "Rejected",
     ).length;
 
     // 2. Average Turnaround Time (TAT)
@@ -153,12 +166,12 @@ export default function Reports({
     resolvedTickets.forEach((t) => {
       if (t.history && t.history.length > 0) {
         const resolvedLog = t.history.find((h) =>
-          h.action.includes("Resolved")
+          h.action.includes("Resolved"),
         );
         if (resolvedLog) {
           totalDays += calculateDaysDiff(
             t.date,
-            resolvedLog.date.split(" ")[0]
+            resolvedLog.date.split(" ")[0],
           );
           resolvedCountWithDate++;
         }
@@ -191,26 +204,25 @@ export default function Reports({
       .slice(0, 5);
 
     // 4. Volume Trend (Group by Date)
-const trendMap: Record<string, { date: string; tickets: number }> = {};
+    const trendMap: Record<string, { date: string; tickets: number }> = {};
 
-filteredData.forEach((t) => {
-  const d = new Date(t.date);
-  const isoKey = d.toISOString().split("T")[0]; 
-  const label = d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
+    filteredData.forEach((t) => {
+      const d = new Date(t.date);
+      const isoKey = d.toISOString().split("T")[0];
+      const label = d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
 
-  if (!trendMap[isoKey]) {
-    trendMap[isoKey] = { date: label, tickets: 0 };
-  }
-  trendMap[isoKey].tickets++;
-});
+      if (!trendMap[isoKey]) {
+        trendMap[isoKey] = { date: label, tickets: 0 };
+      }
+      trendMap[isoKey].tickets++;
+    });
 
-const trendData = Object.entries(trendMap)
-  .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
-  .map(([_, value]) => value);
-
+    const trendData = Object.entries(trendMap)
+      .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
+      .map(([_, value]) => value);
 
     // 5. Status Distribution
     const statusCounts: Record<string, number> = {};
@@ -258,7 +270,7 @@ const trendData = Object.entries(trendMap)
 
       case "MANAGER":
         return settings.teamMembers.filter(
-          (m) => m.role !== "ADMIN" && m.role !== "SUPER_ADMIN"
+          (m) => m.role !== "ADMIN" && m.role !== "SUPER_ADMIN",
         );
 
       default:
@@ -284,7 +296,7 @@ const trendData = Object.entries(trendMap)
 
       pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
       pdf.save(
-        `InfoFix_Work_Report_${new Date().toISOString().split("T")[0]}.pdf`
+        `InfoFix_Work_Report_${new Date().toISOString().split("T")[0]}.pdf`,
       );
     } catch (e) {
       console.error(e);
@@ -292,7 +304,19 @@ const trendData = Object.entries(trendMap)
       setIsExporting(false);
     }
   };
-
+  if (!analytics) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <Loader2
+            className="animate-spin mx-auto mb-4 text-indigo-600"
+            size={40}
+          />
+          <p className="text-slate-600">Loading reports...</p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="space-y-6 pb-20">
       {/* HEADER & FILTERS */}
@@ -386,7 +410,7 @@ const trendData = Object.entries(trendMap)
                   <option value="All">All Staff</option>
                   {accessibleStaff
                     .filter(
-                      (m) => roleFilter === "All" || m.role === roleFilter
+                      (m) => roleFilter === "All" || m.role === roleFilter,
                     )
                     .map((m) => (
                       <option key={m.id} value={m.id}>
@@ -517,138 +541,151 @@ const trendData = Object.entries(trendMap)
               </div>
             </div>
 
-            <div className="relative w-full h-[300px]">
-              <div className="absolute inset-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={analytics.trendData}
-                    margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="colorTickets"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor={COLORS.primary}
-                          stopOpacity={0.4}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor={COLORS.primary}
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="#e2e8f0"
-                    />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 11, fill: COLORS.slate }}
-                      axisLine={false}
-                      tickLine={false}
-                      dy={10}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: COLORS.slate }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: "12px",
-                        border: "none",
-                        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
-                      }}
-                      cursor={{ fill: "#f1f5f9" }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="tickets"
-                      stroke={COLORS.primary}
-                      strokeWidth={4}
-                      fill="url(#colorTickets)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+            {analytics.trendData && analytics.trendData.length > 0 ? (
+              <div className="relative w-full h-[300px]">
+                <div className="absolute inset-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={analytics.trendData}
+                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient
+                          id="colorTickets"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor={COLORS.primary}
+                            stopOpacity={0.4}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor={COLORS.primary}
+                            stopOpacity={0}
+                          />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        stroke="#e2e8f0"
+                      />
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fontSize: 11, fill: COLORS.slate }}
+                        axisLine={false}
+                        tickLine={false}
+                        dy={10}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: COLORS.slate }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: "12px",
+                          border: "none",
+                          boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                        }}
+                        cursor={{ fill: "#f1f5f9" }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="tickets"
+                        stroke={COLORS.primary}
+                        strokeWidth={4}
+                        fill="url(#colorTickets)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-slate-400 text-sm">
+                No data available for the selected period
+              </div>
+            )}
           </div>
 
-          {/* STATUS DISTRIBUTION */}
           {/* STATUS DISTRIBUTION */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
             <h3 className="font-bold text-slate-800 text-lg mb-2">
               Service Status
             </h3>
-            <div className="relative w-full h-[250px]">
-              <div className="absolute inset-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={analytics.statusData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {analytics.statusData.map((entry, index) => {
-                        const statusKey = entry.name.toLowerCase();
-                        const STATUS_COLORS: Record<string, string> = {
-                          new: "#3B82F6", // Blue
-                          delivery: "#F59E0B", // Amber
-                          hold: "#F97316", // Orange
-                          "in progress": "#6366F1", // Indigo
-                          "pending approval": "#FACC15", // Yellow
-                          rejected: "#EF4444", // Red
-                          resolved: "#10B981", // Green
-                          "service done": "#EC4899", // Pink
-                        };
-                        const fillColor = STATUS_COLORS[statusKey] || "#64748b";
-                        return <Cell key={`cell-${index}`} fill={fillColor} />;
-                      })}
-                    </Pie>
-
-                    <Tooltip />
-
-                    <Legend
-                      verticalAlign="bottom"
-                      height={36}
-                      iconType="circle"
-                      iconSize={8}
-                      wrapperStyle={{ fontSize: "11px" }}
-                      formatter={(value: string) => {
-                        // Capitalize first letter of each word
-                        return value
-                          .split(" ")
-                          .map(
-                            (word) =>
-                              word.charAt(0).toUpperCase() + word.slice(1)
-                          )
-                          .join(" ");
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+            {analytics.statusData && analytics.statusData.length > 0 ? (
+              <>
+                <div className="relative w-full h-[250px]">
+                  <div className="absolute inset-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={analytics.statusData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {analytics.statusData.map((entry, index) => {
+                            const statusKey = entry.name.toLowerCase();
+                            const STATUS_COLORS: Record<string, string> = {
+                              new: "#3B82F6",
+                              delivery: "#F59E0B",
+                              hold: "#F97316",
+                              "in progress": "#6366F1",
+                              "pending approval": "#FACC15",
+                              rejected: "#EF4444",
+                              resolved: "#10B981",
+                              "service done": "#EC4899",
+                            };
+                            const fillColor =
+                              STATUS_COLORS[statusKey] || "#64748b";
+                            return (
+                              <Cell key={`cell-${index}`} fill={fillColor} />
+                            );
+                          })}
+                        </Pie>
+                        <Tooltip />
+                        <Legend
+                          verticalAlign="bottom"
+                          height={36}
+                          iconType="circle"
+                          iconSize={8}
+                          wrapperStyle={{ fontSize: "11px" }}
+                          formatter={(value: string) => {
+                            return value
+                              .split(" ")
+                              .map(
+                                (word) =>
+                                  word.charAt(0).toUpperCase() + word.slice(1),
+                              )
+                              .join(" ");
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
+                    <span className="text-3xl font-black text-slate-800">
+                      {analytics.totalTickets}
+                    </span>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                      Reports
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-[250px] text-slate-400 text-sm">
+                No status data available
               </div>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
-                <span className="text-3xl font-black text-slate-800">
-                  {analytics.totalTickets}
-                </span>
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                  Reports
-                </span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -717,75 +754,58 @@ const trendData = Object.entries(trendMap)
             <h3 className="font-bold text-slate-800 text-lg mb-6 flex items-center gap-2">
               <Layers size={20} className="text-indigo-600" /> Device Breakdown
             </h3>
-            <div className="relative w-full h-[300px]" tabIndex={-1}>
-              <div className="absolute inset-0">
-                <div
-                  className="chart-container relative w-full h-[300px] focus:outline-none select-none"
-                  tabIndex={-1}
-                >
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                    className="focus:outline-none "
+
+            {analytics.deviceData && analytics.deviceData.length > 0 ? (
+              <div className="relative w-full h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={analytics.deviceData}
+                    layout="vertical"
+                    margin={{ top: 0, right: 30, left: 40, bottom: 0 }}
                   >
-                    <BarChart
-                      data={analytics.deviceData}
-                      layout="vertical"
-                      margin={{ top: 0, right: 30, left: 40, bottom: 0 }}
-                      className="focus:outline-none"
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        horizontal
-                        vertical={false}
-                        stroke="#f1f5f9"
-                        className="focus:outline-none"
-                      />
-                      <XAxis
-                        type="number"
-                        hide
-                        className="focus:outline-none"
-                      />
-                      <YAxis
-                        dataKey="name"
-                        type="category"
-                        width={100}
-                        tick={{
-                          fontSize: 11,
-                          fontWeight: 600,
-                          fill: COLORS.slate,
-                        }}
-                        tickLine={false}
-                        axisLine={false}
-                        className="focus:outline-none"
-                      />
-                      <Tooltip
-                        cursor={{ fill: "#f8fafc" }}
-                        contentStyle={{
-                          borderRadius: "8px",
-                          border: "none",
-                          boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
-                        }}
-                      />
-                      <Bar
-                        dataKey="count"
-                        radius={[0, 4, 4, 0]}
-                        barSize={24}
-                        className="focus:outline-none"
-                      >
-                        {analytics.deviceData.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={PIE_COLORS[index % PIE_COLORS.length]}
-                            className="focus:outline-none"
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      horizontal
+                      vertical={false}
+                      stroke="#f1f5f9"
+                    />
+                    <XAxis type="number" hide />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      width={100}
+                      tick={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        fill: COLORS.slate,
+                      }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "#f8fafc" }}
+                      contentStyle={{
+                        borderRadius: "8px",
+                        border: "none",
+                        boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                      }}
+                    />
+                    <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={24}>
+                      {analytics.deviceData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={PIE_COLORS[index % PIE_COLORS.length]}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-slate-400 text-sm">
+                No device data available
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -30,7 +30,7 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
     try {
       const cleanEmail = email.trim().toLowerCase();
       await supabase.auth.signOut();
-   const redirectUrl = window.location.origin
+      const redirectUrl = window.location.origin;
 
       const { data, error } = await supabase.auth.resetPasswordForEmail(
         cleanEmail,
@@ -245,7 +245,7 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
 
         {/* Footer */}
         <div className="py-3 px-8 border-t border-white/5 flex justify-center items-center bg-black/20 text-[9px] font-bold text-slate-600 uppercase tracking-wider">
-          <p>© 2025 INFOFIX - Secure Password Recovery</p>
+          <p>© 2026 INFOFIX - Secure Password Recovery</p>
         </div>
       </div>
     </div>

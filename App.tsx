@@ -326,62 +326,64 @@ function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
-// Check for password reset route
-useEffect(() => {
-  const checkResetRoute = async () => {
-    if (!supabase) return;
+  // Check for password reset route
+  useEffect(() => {
+    const checkResetRoute = async () => {
+      if (!supabase) return;
 
-    const hash = window.location.hash;
-    
-    console.log("🔍 Checking reset route...");
-    console.log("🔍 Hash:", hash);
-    
-    // Check if hash contains recovery token
-    if (hash && hash.length > 10) {
-      try {
-        // First, try to verify the session with Supabase
-        // This will exchange the token for a valid session
-        const { data, error } = await supabase.auth.verifyOtp({
-          token_hash: hash.substring(1), // Remove the # from hash
-          type: 'recovery'
-        });
+      const hash = window.location.hash;
 
-        if (error) {
-          console.error("❌ Token verification error:", error);
-          
-          // Fallback: Check if there's already a valid session
-          const { data: { session } } = await supabase.auth.getSession();
-          
-          if (session) {
-            console.log("✅ Valid reset session found:", session);
+      console.log("🔍 Checking reset route...");
+      console.log("🔍 Hash:", hash);
+
+      // Check if hash contains recovery token
+      if (hash && hash.length > 10) {
+        try {
+          // First, try to verify the session with Supabase
+          // This will exchange the token for a valid session
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: hash.substring(1), // Remove the # from hash
+            type: "recovery",
+          });
+
+          if (error) {
+            console.error("❌ Token verification error:", error);
+
+            // Fallback: Check if there's already a valid session
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+
+            if (session) {
+              console.log("✅ Valid reset session found:", session);
+              setIsResetPasswordRoute(true);
+            } else {
+              console.warn("❌ No valid session for password reset");
+              setIsResetPasswordRoute(false);
+            }
+            return;
+          }
+
+          if (data.session) {
+            console.log("✅ Token verified, session created:", data.session);
             setIsResetPasswordRoute(true);
           } else {
-            console.warn("❌ No valid session for password reset");
+            console.warn("❌ No session created from token");
             setIsResetPasswordRoute(false);
           }
-          return;
-        }
-
-        if (data.session) {
-          console.log("✅ Token verified, session created:", data.session);
-          setIsResetPasswordRoute(true);
-        } else {
-          console.warn("❌ No session created from token");
+        } catch (error) {
+          console.error("❌ Error checking reset route:", error);
           setIsResetPasswordRoute(false);
         }
-      } catch (error) {
-        console.error("❌ Error checking reset route:", error);
-        setIsResetPasswordRoute(false);
       }
-    }
-  };
+    };
 
-  checkResetRoute();
+    checkResetRoute();
 
-  // Also listen for hash changes
-  window.addEventListener("hashchange", checkResetRoute);
-  return () => window.removeEventListener("hashchange", checkResetRoute);
-}, []);
+    // Also listen for hash changes
+    window.addEventListener("hashchange", checkResetRoute);
+    return () => window.removeEventListener("hashchange", checkResetRoute);
+  }, []);
   // NEW: global notifications synced across users
   const [notifications, setNotifications] = useSmartSync<AppNotification[]>(
     "notifications",

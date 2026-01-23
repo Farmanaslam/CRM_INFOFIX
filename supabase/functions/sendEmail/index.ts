@@ -19,7 +19,7 @@ async function sendEmail(
   console.log("   From: support@infofixcomputer.in");
   console.log("   Subject:", subject);
   const emailPayload: any = {
-    from: "support@infofixcomputer.in",
+    from: "Infofix Services <support@infofixcomputer.in>",
     to,
     subject,
     html,
