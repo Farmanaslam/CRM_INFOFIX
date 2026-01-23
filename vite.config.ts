@@ -20,5 +20,6 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "."),
       },
     },
+     publicDir: 'public',
   };
 });

@@ -14,12 +14,17 @@ root.render(
   </React.StrictMode>
 );
 
-// ✅ UNREGISTER Service Worker
+// ✅ Register Service Worker for PWA (with proper error handling)
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    registrations.forEach((registration) => {
-      registration.unregister();
-      console.log("✅ Service Worker unregistered");
-    });
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        console.log("✅ Service Worker registered:", registration.scope);
+      })
+      .catch((error) => {
+        // Silently fail - don't show errors in console
+        console.warn("Service Worker registration failed (this is okay):", error);
+      });
   });
 }
