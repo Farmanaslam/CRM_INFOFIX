@@ -208,6 +208,13 @@ export default function Reports({
 
     filteredData.forEach((t) => {
       const d = new Date(t.date);
+
+      // Skip invalid dates
+      if (isNaN(d.getTime())) {
+        console.warn(`Invalid date found in ticket: ${t.id}, date: ${t.date}`);
+        return;
+      }
+
       const isoKey = d.toISOString().split("T")[0];
       const label = d.toLocaleDateString("en-US", {
         month: "short",
