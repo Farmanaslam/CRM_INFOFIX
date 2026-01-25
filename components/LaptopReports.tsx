@@ -773,14 +773,47 @@ export default function LaptopReports({
     const reportId = currentReport.id || Date.now().toString();
 
     const original = reports.find((r) => r.id === reportId);
-    let details = "";
     let reportToSave: Report;
 
     if (original) {
-      // ... existing code for updates ...
+      // Updating existing report
+      const changes: string[] = [];
+
+      if (original.progress !== currentReport.progress) {
+        changes.push(
+          `Progress: ${original.progress}% → ${currentReport.progress}%`,
+        );
+      }
+      if (original.status !== currentReport.status) {
+        changes.push(`Status: ${original.status} → ${currentReport.status}`);
+      }
+      if (original.actionRequired !== currentReport.actionRequired) {
+        changes.push(
+          `Action: ${original.actionRequired || "None"} → ${currentReport.actionRequired || "None"}`,
+        );
+      }
+
+      const details =
+        changes.length > 0 ? changes.join(", ") : "Report updated";
+
+      const historyEntry: ReportHistory = {
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        date: new Date().toLocaleString(),
+        actor: currentUser?.name || "Unknown User",
+        action: "Report Updated",
+        details: details,
+      };
+
+      reportToSave = {
+        ...currentReport,
+        history: [...(currentReport.history || []), historyEntry],
+        status:
+          currentReport.progress === 100 ? "Completed" : currentReport.status,
+      };
     } else {
       // For new reports
-      details = `New report created. Progress: ${currentReport.progress}%. Status: ${currentReport.status || "Draft"}`;
+      const details = `New report created. Progress: ${currentReport.progress}%. Status: ${currentReport.status || "Draft"}`;
 
       const historyEntry: ReportHistory = {
         id: Date.now().toString(),
@@ -793,7 +826,7 @@ export default function LaptopReports({
 
       reportToSave = {
         ...currentReport,
-        id: reportId, // Use the generated ID
+        id: reportId,
         history: [historyEntry],
         status: currentReport.progress === 100 ? "Completed" : "Draft",
         zoneId:
@@ -1222,7 +1255,7 @@ export default function LaptopReports({
     return (
       <div className="space-y-6 h-full flex flex-col bg-slate-50 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px]">
         {/* HERO SECTION */}
-<div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl md:shrink-0">
+        <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl md:shrink-0">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
 
@@ -1262,273 +1295,282 @@ export default function LaptopReports({
         </div>
 
         {/* TOOLBAR & FILTERS */}
-       {/* TOOLBAR & FILTERS */}
-<div className="bg-white/80 backdrop-blur p-4 rounded-3xl border border-slate-200 shadow-sm md:shrink-0">
-  <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-    <div className="relative w-full sm:w-72">
-      <Search
-        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-        size={18}
-      />
-      <input
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 placeholder-slate-400 focus:ring-2 ring-indigo-100"
-        placeholder="Search laptop ID..."
-      />
-    </div>
+        {/* TOOLBAR & FILTERS */}
+        <div className="bg-white/80 backdrop-blur p-4 rounded-3xl border border-slate-200 shadow-sm md:shrink-0">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="relative w-full sm:w-72">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                size={18}
+              />
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 placeholder-slate-400 focus:ring-2 ring-indigo-100"
+                placeholder="Search laptop ID..."
+              />
+            </div>
 
-    <div className="flex bg-slate-100 p-1 rounded-xl self-end sm:self-auto">
-      <button
-        onClick={() => setViewMode("grid")}
-        className={`p-2 rounded-lg transition-all ${
-          viewMode === "grid"
-            ? "bg-white shadow text-indigo-600"
-            : "text-slate-400 hover:text-slate-600"
-        }`}
-      >
-        <Grid size={18} />
-      </button>
-      <button
-        onClick={() => setViewMode("list")}
-        className={`p-2 rounded-lg transition-all ${
-          viewMode === "list"
-            ? "bg-white shadow text-indigo-600"
-            : "text-slate-400 hover:text-slate-600"
-        }`}
-      >
-        <ListIcon size={18} />
-      </button>
-    </div>
-  </div>
-
-  {/* Mobile: Collapsible Filters, Desktop: Always visible */}
-  <div className="mt-4">
-    {/* Mobile Filter Toggle */}
-    <details className="sm:hidden group">
-      <summary className="flex items-center justify-between p-3 bg-slate-50 rounded-xl cursor-pointer list-none border border-slate-200">
-        <div className="flex items-center gap-2">
-          <Filter size={16} className="text-slate-600" />
-          <span className="text-sm font-bold text-slate-700">Filters</span>
-          <span className="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full">
-            {[
-              filterTech !== "All",
-              filterDealer !== "All",
-              filterAction !== "All",
-              filterStatus !== "All",
-            ].filter(Boolean).length} active
-          </span>
-        </div>
-        <ChevronDown 
-          size={16} 
-          className="text-slate-400 group-open:rotate-180 transition-transform"
-        />
-      </summary>
-      
-      <div className="mt-3 grid grid-cols-1 gap-3 animate-in fade-in-50">
-        <div className="relative">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-            <User size={14} />
+            <div className="flex bg-slate-100 p-1 rounded-xl self-end sm:self-auto">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`p-2 rounded-lg transition-all ${
+                  viewMode === "grid"
+                    ? "bg-white shadow text-indigo-600"
+                    : "text-slate-400 hover:text-slate-600"
+                }`}
+              >
+                <Grid size={18} />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`p-2 rounded-lg transition-all ${
+                  viewMode === "list"
+                    ? "bg-white shadow text-indigo-600"
+                    : "text-slate-400 hover:text-slate-600"
+                }`}
+              >
+                <ListIcon size={18} />
+              </button>
+            </div>
           </div>
-          <select
-            value={filterTech}
-            onChange={(e) => setFilterTech(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-            disabled={isTechnician}
-          >
-            {isTechnician ? (
-              <option value={technicianName}>{technicianName} (You)</option>
-            ) : (
-              <>
-                <option value="All">All Technicians</option>
-                {settings?.teamMembers
-                  ?.filter((member) => member.role === "TECHNICIAN")
-                  .map((member) => (
-                    <option key={member.id} value={member.name}>
-                      {member.name} ({member.role})
+
+          {/* Mobile: Collapsible Filters, Desktop: Always visible */}
+          <div className="mt-4">
+            {/* Mobile Filter Toggle */}
+            <details className="sm:hidden group">
+              <summary className="flex items-center justify-between p-3 bg-slate-50 rounded-xl cursor-pointer list-none border border-slate-200">
+                <div className="flex items-center gap-2">
+                  <Filter size={16} className="text-slate-600" />
+                  <span className="text-sm font-bold text-slate-700">
+                    Filters
+                  </span>
+                  <span className="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full">
+                    {
+                      [
+                        filterTech !== "All",
+                        filterDealer !== "All",
+                        filterAction !== "All",
+                        filterStatus !== "All",
+                      ].filter(Boolean).length
+                    }{" "}
+                    active
+                  </span>
+                </div>
+                <ChevronDown
+                  size={16}
+                  className="text-slate-400 group-open:rotate-180 transition-transform"
+                />
+              </summary>
+
+              <div className="mt-3 grid grid-cols-1 gap-3 animate-in fade-in-50">
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                    <User size={14} />
+                  </div>
+                  <select
+                    value={filterTech}
+                    onChange={(e) => setFilterTech(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                    disabled={isTechnician}
+                  >
+                    {isTechnician ? (
+                      <option value={technicianName}>
+                        {technicianName} (You)
+                      </option>
+                    ) : (
+                      <>
+                        <option value="All">All Technicians</option>
+                        {settings?.teamMembers
+                          ?.filter((member) => member.role === "TECHNICIAN")
+                          .map((member) => (
+                            <option key={member.id} value={member.name}>
+                              {member.name} ({member.role})
+                            </option>
+                          ))}
+                      </>
+                    )}
+                  </select>
+                  <ChevronDown
+                    size={14}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                  />
+                </div>
+
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                    <Package size={14} />
+                  </div>
+                  <select
+                    value={filterDealer}
+                    onChange={(e) => setFilterDealer(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                  >
+                    <option value="All">All Dealers</option>
+                    {settings?.laptopDealers?.map((d) => (
+                      <option key={d.id} value={d.name}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={14}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                  />
+                </div>
+
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                    <Zap size={14} />
+                  </div>
+                  <select
+                    value={filterAction}
+                    onChange={(e) => setFilterAction(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                  >
+                    <option value="All">All Actions</option>
+                    <option value="Return to Dealers">Return to Dealers</option>
+                    <option value="Sent to Service Centre">
+                      Sent to Service Centre
+                    </option>
+                    <option value="Parts Sent to Dealers">
+                      Parts Sent to Dealers
+                    </option>
+                    <option value="Own Services">Own Services</option>
+                  </select>
+                  <ChevronDown
+                    size={14}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                  />
+                </div>
+
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                    <Activity size={14} />
+                  </div>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value as any)}
+                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Draft">Draft</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                  <ChevronDown
+                    size={14}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                  />
+                </div>
+              </div>
+            </details>
+
+            {/* Desktop: Always visible filters */}
+            <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="relative group">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <User size={14} />
+                </div>
+                <select
+                  value={filterTech}
+                  onChange={(e) => setFilterTech(e.target.value)}
+                  className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                  disabled={isTechnician}
+                >
+                  {isTechnician ? (
+                    <option value={technicianName}>
+                      {technicianName} (You)
+                    </option>
+                  ) : (
+                    <>
+                      <option value="All">All Technicians</option>
+                      {settings?.teamMembers
+                        ?.filter((member) => member.role === "TECHNICIAN")
+                        .map((member) => (
+                          <option key={member.id} value={member.name}>
+                            {member.name} ({member.role})
+                          </option>
+                        ))}
+                    </>
+                  )}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                />
+              </div>
+
+              <div className="relative group">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <Package size={14} />
+                </div>
+                <select
+                  value={filterDealer}
+                  onChange={(e) => setFilterDealer(e.target.value)}
+                  className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                >
+                  <option value="All">All Dealers</option>
+                  {settings?.laptopDealers?.map((d) => (
+                    <option key={d.id} value={d.name}>
+                      {d.name}
                     </option>
                   ))}
-              </>
-            )}
-          </select>
-          <ChevronDown
-            size={14}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-          />
-        </div>
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                />
+              </div>
 
-        <div className="relative">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-            <Package size={14} />
-          </div>
-          <select
-            value={filterDealer}
-            onChange={(e) => setFilterDealer(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-          >
-            <option value="All">All Dealers</option>
-            {settings?.laptopDealers?.map((d) => (
-              <option key={d.id} value={d.name}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            size={14}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-          />
-        </div>
-
-        <div className="relative">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-            <Zap size={14} />
-          </div>
-          <select
-            value={filterAction}
-            onChange={(e) => setFilterAction(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-          >
-            <option value="All">All Actions</option>
-            <option value="Return to Dealers">Return to Dealers</option>
-            <option value="Sent to Service Centre">
-              Sent to Service Centre
-            </option>
-            <option value="Parts Sent to Dealers">
-              Parts Sent to Dealers
-            </option>
-            <option value="Own Services">Own Services</option>
-          </select>
-          <ChevronDown
-            size={14}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-          />
-        </div>
-
-        <div className="relative">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-            <Activity size={14} />
-          </div>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as any)}
-            className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-          >
-            <option value="All">All Statuses</option>
-            <option value="Draft">Draft</option>
-            <option value="Completed">Completed</option>
-          </select>
-          <ChevronDown
-            size={14}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-          />
-        </div>
-      </div>
-    </details>
-
-    {/* Desktop: Always visible filters */}
-    <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      <div className="relative group">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-          <User size={14} />
-        </div>
-        <select
-          value={filterTech}
-          onChange={(e) => setFilterTech(e.target.value)}
-          className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-          disabled={isTechnician}
-        >
-          {isTechnician ? (
-            <option value={technicianName}>{technicianName} (You)</option>
-          ) : (
-            <>
-              <option value="All">All Technicians</option>
-              {settings?.teamMembers
-                ?.filter((member) => member.role === "TECHNICIAN")
-                .map((member) => (
-                  <option key={member.id} value={member.name}>
-                    {member.name} ({member.role})
+              <div className="relative group">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <Zap size={14} />
+                </div>
+                <select
+                  value={filterAction}
+                  onChange={(e) => setFilterAction(e.target.value)}
+                  className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                >
+                  <option value="All">All Actions</option>
+                  <option value="Return to Dealers">Return to Dealers</option>
+                  <option value="Sent to Service Centre">
+                    Sent to Service Centre
                   </option>
-                ))}
-            </>
-          )}
-        </select>
-        <ChevronDown
-          size={14}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-        />
-      </div>
+                  <option value="Parts Sent to Dealers">
+                    Parts Sent to Dealers
+                  </option>
+                  <option value="Own Services">Own Services</option>
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                />
+              </div>
 
-      <div className="relative group">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-          <Package size={14} />
+              <div className="relative group">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <Activity size={14} />
+                </div>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value as any)}
+                  className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Completed">Completed</option>
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                />
+              </div>
+            </div>
+          </div>
         </div>
-        <select
-          value={filterDealer}
-          onChange={(e) => setFilterDealer(e.target.value)}
-          className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-        >
-          <option value="All">All Dealers</option>
-          {settings?.laptopDealers?.map((d) => (
-            <option key={d.id} value={d.name}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-        <ChevronDown
-          size={14}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-        />
-      </div>
-
-      <div className="relative group">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-          <Zap size={14} />
-        </div>
-        <select
-          value={filterAction}
-          onChange={(e) => setFilterAction(e.target.value)}
-          className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-        >
-          <option value="All">All Actions</option>
-          <option value="Return to Dealers">Return to Dealers</option>
-          <option value="Sent to Service Centre">
-            Sent to Service Centre
-          </option>
-          <option value="Parts Sent to Dealers">
-            Parts Sent to Dealers
-          </option>
-          <option value="Own Services">Own Services</option>
-        </select>
-        <ChevronDown
-          size={14}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-        />
-      </div>
-
-      <div className="relative group">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-          <Activity size={14} />
-        </div>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value as any)}
-          className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-        >
-          <option value="All">All Statuses</option>
-          <option value="Draft">Draft</option>
-          <option value="Completed">Completed</option>
-        </select>
-        <ChevronDown
-          size={14}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-        />
-      </div>
-    </div>
-  </div>
-</div>
 
         {/* REPORTS LIST */}
-<div className="flex-1 overflow-y-auto custom-scrollbar pb-10 min-h-0">
+        <div className="flex-1 overflow-y-auto custom-scrollbar pb-10 min-h-0">
           {viewMode === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredReports.map((report) => (
