@@ -197,7 +197,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     if (formData.status === "Resolved" && !formData.resolvedAt) {
       setFormData((prev) => ({
         ...prev,
-        resolvedAt: new Date().toISOString(), // ← Use ISO string instead
+        resolvedAt: new Date().toISOString(),
       }));
     }
   }, [formData.status]);
@@ -608,7 +608,15 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
             bill_number: formData.billNumber || null,
             scheduled_date: formData.scheduledDate || null,
             resolved_at: formData.resolvedAt
-              ? new Date(formData.resolvedAt).toISOString()
+              ? (() => {
+                  try {
+                    const date = new Date(formData.resolvedAt);
+                    if (isNaN(date.getTime())) return null;
+                    return date.toISOString();
+                  } catch {
+                    return null;
+                  }
+                })()
               : null,
             history: JSON.stringify(updatedHistory),
             hold_reason: formData.holdReason || null,
@@ -718,7 +726,15 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
               address: formData.address,
               created_at: new Date().toISOString(),
               resolved_at: formData.resolvedAt
-                ? new Date(formData.resolvedAt).toISOString()
+                ? (() => {
+                    try {
+                      const date = new Date(formData.resolvedAt);
+                      if (isNaN(date.getTime())) return null;
+                      return date.toISOString();
+                    } catch {
+                      return null;
+                    }
+                  })()
                 : null,
               history: JSON.stringify(initialHistory),
               hold_reason: formData.holdReason || null,

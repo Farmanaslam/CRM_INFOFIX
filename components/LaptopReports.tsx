@@ -1222,7 +1222,7 @@ export default function LaptopReports({
     return (
       <div className="space-y-6 h-full flex flex-col bg-slate-50 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px]">
         {/* HERO SECTION */}
-        <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl shrink-0">
+<div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl md:shrink-0">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
 
@@ -1263,7 +1263,7 @@ export default function LaptopReports({
 
         {/* TOOLBAR & FILTERS */}
        {/* TOOLBAR & FILTERS */}
-<div className="bg-white/80 backdrop-blur p-4 rounded-3xl border border-slate-200 shadow-sm shrink-0">
+<div className="bg-white/80 backdrop-blur p-4 rounded-3xl border border-slate-200 shadow-sm md:shrink-0">
   <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
     <div className="relative w-full sm:w-72">
       <Search
@@ -1528,7 +1528,7 @@ export default function LaptopReports({
 </div>
 
         {/* REPORTS LIST */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar pb-10">
+<div className="flex-1 overflow-y-auto custom-scrollbar pb-10 min-h-0">
           {viewMode === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredReports.map((report) => (
