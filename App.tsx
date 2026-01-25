@@ -210,7 +210,7 @@ function App() {
   const [stores, setStores] = useState<Store[]>([]);
   const [isLoadingTeamData, setIsLoadingTeamData] = useState(false);
   const [isResetPasswordRoute, setIsResetPasswordRoute] = useState(false);
-
+  const [isCheckingResetRoute, setIsCheckingResetRoute] = useState(true);
   // Add this function to fetch all team-related data
   const fetchTeamData = useCallback(async () => {
     if (!supabase) {
@@ -329,60 +329,62 @@ function App() {
   // Check for password reset route
   useEffect(() => {
     const checkResetRoute = async () => {
-      if (!supabase) return;
+      if (!supabase) {
+        setIsCheckingResetRoute(false);
+        return;
+      }
 
       const hash = window.location.hash;
 
-      console.log("🔍 Checking reset route...");
-      console.log("🔍 Hash:", hash);
+      // Check if URL contains password reset hash
+      if (
+        hash &&
+        (hash.includes("access_token") || hash.includes("type=recovery"))
+      ) {
+        // Give Supabase a moment to auto-process the hash
+        await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Check if hash contains recovery token
-      if (hash && hash.length > 10) {
         try {
-          // First, try to verify the session with Supabase
-          // This will exchange the token for a valid session
-          const { data, error } = await supabase.auth.verifyOtp({
-            token_hash: hash.substring(1), // Remove the # from hash
-            type: "recovery",
-          });
+          // Check if Supabase has established a session from the hash
+          const {
+            data: { session },
+            error,
+          } = await supabase.auth.getSession();
 
-          if (error) {
-            console.error("❌ Token verification error:", error);
-
-            // Fallback: Check if there's already a valid session
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-
-            if (session) {
-              console.log("✅ Valid reset session found:", session);
-              setIsResetPasswordRoute(true);
-            } else {
-              console.warn("❌ No valid session for password reset");
-              setIsResetPasswordRoute(false);
-            }
-            return;
-          }
-
-          if (data.session) {
-            console.log("✅ Token verified, session created:", data.session);
+          if (session) {
+            console.log("✅ Valid password reset session detected");
             setIsResetPasswordRoute(true);
           } else {
-            console.warn("❌ No session created from token");
+            console.warn("❌ No valid session for password reset");
             setIsResetPasswordRoute(false);
           }
         } catch (error) {
-          console.error("❌ Error checking reset route:", error);
+          console.error("❌ Error checking reset session:", error);
           setIsResetPasswordRoute(false);
         }
+      } else {
+        setIsResetPasswordRoute(false);
       }
+
+      setIsCheckingResetRoute(false);
     };
 
     checkResetRoute();
 
-    // Also listen for hash changes
-    window.addEventListener("hashchange", checkResetRoute);
-    return () => window.removeEventListener("hashchange", checkResetRoute);
+    // Listen for auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" && session) {
+        console.log("✅ Password recovery event detected");
+        setIsResetPasswordRoute(true);
+        setIsCheckingResetRoute(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
   // NEW: global notifications synced across users
   const [notifications, setNotifications] = useSmartSync<AppNotification[]>(
@@ -957,7 +959,36 @@ function App() {
       />
     );
   }
-
+  if (isCheckingResetRoute) {
+    return (
+      <div className="h-screen bg-[#020617] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 mx-auto mb-4 animate-pulse">
+            <svg
+              className="w-8 h-8 text-white animate-spin"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+          </div>
+          <p className="text-slate-400 text-sm font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
   if (!currentUser)
     return (
       <Login
