@@ -765,79 +765,79 @@ export default function LaptopReports({
       return false;
     }
   };
-const handleSaveReport = async () => {
-  if (!currentReport.deviceInfo.laptopNo)
-    return alert("Laptop No is required");
+  const handleSaveReport = async () => {
+    if (!currentReport.deviceInfo.laptopNo)
+      return alert("Laptop No is required");
 
-  // Generate a unique ID for new reports
-  const reportId = currentReport.id || Date.now().toString();
-  
-  const original = reports.find((r) => r.id === reportId);
-  let details = "";
-  let reportToSave: Report;
+    // Generate a unique ID for new reports
+    const reportId = currentReport.id || Date.now().toString();
 
-  if (original) {
-    // ... existing code for updates ...
-  } else {
-    // For new reports
-    details = `New report created. Progress: ${currentReport.progress}%. Status: ${currentReport.status || "Draft"}`;
-    
-    const historyEntry: ReportHistory = {
-      id: Date.now().toString(),
-      timestamp: Date.now(),
-      date: new Date().toLocaleString(),
-      actor: currentUser?.name || "Unknown User",
-      action: "Report Created",
-      details: details,
-    };
+    const original = reports.find((r) => r.id === reportId);
+    let details = "";
+    let reportToSave: Report;
 
-    reportToSave = {
-      ...currentReport,
-      id: reportId, // Use the generated ID
-      history: [historyEntry],
-      status: currentReport.progress === 100 ? "Completed" : "Draft",
-      zoneId:
-        currentReport.zoneId ||
-        (selectedZoneId !== "all" ? selectedZoneId : undefined),
-    };
-  }
+    if (original) {
+      // ... existing code for updates ...
+    } else {
+      // For new reports
+      details = `New report created. Progress: ${currentReport.progress}%. Status: ${currentReport.status || "Draft"}`;
 
-  // SAVE TO SUPABASE
-  const savedReport = await saveReportToSupabase(reportToSave);
+      const historyEntry: ReportHistory = {
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        date: new Date().toLocaleString(),
+        actor: currentUser?.name || "Unknown User",
+        action: "Report Created",
+        details: details,
+      };
 
-  if (savedReport) {
-    if (setReports) {
-      const existingIndex = reports.findIndex(
-        (r) => r.id === reportToSave.id,
-      );
-      let updatedReports: Report[];
-
-      if (existingIndex >= 0) {
-        updatedReports = [...reports];
-        updatedReports[existingIndex] = reportToSave;
-      } else {
-        updatedReports = [reportToSave, ...reports];
-      }
-
-      setReports(updatedReports);
+      reportToSave = {
+        ...currentReport,
+        id: reportId, // Use the generated ID
+        history: [historyEntry],
+        status: currentReport.progress === 100 ? "Completed" : "Draft",
+        zoneId:
+          currentReport.zoneId ||
+          (selectedZoneId !== "all" ? selectedZoneId : undefined),
+      };
     }
 
-    // Reset and close editor
-    setCurrentReport({
-      ...INITIAL_REPORT,
-      deviceInfo: {
-        ...INITIAL_REPORT.deviceInfo,
-        technicianName: isTechnician ? technicianName : "",
-      },
-    });
-    setInternalView("list");
+    // SAVE TO SUPABASE
+    const savedReport = await saveReportToSupabase(reportToSave);
 
-    // Optional: Show success message
-    alert(`Report saved successfully!`);
-  } else {
-    alert("Failed to save report. Please try again.");
-  }
-};
+    if (savedReport) {
+      if (setReports) {
+        const existingIndex = reports.findIndex(
+          (r) => r.id === reportToSave.id,
+        );
+        let updatedReports: Report[];
+
+        if (existingIndex >= 0) {
+          updatedReports = [...reports];
+          updatedReports[existingIndex] = reportToSave;
+        } else {
+          updatedReports = [reportToSave, ...reports];
+        }
+
+        setReports(updatedReports);
+      }
+
+      // Reset and close editor
+      setCurrentReport({
+        ...INITIAL_REPORT,
+        deviceInfo: {
+          ...INITIAL_REPORT.deviceInfo,
+          technicianName: isTechnician ? technicianName : "",
+        },
+      });
+      setInternalView("list");
+
+      // Optional: Show success message
+      alert(`Report saved successfully!`);
+    } else {
+      alert("Failed to save report. Please try again.");
+    }
+  };
   const handleDownloadPDF = () => {
     const element = document.getElementById("report-container");
     const opt = {
@@ -1218,251 +1218,389 @@ const handleSaveReport = async () => {
   }
 
   // 2. DATA MANAGEMENT TAB -> LIST VIEW
-  if (internalView === "list") {
-    return (
-      <div className="space-y-6 h-full flex flex-col bg-slate-50 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px]">
-        {/* HERO SECTION */}
-        <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl shrink-0">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
+  // 2. DATA MANAGEMENT TAB -> LIST VIEW
+if (internalView === "list") {
+  return (
+    <div className="h-full flex flex-col bg-slate-50 overflow-hidden">
+      {/* HERO SECTION - Compact on mobile */}
+      <div className="bg-slate-900 p-4 md:p-8 text-white relative overflow-hidden shrink-0">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
 
-          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div>
-              <h1 className="text-3xl font-black mb-2 tracking-tight text-white">
-                Laptop QC Management
-              </h1>
-              <p className="text-slate-400">
-                Create, edit, and organize quality check reports.
-              </p>
+        <div className="relative z-10 flex flex-col gap-4">
+          <div>
+            <h1 className="text-xl md:text-3xl font-black mb-1 tracking-tight text-white">
+              Laptop QC Management
+            </h1>
+            <p className="text-slate-400 text-sm md:text-base">
+              Create, edit, and organize quality check reports.
+            </p>
+          </div>
+          
+          {/* Mobile: Stack buttons vertically */}
+          <div className="flex flex-col sm:flex-row gap-3 mt-2">
+            <button
+              onClick={handleExportFilteredPDF}
+              className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl border border-white/10 backdrop-blur-sm transition-all flex items-center justify-center gap-2 text-sm"
+            >
+              <FileDown size={18} /> Export List
+            </button>
+            <button
+              onClick={() => {
+                setCurrentReport({
+                  ...INITIAL_REPORT,
+                  deviceInfo: {
+                    ...INITIAL_REPORT.deviceInfo,
+                    technicianName: isTechnician ? technicianName : "",
+                  },
+                });
+                setInternalView("editor");
+              }}
+              className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg hover:shadow-indigo-500/30 transition-all flex items-center justify-center gap-2 text-sm"
+            >
+              <Plus size={18} /> Add New Laptop
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* TOOLBAR & FILTERS - Collapsible on mobile */}
+      <div className="bg-white border-b border-slate-200 shadow-sm shrink-0">
+        <div className="p-3">
+          {/* Search and View Toggle */}
+          <div className="flex items-center gap-3 mb-3">
+            <div className="relative flex-1">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                size={18}
+              />
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 placeholder-slate-400 focus:ring-2 ring-indigo-100"
+                placeholder="Search laptop ID..."
+              />
             </div>
-            <div className="flex gap-3">
+            <div className="flex bg-slate-100 p-1 rounded-xl">
               <button
-                onClick={handleExportFilteredPDF}
-                className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl border border-white/10 backdrop-blur-sm transition-all flex items-center gap-2"
+                onClick={() => setViewMode("grid")}
+                className={`p-2 rounded-lg transition-all ${
+                  viewMode === "grid"
+                    ? "bg-white shadow text-indigo-600"
+                    : "text-slate-400 hover:text-slate-600"
+                }`}
               >
-                <FileDown size={20} /> Export List
+                <Grid size={18} />
               </button>
               <button
-                onClick={() => {
-                  setCurrentReport({
-                    ...INITIAL_REPORT,
-                    deviceInfo: {
-                      ...INITIAL_REPORT.deviceInfo,
-                      technicianName: isTechnician ? technicianName : "",
-                    },
-                  });
-                  setInternalView("editor");
-                }}
-                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-50 text-white font-bold rounded-2xl shadow-lg hover:shadow-indigo-500/30 transition-all flex items-center gap-2"
+                onClick={() => setViewMode("list")}
+                className={`p-2 rounded-lg transition-all ${
+                  viewMode === "list"
+                    ? "bg-white shadow text-indigo-600"
+                    : "text-slate-400 hover:text-slate-600"
+                }`}
               >
-                <Plus size={20} /> Add New Laptop
+                <ListIcon size={18} />
               </button>
             </div>
           </div>
-        </div>
 
-        {/* TOOLBAR & FILTERS */}
-<div className="bg-white/80 backdrop-blur p-4 rounded-3xl border border-slate-200 shadow-sm shrink-0 flex flex-col gap-4">
-  <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-    <div className="relative w-full sm:w-72">
-      <Search
-        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-        size={18}
-      />
-      <input
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 placeholder-slate-400 focus:ring-2 ring-indigo-100"
-        placeholder="Search laptop ID..."
-      />
-    </div>
-
-    <div className="flex bg-slate-100 p-1 rounded-xl self-end sm:self-auto">
-      <button
-        onClick={() => setViewMode("grid")}
-        className={`p-2 rounded-lg transition-all ${
-          viewMode === "grid"
-            ? "bg-white shadow text-indigo-600"
-            : "text-slate-400 hover:text-slate-600"
-        }`}
-      >
-        <Grid size={18} />
-      </button>
-      <button
-        onClick={() => setViewMode("list")}
-        className={`p-2 rounded-lg transition-all ${
-          viewMode === "list"
-            ? "bg-white shadow text-indigo-600"
-            : "text-slate-400 hover:text-slate-600"
-        }`}
-      >
-        <ListIcon size={18} />
-      </button>
-    </div>
-  </div>
-
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-    <div className="relative group">
-      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-        <User size={14} />
-      </div>
-      <select
-        value={filterTech}
-        onChange={(e) => setFilterTech(e.target.value)}
-        className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-        disabled={isTechnician}
-      >
-        {isTechnician ? (
-          <option value={technicianName}>{technicianName} (You)</option>
-        ) : (
-          <>
-            <option value="All">All Technicians</option>
-            {settings?.teamMembers
-              ?.filter((member) => member.role === "TECHNICIAN")
-              .map((member) => (
-                <option key={member.id} value={member.name}>
-                  {member.name} ({member.role})
-                </option>
-              ))}
-          </>
-        )}
-      </select>
-      <ChevronDown
-        size={14}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-      />
-    </div>
-
-    <div className="relative group">
-      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-        <Package size={14} />
-      </div>
-      <select
-        value={filterDealer}
-        onChange={(e) => setFilterDealer(e.target.value)}
-        className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-      >
-        <option value="All">All Dealers</option>
-        {settings?.laptopDealers?.map((d) => (
-          <option key={d.id} value={d.name}>
-            {d.name}
-          </option>
-        ))}
-      </select>
-      <ChevronDown
-        size={14}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-      />
-    </div>
-
-    <div className="relative group">
-      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-        <Zap size={14} />
-      </div>
-      <select
-        value={filterAction}
-        onChange={(e) => setFilterAction(e.target.value)}
-        className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-      >
-        <option value="All">All Actions</option>
-        <option value="Return to Dealers">Return to Dealers</option>
-        <option value="Sent to Service Centre">Sent to Service Centre</option>
-        <option value="Parts Sent to Dealers">Parts Sent to Dealers</option>
-        <option value="Own Services">Own Services</option>
-      </select>
-      <ChevronDown
-        size={14}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-      />
-    </div>
-
-    <div className="relative group">
-      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-        <Activity size={14} />
-      </div>
-      <select
-        value={filterStatus}
-        onChange={(e) => setFilterStatus(e.target.value as any)}
-        className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-      >
-        <option value="All">All Statuses</option>
-        <option value="Draft">Draft</option>
-        <option value="Completed">Completed</option>
-      </select>
-      <ChevronDown
-        size={14}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-      />
-    </div>
-  </div>
-</div>
-
-        {/* REPORTS LIST */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar pb-10">
-          {viewMode === "grid" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredReports.map((report) => (
-                <div
-                  key={report.id}
-                  className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-all group relative overflow-hidden flex flex-col"
+          {/* Mobile Collapsible Filters */}
+          <details className="group">
+            <summary className="flex items-center justify-between p-2 bg-slate-50 rounded-xl cursor-pointer list-none">
+              <div className="flex items-center gap-2">
+                <Filter size={16} className="text-slate-600" />
+                <span className="text-sm font-bold text-slate-700">Filters</span>
+                <span className="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full">
+                  {[
+                    filterTech !== "All",
+                    filterDealer !== "All",
+                    filterAction !== "All",
+                    filterStatus !== "All",
+                  ].filter(Boolean).length} active
+                </span>
+              </div>
+              <ChevronDown 
+                size={16} 
+                className="text-slate-400 group-open:rotate-180 transition-transform"
+              />
+            </summary>
+            
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in-50">
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <User size={14} />
+                </div>
+                <select
+                  value={filterTech}
+                  onChange={(e) => setFilterTech(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                  disabled={isTechnician}
                 >
-                  {report.actionRequired && (
-                    <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl z-10 shadow-sm">
-                      ACTION
-                    </div>
+                  {isTechnician ? (
+                    <option value={technicianName}>{technicianName} (You)</option>
+                  ) : (
+                    <>
+                      <option value="All">All Technicians</option>
+                      {settings?.teamMembers
+                        ?.filter((member) => member.role === "TECHNICIAN")
+                        .map((member) => (
+                          <option key={member.id} value={member.name}>
+                            {member.name}
+                          </option>
+                        ))}
+                    </>
                   )}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                />
+              </div>
 
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500 font-bold text-lg">
-                      {report.deviceInfo.laptopNo.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-slate-800">
-                        {report.deviceInfo.laptopNo}
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        {new Date(report.date).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <Package size={14} />
+                </div>
+                <select
+                  value={filterDealer}
+                  onChange={(e) => setFilterDealer(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                >
+                  <option value="All">All Dealers</option>
+                  {settings?.laptopDealers?.map((d) => (
+                    <option key={d.id} value={d.name}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                />
+              </div>
 
-                  <div className="space-y-2 mb-4 flex-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-400 font-medium">
-                        Technician
-                      </span>
-                      <span className="font-bold text-slate-700">
-                        {report.deviceInfo.technicianName || "N/A"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-400 font-medium">Dealer</span>
-                      <span className="font-bold text-slate-700">
-                        {report.deviceInfo.customerName || "N/A"}
-                      </span>
-                    </div>
-                    {report.actionRequired && (
-                      <div className="mt-3 pt-2 border-t border-slate-50">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                          Action Required
-                        </span>
-                        <div className="mt-1 text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-1.5 rounded-lg flex items-start gap-1">
-                          <AlertTriangle
-                            size={12}
-                            className="mt-0.5 shrink-0"
-                          />
-                          {report.actionRequired}
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <Zap size={14} />
+                </div>
+                <select
+                  value={filterAction}
+                  onChange={(e) => setFilterAction(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                >
+                  <option value="All">All Actions</option>
+                  <option value="Return to Dealers">Return to Dealers</option>
+                  <option value="Sent to Service Centre">
+                    Sent to Service Centre
+                  </option>
+                  <option value="Parts Sent to Dealers">
+                    Parts Sent to Dealers
+                  </option>
+                  <option value="Own Services">Own Services</option>
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                />
+              </div>
+
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <Activity size={14} />
+                </div>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value as any)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Completed">Completed</option>
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                />
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      {/* REPORTS LIST - Main content area */}
+      <div className="flex-1 overflow-hidden">
+        {viewMode === "grid" ? (
+          <div className="h-full overflow-y-auto custom-scrollbar p-3">
+            {filteredReports.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pb-4">
+                {filteredReports.map((report) => (
+                  <div
+                    key={report.id}
+                    className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col min-h-[200px]"
+                  >
+                    {/* Header with action badge */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 font-bold text-sm shrink-0">
+                          {report.deviceInfo.laptopNo.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-slate-800 truncate">
+                            {report.deviceInfo.laptopNo}
+                          </h3>
+                          <p className="text-xs text-slate-500 truncate">
+                            {new Date(report.date).toLocaleDateString()}
+                          </p>
                         </div>
                       </div>
-                    )}
-                  </div>
+                      {report.actionRequired && (
+                        <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-lg shrink-0">
+                          !
+                        </div>
+                      )}
+                    </div>
 
-                  {/* Progress Section */}
-                  <div className="mt-2 mb-4 pt-3 border-t border-slate-100">
-                    <div className="flex justify-between items-center mb-1.5">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Completion
-                      </span>
+                    {/* Info section */}
+                    <div className="space-y-2 mb-3 flex-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-400 font-medium">Tech:</span>
+                        <span className="font-bold text-slate-700 truncate ml-2">
+                          {report.deviceInfo.technicianName || "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-400 font-medium">Dealer:</span>
+                        <span className="font-bold text-slate-700 truncate ml-2">
+                          {report.deviceInfo.customerName || "N/A"}
+                        </span>
+                      </div>
+                      
+                      {/* Action required - only show if exists */}
+                      {report.actionRequired && (
+                        <div className="mt-2 pt-2 border-t border-slate-50">
+                          <div className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-1.5 rounded-lg">
+                            <div className="flex items-start gap-1">
+                              <AlertTriangle size={10} className="mt-0.5 shrink-0" />
+                              <span className="truncate">{report.actionRequired}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="mb-3">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">
+                          Progress
+                        </span>
+                        <span
+                          className={`text-xs font-bold ${
+                            getProgressColor(report.progress).split(" ")[0]
+                          }`}
+                        >
+                          {report.progress}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            getProgressColor(report.progress).split(" ")[1]
+                          }`}
+                          style={{ width: `${report.progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => loadReport(report)}
+                        className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-600 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteReport(report.id)}
+                        className="px-3 py-2 bg-red-50 hover:bg-red-100 rounded-xl text-red-600 transition-colors shrink-0"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full py-12 px-4">
+                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
+                  <ClipboardCheck size={24} className="text-slate-400" />
+                </div>
+                <p className="text-slate-400 text-center mb-2">No reports match your filters.</p>
+                <button
+                  onClick={() => {
+                    setSearchTerm("");
+                    setFilterTech("All");
+                    setFilterDealer("All");
+                    setFilterAction("All");
+                    setFilterStatus("All");
+                  }}
+                  className="text-indigo-600 text-sm font-bold hover:underline"
+                >
+                  Clear all filters
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          // List View for mobile
+          <div className="h-full overflow-y-auto custom-scrollbar">
+            {filteredReports.length > 0 ? (
+              <div className="divide-y divide-slate-100">
+                {filteredReports.map((report) => (
+                  <div
+                    key={report.id}
+                    className="p-4 hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 font-bold text-sm shrink-0">
+                          {report.deviceInfo.laptopNo.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-slate-800 truncate">
+                            {report.deviceInfo.laptopNo}
+                          </h3>
+                          <p className="text-xs text-slate-500">
+                            {new Date(report.date).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => loadReport(report)}
+                          className="p-1.5 hover:bg-indigo-50 text-indigo-600 rounded-lg"
+                        >
+                          <FileText size={16} />
+                        </button>
+                        <button
+                          onClick={() => deleteReport(report.id)}
+                          className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs mb-2">
+                      <div className="flex items-center gap-4">
+                        <span className="text-slate-600">
+                          {report.deviceInfo.technicianName || "N/A"}
+                        </span>
+                        <span className="text-slate-600">
+                          {report.deviceInfo.customerName || "N/A"}
+                        </span>
+                      </div>
                       <span
                         className={`text-xs font-bold ${
                           getProgressColor(report.progress).split(" ")[0]
@@ -1471,7 +1609,8 @@ const handleSaveReport = async () => {
                         {report.progress}%
                       </span>
                     </div>
-                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+
+                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden mb-2">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
                           getProgressColor(report.progress).split(" ")[1]
@@ -1479,132 +1618,61 @@ const handleSaveReport = async () => {
                         style={{ width: `${report.progress}%` }}
                       ></div>
                     </div>
-                  </div>
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => loadReport(report)}
-                      className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-600 transition-colors"
-                    >
-                      Edit Report
-                    </button>
-                    <button
-                      onClick={() => deleteReport(report.id)}
-                      className="px-3 py-2 bg-red-50 hover:bg-red-100 rounded-xl text-red-600 transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {report.actionRequired && (
+                      <div className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-1 rounded-lg mt-2 flex items-center gap-1">
+                        <AlertTriangle size={10} />
+                        <span className="truncate">{report.actionRequired}</span>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
-              {filteredReports.length === 0 && (
-                <div className="col-span-full py-12 text-center text-slate-400">
-                  <p>No reports match your filters.</p>
-                  <button
-                    onClick={() => {
-                      setSearchTerm("");
-                      setFilterTech("All");
-                      setFilterDealer("All");
-                      setFilterAction("All");
-                      setFilterStatus("All");
-                    }}
-                    className="text-indigo-600 text-xs font-bold mt-2 hover:underline"
-                  >
-                    Clear all filters
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
-                    <tr>
-                      <th className="px-6 py-4 font-bold">Device No</th>
-                      <th className="px-6 py-4 font-bold">Date</th>
-                      <th className="px-6 py-4 font-bold">Dealer</th>
-                      <th className="px-6 py-4 font-bold">Technician</th>
-                      <th className="px-6 py-4 font-bold">Progress</th>
-                      <th className="px-6 py-4 font-bold">Status</th>
-                      <th className="px-6 py-4 font-bold text-right">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredReports.map((report) => (
-                      <tr key={report.id} className="hover:bg-slate-50">
-                        <td className="px-6 py-4 font-bold text-slate-800">
-                          {report.deviceInfo.laptopNo}
-                        </td>
-                        <td className="px-6 py-4 text-slate-500">
-                          {new Date(report.date).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 text-slate-600">
-                          {report.deviceInfo.customerName}
-                        </td>
-                        <td className="px-6 py-4 text-slate-600">
-                          {report.deviceInfo.technicianName}
-                        </td>
-                        <td className="px-6 py-4 w-32">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${
-                                  getProgressColor(report.progress).split(
-                                    " ",
-                                  )[1]
-                                }`}
-                                style={{ width: `${report.progress}%` }}
-                              ></div>
-                            </div>
-                            <span
-                              className={`text-xs font-bold ${
-                                getProgressColor(report.progress).split(" ")[0]
-                              }`}
-                            >
-                              {report.progress}%
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          {report.actionRequired ? (
-                            <span className="bg-red-100 text-red-700 px-2 py-1 rounded-md text-[10px] font-bold whitespace-nowrap border border-red-200 flex items-center gap-1 w-fit uppercase">
-                              <AlertTriangle size={10} />{" "}
-                              {report.actionRequired}
-                            </span>
-                          ) : (
-                            <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md text-[10px] font-bold whitespace-nowrap border border-emerald-200 uppercase">
-                              Pass
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-right flex justify-end gap-2">
-                          <button
-                            onClick={() => loadReport(report)}
-                            className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"
-                          >
-                            <FileText size={16} />
-                          </button>
-                          <button
-                            onClick={() => deleteReport(report.id)}
-                            className="p-2 hover:bg-red-50 text-red-600 rounded-lg"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                ))}
               </div>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full py-12 px-4">
+                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
+                  <ClipboardCheck size={24} className="text-slate-400" />
+                </div>
+                <p className="text-slate-400 text-center mb-2">No reports match your filters.</p>
+                <button
+                  onClick={() => {
+                    setSearchTerm("");
+                    setFilterTech("All");
+                    setFilterDealer("All");
+                    setFilterAction("All");
+                    setFilterStatus("All");
+                  }}
+                  className="text-indigo-600 text-sm font-bold hover:underline"
+                >
+                  Clear all filters
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    );
-  }
+
+      {/* Mobile Floating Action Button for adding new reports */}
+      <div className="md:hidden fixed bottom-6 right-6 z-40">
+        <button
+          onClick={() => {
+            setCurrentReport({
+              ...INITIAL_REPORT,
+              deviceInfo: {
+                ...INITIAL_REPORT.deviceInfo,
+                technicianName: isTechnician ? technicianName : "",
+              },
+            });
+            setInternalView("editor");
+          }}
+          className="w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg hover:shadow-indigo-500/30 hover:scale-110 transition-all flex items-center justify-center"
+        >
+          <Plus size={24} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
   // 3. DATA MANAGEMENT TAB -> EDITOR VIEW
   return (
@@ -2031,19 +2099,19 @@ const handleSaveReport = async () => {
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
               Technician Notes
             </label>
-  <textarea
-  value={currentReport.notes}
-  onChange={(e) => {
-    // Simply update the state without creating history
-    setCurrentReport({
-      ...currentReport,
-      notes: e.target.value,
-    });
-  }}
-  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-indigo-100 outline-none resize-none"
-  rows={4}
-  placeholder="Additional observations..."
-/>
+            <textarea
+              value={currentReport.notes}
+              onChange={(e) => {
+                // Simply update the state without creating history
+                setCurrentReport({
+                  ...currentReport,
+                  notes: e.target.value,
+                });
+              }}
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-indigo-100 outline-none resize-none"
+              rows={4}
+              placeholder="Additional observations..."
+            />
           </div>
 
           {/* Signatures (Hidden usually, visible on print via CSS media query logic handles by html2pdf mostly but we structure it) */}
