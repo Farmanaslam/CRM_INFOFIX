@@ -390,7 +390,7 @@ const HistoryModal: React.FC<{
       doc.text(
         `User: ${item.actor.toUpperCase()}`,
         45,
-        y + 6 + detailsHeight + 2
+        y + 6 + detailsHeight + 2,
       );
 
       // Draw line connecting items
@@ -504,9 +504,18 @@ export default function LaptopReports({
   selectedZoneId,
 }: LaptopReportsProps) {
   // internalView controls List vs Editor inside the Data tab
+  const isTechnician = currentUser?.role === "TECHNICIAN";
+  const technicianName = currentUser?.name || "";
+
   const [internalView, setInternalView] = useState<"list" | "editor">("list");
 
-  const [currentReport, setCurrentReport] = useState<Report>(INITIAL_REPORT);
+  const [currentReport, setCurrentReport] = useState<Report>({
+    ...INITIAL_REPORT,
+    deviceInfo: {
+      ...INITIAL_REPORT.deviceInfo,
+      technicianName: isTechnician ? technicianName : "",
+    },
+  });
   const [showHistory, setShowHistory] = useState(false);
 
   // UI State
@@ -525,47 +534,20 @@ export default function LaptopReports({
       setInternalView("list");
     }
   }, [activeTab]);
+
+  const visibleReports = useMemo(() => {
+    if (isTechnician) {
+      return reports.filter(
+        (report) => report.deviceInfo.technicianName === technicianName,
+      );
+    }
+    return reports;
+  }, [reports, isTechnician, technicianName]);
   // Inside the component, after useState declarations:
-
-  // Fetch reports on mount and zone change
-
-  useEffect(() => {
-    const loadReports = async () => {
-      const fetchedReports = await fetchReportsFromSupabase(selectedZoneId);
-      if (setReports && fetchedReports.length >= 0) {
-        setReports(fetchedReports);
-      }
-    };
-
-    loadReports();
-  }, [selectedZoneId]);
-
-  // Realtime subscription
-  useEffect(() => {
-    if (!supabase) return;
-
-    const channel = supabase
-      .channel("laptop-reports-changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "laptop_reports" },
-        async () => {
-          const fetchedReports = await fetchReportsFromSupabase(selectedZoneId);
-          if (setReports) setReports(fetchedReports);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [selectedZoneId]);
-
-  // Fix: Filter reports by zone before analytics and listing
   const zoneFilteredReports = useMemo(() => {
-    if (selectedZoneId === "all") return reports;
-    return reports.filter((r) => r.zoneId === selectedZoneId);
-  }, [reports, selectedZoneId]);
+    if (selectedZoneId === "all") return visibleReports;
+    return visibleReports.filter((r) => r.zoneId === selectedZoneId);
+  }, [visibleReports, selectedZoneId]);
 
   // --- ANALYTICS DATA ---
   const dashboardData = useMemo(() => {
@@ -609,12 +591,12 @@ export default function LaptopReports({
         issues: dealerStats[name].issues,
         passed: dealerStats[name].total - dealerStats[name].issues, // Explicit Passed Count
         defectRate: Math.round(
-          (dealerStats[name].issues / dealerStats[name].total) * 100
+          (dealerStats[name].issues / dealerStats[name].total) * 100,
         ),
         passRate: Math.round(
           ((dealerStats[name].total - dealerStats[name].issues) /
             dealerStats[name].total) *
-            100
+            100,
         ),
       }))
       .sort((a, b) => b.issues - a.issues); // Sort by issues descending for "Issues facing"
@@ -625,7 +607,7 @@ export default function LaptopReports({
         name,
         total: techStats[name].total,
         efficiency: Math.round(
-          techStats[name].avgProgress / techStats[name].total
+          techStats[name].avgProgress / techStats[name].total,
         ),
       }))
       .sort((a, b) => b.total - a.total);
@@ -680,10 +662,10 @@ export default function LaptopReports({
       // Calculate Progress
       const totalItems = CHECKLIST_DATA.reduce(
         (acc, cat) => acc + cat.items.length,
-        0
+        0,
       );
       const checkedItems = Object.values(newChecklist).filter(
-        (v) => v !== null
+        (v) => v !== null,
       ).length;
       const progress = Math.round((checkedItems / totalItems) * 100);
 
@@ -789,6 +771,7 @@ export default function LaptopReports({
 
     const original = reports.find((r) => r.id === currentReport.id);
     let details = "";
+    let reportToSave: Report;
 
     if (original) {
       const changes: string[] = [];
@@ -807,32 +790,89 @@ export default function LaptopReports({
         }
       });
 
+      // Check for other changes
+      if (
+        original.deviceInfo.customerName !==
+        currentReport.deviceInfo.customerName
+      ) {
+        changes.push(
+          `Dealer: ${original.deviceInfo.customerName || "None"} → ${currentReport.deviceInfo.customerName || "None"}`,
+        );
+      }
+      if (
+        original.deviceInfo.technicianName !==
+        currentReport.deviceInfo.technicianName
+      ) {
+        changes.push(
+          `Technician: ${original.deviceInfo.technicianName || "Unassigned"} → ${currentReport.deviceInfo.technicianName || "Unassigned"}`,
+        );
+      }
+      if (
+        original.notes !== currentReport.notes &&
+        currentReport.notes.trim()
+      ) {
+        changes.push(`Notes updated`);
+      }
+
       details = `Report updated. Progress: ${
         currentReport.progress
       }%. Status: ${currentReport.status || "Draft"}`;
       if (changes.length > 0) details += `\nChanges: ${changes.join(", ")}`;
+
+      // Only add save history entry if there are actual changes
+      if (changes.length > 0) {
+        const historyEntry: ReportHistory = {
+          id: Date.now().toString(),
+          timestamp: Date.now(),
+          date: new Date().toLocaleString(),
+          actor: currentUser?.name || "Unknown User",
+          action: "Report Saved",
+          details: details,
+        };
+
+        reportToSave = {
+          ...currentReport,
+          id: currentReport.id || Date.now().toString(),
+          history: [...(currentReport.history || []), historyEntry],
+          status: currentReport.progress === 100 ? "Completed" : "Draft",
+          zoneId:
+            currentReport.zoneId ||
+            (selectedZoneId !== "all" ? selectedZoneId : undefined),
+        };
+      } else {
+        // No changes, keep existing history
+        reportToSave = {
+          ...currentReport,
+          id: currentReport.id || Date.now().toString(),
+          history: currentReport.history || [],
+          status: currentReport.progress === 100 ? "Completed" : "Draft",
+          zoneId:
+            currentReport.zoneId ||
+            (selectedZoneId !== "all" ? selectedZoneId : undefined),
+        };
+      }
     } else {
+      // New report
       details = `New report created for Laptop ${currentReport.deviceInfo.laptopNo}`;
+      const historyEntry: ReportHistory = {
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        date: new Date().toLocaleString(),
+        actor: currentUser?.name || "Unknown User",
+        action: "Report Created",
+        details: details,
+      };
+
+      reportToSave = {
+        ...currentReport,
+        id: Date.now().toString(),
+        history: [historyEntry],
+        status: currentReport.progress === 100 ? "Completed" : "Draft",
+        zoneId:
+          currentReport.zoneId ||
+          (selectedZoneId !== "all" ? selectedZoneId : undefined),
+      };
     }
-
-    const historyEntry: ReportHistory = {
-      id: Date.now().toString(),
-      timestamp: Date.now(),
-      date: new Date().toLocaleString(),
-      actor: currentUser?.name || "Unknown User",
-      action: currentReport.id ? "Report Updated" : "Report Created",
-      details: details,
-    };
-
-    const reportToSave: Report = {
-      ...currentReport,
-      id: currentReport.id || Date.now().toString(),
-      history: [...(currentReport.history || []), historyEntry],
-      status: currentReport.progress === 100 ? "Completed" : "Draft",
-      zoneId:
-        currentReport.zoneId ||
-        (selectedZoneId !== "all" ? selectedZoneId : undefined),
-    };
 
     // SAVE TO SUPABASE
     const savedReport = await saveReportToSupabase(reportToSave);
@@ -840,7 +880,7 @@ export default function LaptopReports({
     if (savedReport) {
       if (setReports) {
         const existingIndex = reports.findIndex(
-          (r) => r.id === reportToSave.id
+          (r) => r.id === reportToSave.id,
         );
         let updatedReports: Report[];
 
@@ -854,8 +894,18 @@ export default function LaptopReports({
         setReports(updatedReports);
       }
 
+      // Reset and close editor
+      setCurrentReport({
+        ...INITIAL_REPORT,
+        deviceInfo: {
+          ...INITIAL_REPORT.deviceInfo,
+          technicianName: isTechnician ? technicianName : "",
+        },
+      });
       setInternalView("list");
-      setCurrentReport(INITIAL_REPORT);
+
+      // Optional: Show success message
+      alert(`Report saved successfully!`);
     } else {
       alert("Failed to save report. Please try again.");
     }
@@ -890,7 +940,7 @@ export default function LaptopReports({
     doc.text(
       `Filter View: Tech: ${filterTech}, Dealer: ${filterDealer}, Status: ${filterStatus}`,
       15,
-      21
+      21,
     );
 
     // Table Setup
@@ -973,22 +1023,36 @@ export default function LaptopReports({
     doc.text(
       `Total Records in this view: ${filteredReports.length}`,
       startX,
-      y
+      y,
     );
 
     doc.save(`QC_Summary_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   const loadReport = (report: Report) => {
-    // Ensure history array exists for legacy data
+    // For technicians, ensure they can only load their own reports
+    if (isTechnician && report.deviceInfo.technicianName !== technicianName) {
+      alert("You can only view your own reports");
+      return;
+    }
+
     setCurrentReport({
       ...report,
       history: report.history || [],
     });
     setInternalView("editor");
   };
-
   const deleteReport = async (id: string) => {
+    // Check if technician is trying to delete someone else's report
+    const reportToDelete = reports.find((r) => r.id === id);
+    if (
+      isTechnician &&
+      reportToDelete?.deviceInfo.technicianName !== technicianName
+    ) {
+      alert("You can only delete your own reports");
+      return;
+    }
+
     if (!confirm("Delete this report?")) return;
 
     const success = await deleteReportFromSupabase(id);
@@ -1252,7 +1316,13 @@ export default function LaptopReports({
               </button>
               <button
                 onClick={() => {
-                  setCurrentReport(INITIAL_REPORT);
+                  setCurrentReport({
+                    ...INITIAL_REPORT,
+                    deviceInfo: {
+                      ...INITIAL_REPORT.deviceInfo,
+                      technicianName: isTechnician ? technicianName : "",
+                    },
+                  });
                   setInternalView("editor");
                 }}
                 className="px-6 py-3 bg-indigo-600 hover:bg-indigo-50 text-white font-bold rounded-2xl shadow-lg hover:shadow-indigo-500/30 transition-all flex items-center gap-2"
@@ -1312,16 +1382,22 @@ export default function LaptopReports({
                 value={filterTech}
                 onChange={(e) => setFilterTech(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                disabled={isTechnician} // Disable for technicians
               >
-                <option value="All">All Technicians</option>
-                {/* Filter to show only technicians, not all team members */}
-                {settings?.teamMembers
-                  ?.filter((member) => member.role === "TECHNICIAN") // Only show technicians
-                  .map((member) => (
-                    <option key={member.id} value={member.name}>
-                      {member.name} ({member.role})
-                    </option>
-                  ))}
+                {isTechnician ? (
+                  <option value={technicianName}>{technicianName} (You)</option>
+                ) : (
+                  <>
+                    <option value="All">All Technicians</option>
+                    {settings?.teamMembers
+                      ?.filter((member) => member.role === "TECHNICIAN")
+                      .map((member) => (
+                        <option key={member.id} value={member.name}>
+                          {member.name} ({member.role})
+                        </option>
+                      ))}
+                  </>
+                )}
               </select>
               <ChevronDown
                 size={14}
@@ -1553,7 +1629,7 @@ export default function LaptopReports({
                               <div
                                 className={`h-full rounded-full ${
                                   getProgressColor(report.progress).split(
-                                    " "
+                                    " ",
                                   )[1]
                                 }`}
                                 style={{ width: `${report.progress}%` }}
@@ -1636,10 +1712,10 @@ export default function LaptopReports({
                     currentReport.progress < 50
                       ? "bg-red-500"
                       : currentReport.progress < 80
-                      ? "bg-amber-500"
-                      : currentReport.progress < 100
-                      ? "bg-blue-500"
-                      : "bg-emerald-500"
+                        ? "bg-amber-500"
+                        : currentReport.progress < 100
+                          ? "bg-blue-500"
+                          : "bg-emerald-500"
                   }`}
                   style={{ width: `${currentReport.progress}%` }}
                 ></div>
@@ -1751,34 +1827,71 @@ export default function LaptopReports({
               </label>
               <div className="flex items-center gap-3">
                 <User className="text-emerald-400" size={20} />
-                <div className="relative w-full">
-                  <select
-                    value={currentReport.deviceInfo.technicianName}
-                    onChange={(e) =>
-                      setCurrentReport({
-                        ...currentReport,
-                        deviceInfo: {
-                          ...currentReport.deviceInfo,
-                          technicianName: e.target.value,
-                        },
-                      })
-                    }
-                    className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg appearance-none cursor-pointer pr-4"
-                  >
-                    <option value="">Select Tech...</option>
-                    {/* Filter to show only technicians, not all team members */}
-                    {settings?.teamMembers
-                      ?.filter((member) => member.role === "TECHNICIAN") // Only show technicians
-                      .map((member) => (
-                        <option key={member.id} value={member.name}>
-                          {member.name} ({member.role})
-                        </option>
-                      ))}
-                  </select>
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <ChevronDown size={14} className="text-slate-400" />
+                {isTechnician ? (
+                  // Display technician name if current user is technician
+                  <div className="w-full font-bold text-slate-700 text-lg">
+                    {technicianName} (You)
+                    <input
+                      type="hidden"
+                      value={technicianName}
+                      onChange={(e) =>
+                        setCurrentReport({
+                          ...currentReport,
+                          deviceInfo: {
+                            ...currentReport.deviceInfo,
+                            technicianName: technicianName,
+                          },
+                        })
+                      }
+                    />
                   </div>
-                </div>
+                ) : (
+                  // Show dropdown only for non-technicians
+                  <div className="relative w-full">
+                    <select
+                      value={currentReport.deviceInfo.technicianName}
+                      onChange={(e) => {
+                        const oldTech = currentReport.deviceInfo.technicianName;
+                        const newTech = e.target.value;
+
+                        // Create history entry for technician change
+                        const historyEntry: ReportHistory = {
+                          id: Date.now().toString(),
+                          timestamp: Date.now(),
+                          date: new Date().toLocaleString(),
+                          actor: currentUser?.name || "Unknown User",
+                          action: "Technician Assigned",
+                          details: `Technician changed from ${oldTech || "Unassigned"} to ${newTech || "Unassigned"}`,
+                        };
+
+                        setCurrentReport({
+                          ...currentReport,
+                          deviceInfo: {
+                            ...currentReport.deviceInfo,
+                            technicianName: newTech,
+                          },
+                          history: [
+                            ...(currentReport.history || []),
+                            historyEntry,
+                          ],
+                        });
+                      }}
+                      className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg appearance-none cursor-pointer pr-4"
+                    >
+                      <option value="">Select Tech...</option>
+                      {settings?.teamMembers
+                        ?.filter((member) => member.role === "TECHNICIAN")
+                        .map((member) => (
+                          <option key={member.id} value={member.name}>
+                            {member.name} ({member.role})
+                          </option>
+                        ))}
+                    </select>
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <ChevronDown size={14} className="text-slate-400" />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -1805,8 +1918,8 @@ export default function LaptopReports({
                             status === "pass"
                               ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200"
                               : status === "fail"
-                              ? "bg-slate-50 border-slate-200 text-slate-400 opacity-50"
-                              : "bg-slate-50 border-slate-100 text-slate-600 hover:border-blue-200 hover:bg-white"
+                                ? "bg-slate-50 border-slate-200 text-slate-400 opacity-50"
+                                : "bg-slate-50 border-slate-100 text-slate-600 hover:border-blue-200 hover:bg-white"
                           }`}
                         >
                           <div className="flex items-center gap-3">
@@ -1996,9 +2109,30 @@ export default function LaptopReports({
             </label>
             <textarea
               value={currentReport.notes}
-              onChange={(e) =>
-                setCurrentReport({ ...currentReport, notes: e.target.value })
-              }
+              onChange={(e) => {
+                const oldNotes = currentReport.notes;
+                const newNotes = e.target.value;
+
+                // Only create history if notes changed and are not empty
+                if (oldNotes !== newNotes && newNotes.trim()) {
+                  const historyEntry: ReportHistory = {
+                    id: Date.now().toString(),
+                    timestamp: Date.now(),
+                    date: new Date().toLocaleString(),
+                    actor: currentUser?.name || "Unknown User",
+                    action: "Notes Updated",
+                    details: `Technician notes updated: "${newNotes}"`,
+                  };
+
+                  setCurrentReport({
+                    ...currentReport,
+                    notes: newNotes,
+                    history: [...(currentReport.history || []), historyEntry],
+                  });
+                } else {
+                  setCurrentReport({ ...currentReport, notes: newNotes });
+                }
+              }}
               className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-indigo-100 outline-none resize-none"
               rows={4}
               placeholder="Additional observations..."

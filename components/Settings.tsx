@@ -496,6 +496,11 @@ const ZoneModal: React.FC<ZoneModalProps> = ({
         setColor(zone.color || "indigo");
         setHeadBranchId(zone.headBranchId || "");
         setAddress(zone.address || "");
+        // Initialize selectedStoreIds with stores already assigned to this zone
+        const assignedStoreIds = allStores
+          .filter((store) => store.zoneId === zone.id)
+          .map((store) => store.id);
+        setSelectedStoreIds(assignedStoreIds);
       } else {
         setName("");
         setColor("indigo");
@@ -505,14 +510,15 @@ const ZoneModal: React.FC<ZoneModalProps> = ({
       }
       setActiveTab("identity");
     }
-  }, [isOpen, zone, allStores]);
-
+  }, [isOpen, zone, allStores]); // Add allStores to dependencies
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name) return;
 
+    // DON'T generate ID here - let Supabase handle it
     const newZone: OperationalZone = {
-      id: zone ? zone.id : ``,
+      // Don't include id for new zones
+      ...(zone && { id: zone.id }),
       name,
       color,
       headBranchId: headBranchId || undefined,
@@ -820,6 +826,7 @@ const ZoneManager: React.FC<{
       const { data: savedZone, error: zoneError } = await supabase
         .from("operational_zones")
         .upsert({
+          // Only include id if it exists (for updates)
           ...(newZone.id && { id: newZone.id }),
           name: newZone.name,
           color: newZone.color,
@@ -849,31 +856,39 @@ const ZoneManager: React.FC<{
             .eq("id", store.id);
         }
       }
+
       let updatedZones = [...zones];
       const existingIdx = zones.findIndex((z) => z.id === zoneId);
+
       if (existingIdx > -1) {
+        // Update existing zone
         updatedZones[existingIdx] = {
-          ...newZone,
-          id: zoneId,
+          ...savedZone,
+          id: savedZone.id,
+          headBranchId: savedZone.head_branch_id || undefined,
         };
       } else {
+        // Add new zone
         updatedZones.push({
-          ...newZone,
-          id: zoneId,
+          ...savedZone,
+          id: savedZone.id,
+          headBranchId: savedZone.head_branch_id || undefined,
         });
       }
+
+      // Update stores with new zone assignments
       const updatedStores = stores.map((store) => {
         if (selectedStoreIds.includes(store.id)) {
           return { ...store, zoneId: zoneId };
         }
-        if (store.zoneId === zoneId) {
+        // If store was previously assigned to this zone but now unselected, remove zone
+        if (store.zoneId === zoneId && !selectedStoreIds.includes(store.id)) {
           return { ...store, zoneId: undefined };
         }
         return store;
       });
 
       onUpdate(updatedZones, updatedStores);
-
       alert("Zone saved successfully!");
     } catch (error: any) {
       console.error("Error saving zone:", error);
@@ -1298,6 +1313,7 @@ const StoreManager: React.FC<{
     const data = Object.fromEntries(formData);
 
     const storeData = {
+      // DON'T include id field when creating new store - let Supabase generate it
       name: data.name as string,
       address: data.address as string,
       phone: data.phone as string,
@@ -1306,31 +1322,44 @@ const StoreManager: React.FC<{
 
     try {
       if (editingStore) {
+        // For updates, include the id
         const { error } = await supabase
           .from("stores")
           .update(storeData)
           .eq("id", editingStore.id);
 
         if (error) throw error;
+
+        const updatedStore: Store = {
+          id: editingStore.id,
+          name: data.name as string,
+          address: data.address as string,
+          phone: data.phone as string,
+          zoneId: (data.zoneId as string) || undefined,
+        };
+
+        onUpdate(
+          stores.map((s) => (s.id === editingStore.id ? updatedStore : s)),
+        );
       } else {
-        const { error } = await supabase.from("stores").insert({
-          ...storeData,
-          id: Date.now().toString(),
-        });
+        // For new stores, DON'T include id - let Supabase generate it
+        const { data: newStoreData, error } = await supabase
+          .from("stores")
+          .insert(storeData)
+          .select() // Make sure to select the returned data
+          .single();
 
         if (error) throw error;
-      }
-      const newStore: Store = {
-        id: editingStore ? editingStore.id : Date.now().toString(),
-        name: data.name as string,
-        address: data.address as string,
-        phone: data.phone as string,
-        zoneId: (data.zoneId as string) || undefined,
-      };
 
-      if (editingStore) {
-        onUpdate(stores.map((s) => (s.id === newStore.id ? newStore : s)));
-      } else {
+        // Use the ID that Supabase generated
+        const newStore: Store = {
+          id: newStoreData.id, // This is the UUID from Supabase
+          name: newStoreData.name,
+          address: newStoreData.address,
+          phone: newStoreData.phone,
+          zoneId: newStoreData.zone_id || undefined,
+        };
+
         onUpdate([...stores, newStore]);
       }
 
@@ -1630,16 +1659,18 @@ const TeamManager: React.FC<{
           .eq("id", editingMember.id);
 
         if (error) throw error;
+
+        // Update password if provided
         if (data.password && data.password.toString().trim() !== "") {
           const { error: authError } = await supabase.auth.updateUser({
             password: data.password as string,
           });
-
           if (authError) {
             console.error("Password update failed:", authError);
           }
         }
       } else {
+        // Create new user with auth
         const { data: authData, error: authError } = await supabase.auth.signUp(
           {
             email: data.email as string,
@@ -1654,6 +1685,8 @@ const TeamManager: React.FC<{
         );
 
         if (authError) throw authError;
+
+        // Insert into users table
         const { error: dbError } = await supabase.from("users").insert({
           auth_id: authData.user?.id,
           ...userData,
@@ -1662,9 +1695,14 @@ const TeamManager: React.FC<{
 
         if (dbError) throw dbError;
       }
-      onUpdate(members);
+
+      // Close modal FIRST
       setIsModalOpen(false);
       setEditingMember(null);
+
+      // Refresh data from Supabase
+      onUpdate(members); // This will trigger parent to refresh from Supabase
+
       alert(
         editingMember
           ? "Team member updated successfully!"

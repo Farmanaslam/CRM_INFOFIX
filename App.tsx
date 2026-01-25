@@ -620,6 +620,70 @@ function App() {
     setSyncStatus,
   );
 
+  // Add after const [laptopReports, setLaptopReports] = useState<Report[]>([]);
+
+  // Fetch laptop reports from Supabase
+  const fetchLaptopReports = useCallback(async (zoneId?: string) => {
+    if (!supabase) return;
+
+    try {
+      let query = supabase
+        .from("laptop_reports")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (zoneId && zoneId !== "all") {
+        query = query.eq("zone_id", zoneId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const mappedReports: Report[] = (data || []).map((r: any) => ({
+        id: r.id,
+        date: r.date,
+        deviceInfo: r.device_info,
+        checklist: r.checklist || {},
+        battery: r.battery,
+        actionRequired: r.action_required,
+        notes: r.notes,
+        status: r.status,
+        progress: r.progress,
+        history: r.history || [],
+        zoneId: r.zone_id,
+      }));
+
+      setLaptopReports(mappedReports);
+    } catch (err) {
+      console.error("❌ Error fetching laptop reports:", err);
+    }
+  }, []);
+  // Fetch laptop reports on mount and zone change
+  useEffect(() => {
+    if (!supabase || !currentUser) return;
+    fetchLaptopReports(selectedZoneId);
+  }, [currentUser, selectedZoneId, fetchLaptopReports]);
+
+  // Realtime subscription for laptop reports
+  useEffect(() => {
+    if (!supabase || !currentUser) return;
+
+    const channel = supabase
+      .channel("laptop-reports-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "laptop_reports" },
+        () => {
+          fetchLaptopReports(selectedZoneId);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, selectedZoneId, fetchLaptopReports]);
+
   useEffect(() => {
     if (!supabase || !currentUser) return;
 

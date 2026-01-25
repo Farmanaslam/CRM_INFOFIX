@@ -197,7 +197,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     if (formData.status === "Resolved" && !formData.resolvedAt) {
       setFormData((prev) => ({
         ...prev,
-        resolvedAt: new Date().toLocaleDateString(),
+        resolvedAt: new Date().toISOString(), // ← Use ISO string instead
       }));
     }
   }, [formData.status]);

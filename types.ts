@@ -46,7 +46,7 @@ export interface AppNotification {
 }
 
 export interface OperationalZone {
-  id: string;
+  id?: string;
   name: string;
   color: string;
   headBranchId?: string;

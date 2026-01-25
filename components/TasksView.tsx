@@ -23,6 +23,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import { supabase } from "@/supabaseClient";
 
 interface TasksViewProps {
   tasks: Task[];
@@ -125,53 +126,80 @@ export default function TasksView({
       .map((m) => m.id);
   }, [accessibleMembers]);
 
-  const kpiData = useMemo(() => {
-    const baseTasks =
-      memberFilter === "all"
-        ? accessibleTasks.filter(
-            (t) =>
-              t.status === "completed" &&
-              t.assignedToId &&
-              technicianIds.includes(t.assignedToId),
-          )
-        : accessibleTasks.filter(
-            (t) => t.status === "completed" && t.assignedToId === memberFilter,
-          );
+  // In TasksView.tsx, replace the kpiData useMemo calculation (around line 106-158)
 
-    const total = baseTasks.length;
-    const completed = baseTasks.filter((t) => t.status === "completed").length;
-    const urgentPending = baseTasks.filter(
+  const kpiData = useMemo(() => {
+    // Filter reports by selected technician/team
+    const reportsForKPI =
+      memberFilter === "all"
+        ? accessibleReports.filter((r) => {
+            const techName = r.deviceInfo.technicianName?.trim().toLowerCase();
+            const accessibleNames = accessibleMembers
+              .filter((m) => m.role === "TECHNICIAN")
+              .map((m) => m.name.trim().toLowerCase());
+            return techName && accessibleNames.includes(techName);
+          })
+        : accessibleReports.filter((r) => {
+            const member = teamMembers.find((m) => m.id === memberFilter);
+            return member
+              ? r.deviceInfo.technicianName?.trim().toLowerCase() ===
+                  member.name.trim().toLowerCase()
+              : false;
+          });
+
+    // ✅ Count QC reports passed (progress >= 50% and no action required)
+    const qcPassedReports = reportsForKPI.filter(
+      (r) => r.progress >= 50 && !r.actionRequired,
+    );
+
+    // ✅ FIX: Count tasks correctly based on filter
+    const tasksForMetrics =
+      memberFilter === "all"
+        ? accessibleTasks.filter((t) => t.assignedToId === currentUser.id)
+        : accessibleTasks.filter((t) => t.assignedToId === memberFilter);
+
+    const totalTasks = tasksForMetrics.length;
+    const completedTasks = tasksForMetrics.filter(
+      (t) => t.status === "completed",
+    ).length;
+    const activeTasks = totalTasks - completedTasks;
+    const urgentPending = tasksForMetrics.filter(
       (t) => t.status === "pending" && t.priority === "urgent",
     ).length;
     const completionRate =
-      total > 0 ? Math.round((completed / total) * 100) : 0;
+      totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
 
-    const reportsThisMonth = baseTasks.filter((t) => {
-      const taskDate = new Date(t.date);
+    // ✅ Count QC reports passed THIS MONTH
+    const qcPassedThisMonth = qcPassedReports.filter((r) => {
+      const reportDate = new Date(r.date);
       return (
-        taskDate.getMonth() === currentMonth &&
-        taskDate.getFullYear() === currentYear
+        reportDate.getMonth() === currentMonth &&
+        reportDate.getFullYear() === currentYear
       );
     }).length;
 
+    // Monthly target calculation
     const monthlyTarget =
-      memberFilter === "all" ? accessibleMembers.length * 20 : 20;
+      memberFilter === "all"
+        ? accessibleMembers.filter((m) => m.role === "TECHNICIAN").length * 20
+        : 20;
 
     const targetProgress = Math.min(
-      Math.round((reportsThisMonth / (monthlyTarget || 1)) * 100),
+      Math.round((qcPassedThisMonth / (monthlyTarget || 1)) * 100),
       100,
     );
 
     return {
-      active: total - completed,
-      completed,
+      active: activeTasks, // ✅ Fixed to show active tasks
+      completed: completedTasks,
       urgentPending,
       completionRate,
-      reportsThisMonth,
+      reportsThisMonth: qcPassedThisMonth,
       targetProgress,
-      totalHistory: completed, // ✅ FIX: Show total completed tasks instead of reports
+      totalHistory: qcPassedReports.length,
       monthlyTargetDisplay: monthlyTarget,
     };
   }, [
@@ -180,7 +208,7 @@ export default function TasksView({
     memberFilter,
     accessibleMembers,
     teamMembers,
-    currentUser.role,
+    currentUser.id, // ✅ Added currentUser.id dependency
   ]);
 
   const chartData = useMemo(() => {
@@ -252,59 +280,188 @@ export default function TasksView({
     }
   }, [accessibleReports, chartView, memberFilter, teamMembers]);
 
+  // Supabase helper functions for tasks
+  const saveTaskToSupabase = async (task: Task) => {
+    if (!supabase) return null;
+
+    try {
+      // ✅ Map priority to match database constraint
+      let dbPriority = "medium"; // default
+      if (task.priority === "urgent") {
+        dbPriority = "high";
+      } else if (task.priority === "normal") {
+        dbPriority = "medium";
+      } else {
+        dbPriority = task.priority; // already low/medium/high
+      }
+
+      const { data, error } = await supabase
+        .from("tasks")
+        .upsert({
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          task_date: task.date,
+          task_time: task.time,
+          assigned_to: task.assignedToId,
+          type: task.type,
+          status: task.status,
+          priority: dbPriority, // ✅ Use mapped priority
+          created_by: task.createdBy,
+          technician_note: task.technicianNote || "",
+          zone_id: task.zoneId || null,
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.error("❌ Error saving task:", err);
+      console.error("❌ Task data:", task); // Debug log
+      return null;
+    }
+  };
+
+  const deleteTaskFromSupabase = async (id: string) => {
+    if (!supabase) return false;
+
+    try {
+      const { error } = await supabase.from("tasks").delete().eq("id", id);
+      return !error;
+    } catch (err) {
+      console.error("❌ Error deleting task:", err);
+      return false;
+    }
+  };
   // --- HANDLERS ---
-  const handleQuickAdd = (e: React.FormEvent) => {
+  const handleQuickAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quickTaskTitle.trim()) return;
 
+    const taskId = crypto.randomUUID();
+
     const newTask: Task = {
-      id: Date.now().toString(),
+      id: taskId,
       title: quickTaskTitle,
       description: "Quickly added via My Works",
       date: new Date().toISOString().split("T")[0],
-      time: new Date().toLocaleTimeString([], {
+      time: new Date().toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
+        hour12: false, // ✅ Use 24-hour format to match database
       }),
       assignedToId: memberFilter !== "all" ? memberFilter : currentUser.id,
       type: "general",
       status: "pending",
-      priority: "normal",
+      priority: "normal", // ✅ This will be mapped to "medium" in saveTaskToSupabase
       createdBy: currentUser.id,
+      zoneId: currentUser.zoneId || undefined,
     };
 
-    setTasks([newTask, ...tasks]);
-    setQuickTaskTitle("");
-  };
+    const savedTask = await saveTaskToSupabase(newTask);
 
-  const toggleTask = (id: string) => {
-    setTasks(
-      tasks.map((t) =>
-        t.id === id
-          ? { ...t, status: t.status === "completed" ? "pending" : "completed" }
-          : t,
-      ),
-    );
-  };
-
-  const updateTaskNote = (id: string, note: string) => {
-    setTasks(
-      tasks.map((t) => (t.id === id ? { ...t, technicianNote: note } : t)),
-    );
-  };
-
-  const deleteTask = (id: string) => {
-    if (confirm("Delete this task?")) {
-      setTasks(tasks.filter((t) => t.id !== id));
+    if (savedTask) {
+      setTasks([newTask, ...tasks]);
+      setQuickTaskTitle("");
+    } else {
+      alert("Failed to create task. Please try again.");
     }
   };
 
-  const clearCompleted = () => {
-    if (confirm("Remove all completed tasks visible in this list?")) {
-      const visibleIds = new Set(filteredTasks.map((t) => t.id));
+  const toggleTask = async (id: string) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+
+    const updatedTask = {
+      ...task,
+      status: task.status === "completed" ? "pending" : "completed",
+    } as Task;
+
+    // ✅ Save to Supabase
+    const savedTask = await saveTaskToSupabase(updatedTask);
+
+    if (savedTask) {
       setTasks(
-        tasks.filter((t) => !visibleIds.has(t.id) || t.status !== "completed"),
+        tasks.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                status: t.status === "completed" ? "pending" : "completed",
+              }
+            : t,
+        ),
       );
+    } else {
+      alert("Failed to update task. Please try again.");
+    }
+  };
+
+  const updateTaskNote = async (id: string, note: string) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+
+    const updatedTask = {
+      ...task,
+      technicianNote: note,
+    } as Task;
+
+    // ✅ Save to Supabase
+    const savedTask = await saveTaskToSupabase(updatedTask);
+
+    if (savedTask) {
+      setTasks(
+        tasks.map((t) => (t.id === id ? { ...t, technicianNote: note } : t)),
+      );
+    }
+    // Note: We don't show error for note updates as they happen on every keystroke
+  };
+
+  const deleteTask = async (id: string) => {
+    if (!confirm("Delete this task?")) return;
+
+    // ✅ Delete from Supabase
+    const success = await deleteTaskFromSupabase(id);
+
+    if (success) {
+      setTasks(tasks.filter((t) => t.id !== id));
+    } else {
+      alert("Failed to delete task. Please try again.");
+    }
+  };
+
+  const clearCompleted = async () => {
+    if (!confirm("Remove all completed tasks visible in this list?")) return;
+
+    const completedTaskIds = filteredTasks
+      .filter((t) => t.status === "completed")
+      .map((t) => t.id);
+
+    if (completedTaskIds.length === 0) return;
+
+    if (!supabase) {
+      // Fallback to local if Supabase not configured
+      setTasks(tasks.filter((t) => !completedTaskIds.includes(t.id)));
+      return;
+    }
+
+    try {
+      // ✅ Delete from Supabase in batch
+      const { error } = await supabase
+        .from("tasks")
+        .delete()
+        .in("id", completedTaskIds);
+
+      if (!error) {
+        setTasks(tasks.filter((t) => !completedTaskIds.includes(t.id)));
+      } else {
+        console.error("❌ Error clearing tasks:", error);
+        alert("Failed to clear completed tasks. Please try again.");
+      }
+    } catch (err) {
+      console.error("❌ Error clearing tasks:", err);
+      alert("Failed to clear completed tasks. Please try again.");
     }
   };
 
