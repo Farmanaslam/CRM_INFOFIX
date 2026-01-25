@@ -202,6 +202,16 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     }
   }, [formData.status]);
 
+  // Auto-assign technician if current user is a technician
+  useEffect(() => {
+    if (!editingTicket && currentUser.role === "TECHNICIAN") {
+      setFormData((prev) => ({
+        ...prev,
+        assignedToId: currentUser.id,
+      }));
+    }
+  }, [currentUser, editingTicket]);
+
   // Check if selected brand is a Service Brand
   const isServiceBrand = useMemo(() => {
     return settings.serviceBrands.some(
@@ -1259,20 +1269,26 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                           onChange={(e) =>
                             setFormData({ ...formData, store: e.target.value })
                           }
-                          disabled={!isAdmin}
-                          className={`w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none ${
-                            !isAdmin
-                              ? "cursor-not-allowed opacity-70 text-slate-500"
-                              : "cursor-pointer"
-                          }`}
+                          className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none cursor-pointer"
                         >
                           <option value="">Choose Store</option>
-                          {stores?.length > 0 &&
-                            stores.map((s) => (
-                              <option key={s.id} value={s.name}>
-                                {s.name}
-                              </option>
-                            ))}
+                          {(() => {
+                            // For technicians, show only their assigned stores
+                            const availableStores =
+                              currentUser.role === "TECHNICIAN"
+                                ? stores.filter(
+                                    (s) => s.id === currentUser.storeId,
+                                  )
+                                : stores;
+
+                            return availableStores?.length > 0
+                              ? availableStores.map((s) => (
+                                  <option key={s.id} value={s.name}>
+                                    {s.name}
+                                  </option>
+                                ))
+                              : null;
+                          })()}
                         </select>
                       </div>
 
@@ -1508,19 +1524,30 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                               assignedToId: e.target.value,
                             })
                           }
-                          disabled={!isAdmin}
                           className={`w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none text-slate-700 ${
-                            !isAdmin
+                            currentUser.role === "TECHNICIAN"
                               ? "cursor-not-allowed opacity-70"
                               : "cursor-pointer"
                           }`}
                         >
                           <option value="">-- Unassigned --</option>
-                          {technicians.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name} ({t.role})
-                            </option>
-                          ))}
+                          {(() => {
+                            // For technicians, auto-assign to themselves
+                            if (currentUser.role === "TECHNICIAN") {
+                              return (
+                                <option value={currentUser.id}>
+                                  {currentUser.name} (You)
+                                </option>
+                              );
+                            }
+
+                            // For admins/managers, show all technicians
+                            return technicians.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name} ({t.role})
+                              </option>
+                            ));
+                          })()}
                         </select>
                         <ChevronDown
                           className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"

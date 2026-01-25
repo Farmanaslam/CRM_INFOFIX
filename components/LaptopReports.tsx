@@ -765,151 +765,79 @@ export default function LaptopReports({
       return false;
     }
   };
-  const handleSaveReport = async () => {
-    if (!currentReport.deviceInfo.laptopNo)
-      return alert("Laptop No is required");
+const handleSaveReport = async () => {
+  if (!currentReport.deviceInfo.laptopNo)
+    return alert("Laptop No is required");
 
-    const original = reports.find((r) => r.id === currentReport.id);
-    let details = "";
-    let reportToSave: Report;
+  // Generate a unique ID for new reports
+  const reportId = currentReport.id || Date.now().toString();
+  
+  const original = reports.find((r) => r.id === reportId);
+  let details = "";
+  let reportToSave: Report;
 
-    if (original) {
-      const changes: string[] = [];
-      const allItems = CHECKLIST_DATA.flatMap((c) => c.items);
+  if (original) {
+    // ... existing code for updates ...
+  } else {
+    // For new reports
+    details = `New report created. Progress: ${currentReport.progress}%. Status: ${currentReport.status || "Draft"}`;
+    
+    const historyEntry: ReportHistory = {
+      id: Date.now().toString(),
+      timestamp: Date.now(),
+      date: new Date().toLocaleString(),
+      actor: currentUser?.name || "Unknown User",
+      action: "Report Created",
+      details: details,
+    };
 
-      allItems.forEach((item) => {
-        const oldVal = original.checklist[item.id];
-        const newVal = currentReport.checklist[item.id];
-        if (oldVal !== newVal) {
-          const status = newVal
-            ? newVal === "pass"
-              ? "Pass"
-              : "Fail"
-            : "Unchecked";
-          changes.push(`${item.label} [${status}]`);
-        }
-      });
+    reportToSave = {
+      ...currentReport,
+      id: reportId, // Use the generated ID
+      history: [historyEntry],
+      status: currentReport.progress === 100 ? "Completed" : "Draft",
+      zoneId:
+        currentReport.zoneId ||
+        (selectedZoneId !== "all" ? selectedZoneId : undefined),
+    };
+  }
 
-      // Check for other changes
-      if (
-        original.deviceInfo.customerName !==
-        currentReport.deviceInfo.customerName
-      ) {
-        changes.push(
-          `Dealer: ${original.deviceInfo.customerName || "None"} → ${currentReport.deviceInfo.customerName || "None"}`,
-        );
-      }
-      if (
-        original.deviceInfo.technicianName !==
-        currentReport.deviceInfo.technicianName
-      ) {
-        changes.push(
-          `Technician: ${original.deviceInfo.technicianName || "Unassigned"} → ${currentReport.deviceInfo.technicianName || "Unassigned"}`,
-        );
-      }
-      if (
-        original.notes !== currentReport.notes &&
-        currentReport.notes.trim()
-      ) {
-        changes.push(`Notes updated`);
-      }
+  // SAVE TO SUPABASE
+  const savedReport = await saveReportToSupabase(reportToSave);
 
-      details = `Report updated. Progress: ${
-        currentReport.progress
-      }%. Status: ${currentReport.status || "Draft"}`;
-      if (changes.length > 0) details += `\nChanges: ${changes.join(", ")}`;
+  if (savedReport) {
+    if (setReports) {
+      const existingIndex = reports.findIndex(
+        (r) => r.id === reportToSave.id,
+      );
+      let updatedReports: Report[];
 
-      // Only add save history entry if there are actual changes
-      if (changes.length > 0) {
-        const historyEntry: ReportHistory = {
-          id: Date.now().toString(),
-          timestamp: Date.now(),
-          date: new Date().toLocaleString(),
-          actor: currentUser?.name || "Unknown User",
-          action: "Report Saved",
-          details: details,
-        };
-
-        reportToSave = {
-          ...currentReport,
-          id: currentReport.id || Date.now().toString(),
-          history: [...(currentReport.history || []), historyEntry],
-          status: currentReport.progress === 100 ? "Completed" : "Draft",
-          zoneId:
-            currentReport.zoneId ||
-            (selectedZoneId !== "all" ? selectedZoneId : undefined),
-        };
+      if (existingIndex >= 0) {
+        updatedReports = [...reports];
+        updatedReports[existingIndex] = reportToSave;
       } else {
-        // No changes, keep existing history
-        reportToSave = {
-          ...currentReport,
-          id: currentReport.id || Date.now().toString(),
-          history: currentReport.history || [],
-          status: currentReport.progress === 100 ? "Completed" : "Draft",
-          zoneId:
-            currentReport.zoneId ||
-            (selectedZoneId !== "all" ? selectedZoneId : undefined),
-        };
-      }
-    } else {
-      // New report
-      details = `New report created for Laptop ${currentReport.deviceInfo.laptopNo}`;
-      const historyEntry: ReportHistory = {
-        id: Date.now().toString(),
-        timestamp: Date.now(),
-        date: new Date().toLocaleString(),
-        actor: currentUser?.name || "Unknown User",
-        action: "Report Created",
-        details: details,
-      };
-
-      reportToSave = {
-        ...currentReport,
-        id: Date.now().toString(),
-        history: [historyEntry],
-        status: currentReport.progress === 100 ? "Completed" : "Draft",
-        zoneId:
-          currentReport.zoneId ||
-          (selectedZoneId !== "all" ? selectedZoneId : undefined),
-      };
-    }
-
-    // SAVE TO SUPABASE
-    const savedReport = await saveReportToSupabase(reportToSave);
-
-    if (savedReport) {
-      if (setReports) {
-        const existingIndex = reports.findIndex(
-          (r) => r.id === reportToSave.id,
-        );
-        let updatedReports: Report[];
-
-        if (existingIndex >= 0) {
-          updatedReports = [...reports];
-          updatedReports[existingIndex] = reportToSave;
-        } else {
-          updatedReports = [reportToSave, ...reports];
-        }
-
-        setReports(updatedReports);
+        updatedReports = [reportToSave, ...reports];
       }
 
-      // Reset and close editor
-      setCurrentReport({
-        ...INITIAL_REPORT,
-        deviceInfo: {
-          ...INITIAL_REPORT.deviceInfo,
-          technicianName: isTechnician ? technicianName : "",
-        },
-      });
-      setInternalView("list");
-
-      // Optional: Show success message
-      alert(`Report saved successfully!`);
-    } else {
-      alert("Failed to save report. Please try again.");
+      setReports(updatedReports);
     }
-  };
+
+    // Reset and close editor
+    setCurrentReport({
+      ...INITIAL_REPORT,
+      deviceInfo: {
+        ...INITIAL_REPORT.deviceInfo,
+        technicianName: isTechnician ? technicianName : "",
+      },
+    });
+    setInternalView("list");
+
+    // Optional: Show success message
+    alert(`Report saved successfully!`);
+  } else {
+    alert("Failed to save report. Please try again.");
+  }
+};
   const handleDownloadPDF = () => {
     const element = document.getElementById("report-container");
     const opt = {
@@ -1334,144 +1262,140 @@ export default function LaptopReports({
         </div>
 
         {/* TOOLBAR & FILTERS */}
-        <div className="bg-white/80 backdrop-blur p-4 rounded-3xl border border-slate-200 shadow-sm shrink-0 flex flex-col gap-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="relative w-full md:w-72">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                size={18}
-              />
-              <input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 placeholder-slate-400 focus:ring-2 ring-indigo-100"
-                placeholder="Search laptop ID..."
-              />
-            </div>
+<div className="bg-white/80 backdrop-blur p-4 rounded-3xl border border-slate-200 shadow-sm shrink-0 flex flex-col gap-4">
+  <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+    <div className="relative w-full sm:w-72">
+      <Search
+        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+        size={18}
+      />
+      <input
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 placeholder-slate-400 focus:ring-2 ring-indigo-100"
+        placeholder="Search laptop ID..."
+      />
+    </div>
 
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`p-2 rounded-lg transition-all ${
-                  viewMode === "grid"
-                    ? "bg-white shadow text-indigo-600"
-                    : "text-slate-400 hover:text-slate-600"
-                }`}
-              >
-                <Grid size={18} />
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`p-2 rounded-lg transition-all ${
-                  viewMode === "list"
-                    ? "bg-white shadow text-indigo-600"
-                    : "text-slate-400 hover:text-slate-600"
-                }`}
-              >
-                <ListIcon size={18} />
-              </button>
-            </div>
-          </div>
+    <div className="flex bg-slate-100 p-1 rounded-xl self-end sm:self-auto">
+      <button
+        onClick={() => setViewMode("grid")}
+        className={`p-2 rounded-lg transition-all ${
+          viewMode === "grid"
+            ? "bg-white shadow text-indigo-600"
+            : "text-slate-400 hover:text-slate-600"
+        }`}
+      >
+        <Grid size={18} />
+      </button>
+      <button
+        onClick={() => setViewMode("list")}
+        className={`p-2 rounded-lg transition-all ${
+          viewMode === "list"
+            ? "bg-white shadow text-indigo-600"
+            : "text-slate-400 hover:text-slate-600"
+        }`}
+      >
+        <ListIcon size={18} />
+      </button>
+    </div>
+  </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="relative group">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                <User size={14} />
-              </div>
-              <select
-                value={filterTech}
-                onChange={(e) => setFilterTech(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                disabled={isTechnician} // Disable for technicians
-              >
-                {isTechnician ? (
-                  <option value={technicianName}>{technicianName} (You)</option>
-                ) : (
-                  <>
-                    <option value="All">All Technicians</option>
-                    {settings?.teamMembers
-                      ?.filter((member) => member.role === "TECHNICIAN")
-                      .map((member) => (
-                        <option key={member.id} value={member.name}>
-                          {member.name} ({member.role})
-                        </option>
-                      ))}
-                  </>
-                )}
-              </select>
-              <ChevronDown
-                size={14}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-              />
-            </div>
-
-            <div className="relative group">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                <Package size={14} />
-              </div>
-              <select
-                value={filterDealer}
-                onChange={(e) => setFilterDealer(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-              >
-                <option value="All">All Dealers</option>
-                {settings?.laptopDealers?.map((d) => (
-                  <option key={d.id} value={d.name}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                size={14}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-              />
-            </div>
-
-            <div className="relative group">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                <Zap size={14} />
-              </div>
-              <select
-                value={filterAction}
-                onChange={(e) => setFilterAction(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-              >
-                <option value="All">All Actions</option>
-                <option value="Return to Dealers">Return to Dealers</option>
-                <option value="Sent to Service Centre">
-                  Sent to Service Centre
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="relative group">
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+        <User size={14} />
+      </div>
+      <select
+        value={filterTech}
+        onChange={(e) => setFilterTech(e.target.value)}
+        className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+        disabled={isTechnician}
+      >
+        {isTechnician ? (
+          <option value={technicianName}>{technicianName} (You)</option>
+        ) : (
+          <>
+            <option value="All">All Technicians</option>
+            {settings?.teamMembers
+              ?.filter((member) => member.role === "TECHNICIAN")
+              .map((member) => (
+                <option key={member.id} value={member.name}>
+                  {member.name} ({member.role})
                 </option>
-                <option value="Parts Sent to Dealers">
-                  Parts Sent to Dealers
-                </option>
-                <option value="Own Services">Own Services</option>
-              </select>
-              <ChevronDown
-                size={14}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-              />
-            </div>
+              ))}
+          </>
+        )}
+      </select>
+      <ChevronDown
+        size={14}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+      />
+    </div>
 
-            <div className="relative group">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                <Activity size={14} />
-              </div>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as any)}
-                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-              >
-                <option value="All">All Statuses</option>
-                <option value="Draft">Draft</option>
-                <option value="Completed">Completed</option>
-              </select>
-              <ChevronDown
-                size={14}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-              />
-            </div>
-          </div>
-        </div>
+    <div className="relative group">
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+        <Package size={14} />
+      </div>
+      <select
+        value={filterDealer}
+        onChange={(e) => setFilterDealer(e.target.value)}
+        className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+      >
+        <option value="All">All Dealers</option>
+        {settings?.laptopDealers?.map((d) => (
+          <option key={d.id} value={d.name}>
+            {d.name}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        size={14}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+      />
+    </div>
+
+    <div className="relative group">
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+        <Zap size={14} />
+      </div>
+      <select
+        value={filterAction}
+        onChange={(e) => setFilterAction(e.target.value)}
+        className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+      >
+        <option value="All">All Actions</option>
+        <option value="Return to Dealers">Return to Dealers</option>
+        <option value="Sent to Service Centre">Sent to Service Centre</option>
+        <option value="Parts Sent to Dealers">Parts Sent to Dealers</option>
+        <option value="Own Services">Own Services</option>
+      </select>
+      <ChevronDown
+        size={14}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+      />
+    </div>
+
+    <div className="relative group">
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+        <Activity size={14} />
+      </div>
+      <select
+        value={filterStatus}
+        onChange={(e) => setFilterStatus(e.target.value as any)}
+        className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+      >
+        <option value="All">All Statuses</option>
+        <option value="Draft">Draft</option>
+        <option value="Completed">Completed</option>
+      </select>
+      <ChevronDown
+        size={14}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+      />
+    </div>
+  </div>
+</div>
 
         {/* REPORTS LIST */}
         <div className="flex-1 overflow-y-auto custom-scrollbar pb-10">
@@ -2107,36 +2031,19 @@ export default function LaptopReports({
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
               Technician Notes
             </label>
-            <textarea
-              value={currentReport.notes}
-              onChange={(e) => {
-                const oldNotes = currentReport.notes;
-                const newNotes = e.target.value;
-
-                // Only create history if notes changed and are not empty
-                if (oldNotes !== newNotes && newNotes.trim()) {
-                  const historyEntry: ReportHistory = {
-                    id: Date.now().toString(),
-                    timestamp: Date.now(),
-                    date: new Date().toLocaleString(),
-                    actor: currentUser?.name || "Unknown User",
-                    action: "Notes Updated",
-                    details: `Technician notes updated: "${newNotes}"`,
-                  };
-
-                  setCurrentReport({
-                    ...currentReport,
-                    notes: newNotes,
-                    history: [...(currentReport.history || []), historyEntry],
-                  });
-                } else {
-                  setCurrentReport({ ...currentReport, notes: newNotes });
-                }
-              }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-indigo-100 outline-none resize-none"
-              rows={4}
-              placeholder="Additional observations..."
-            />
+  <textarea
+  value={currentReport.notes}
+  onChange={(e) => {
+    // Simply update the state without creating history
+    setCurrentReport({
+      ...currentReport,
+      notes: e.target.value,
+    });
+  }}
+  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-indigo-100 outline-none resize-none"
+  rows={4}
+  placeholder="Additional observations..."
+/>
           </div>
 
           {/* Signatures (Hidden usually, visible on print via CSS media query logic handles by html2pdf mostly but we structure it) */}

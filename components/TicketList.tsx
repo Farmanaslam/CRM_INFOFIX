@@ -928,16 +928,12 @@ const TicketList: React.FC<TicketListProps> = ({
       </div>
 
       {/* Floating Action Button */}
-      {(currentUser.role === "SUPER_ADMIN" ||
-        currentUser.role === "ADMIN" ||
-        currentUser.role === "MANAGER") && (
-        <button
-          onClick={handleOpenNew}
-          className="fixed bottom-8 right-8 lg:bottom-10 lg:right-10 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center transition-all transform hover:scale-105 z-40"
-        >
-          <Plus size={28} />
-        </button>
-      )}
+<button
+  onClick={handleOpenNew}
+  className="fixed bottom-8 right-8 lg:bottom-10 lg:right-10 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center transition-all transform hover:scale-105 z-40"
+>
+  <Plus size={28} />
+</button>
 
       {/* New Ticket Modal */}
       <TicketFormModal
