@@ -116,8 +116,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     estimatedAmount: "",
     warranty: "No",
     billNumber: "",
-    priority: "Medium",
-    status: "New",
     holdReason: "",
     progressReason: "",
     progressNote: "",
@@ -126,6 +124,14 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     jobId: "",
     rejectionReasonStaff: "",
     rejectionReasonCustomer: "",
+    priority:
+      settings.priorities && settings.priorities.length > 0
+        ? settings.priorities.find((p) => p.name === "Medium")?.name || "Medium"
+        : "Medium",
+    status:
+      settings.ticketStatuses && settings.ticketStatuses.length > 0
+        ? settings.ticketStatuses.find((s) => s.name === "New")?.name || "New"
+        : "New",
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -1328,11 +1334,23 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                             }
                             className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none cursor-pointer text-slate-700"
                           >
-                            <option value="New">New</option>
-                            <option value="In Progress">In Progress</option>
-                            <option value="On Hold">On Hold</option>
-                            <option value="Resolved">Resolved</option>
-                            <option value="Rejected">Rejected</option>
+                            {settings.ticketStatuses &&
+                            settings.ticketStatuses.length > 0 ? (
+                              settings.ticketStatuses.map((status) => (
+                                <option key={status.id} value={status.name}>
+                                  {status.name}
+                                </option>
+                              ))
+                            ) : (
+                              // Fallback to default statuses if none in settings
+                              <>
+                                <option value="New">New</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="On Hold">On Hold</option>
+                                <option value="Resolved">Resolved</option>
+                                <option value="Rejected">Rejected</option>
+                              </>
+                            )}
                           </select>
                           <ChevronDown
                             className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
@@ -1355,9 +1373,21 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                           }
                           className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold text-slate-700 focus:bg-white outline-none"
                         >
-                          <option value="Low">Low</option>
-                          <option value="Medium">Medium</option>
-                          <option value="High">Urgent</option>
+                          {settings.priorities &&
+                          settings.priorities.length > 0 ? (
+                            settings.priorities.map((priority) => (
+                              <option key={priority.id} value={priority.name}>
+                                {priority.name}
+                              </option>
+                            ))
+                          ) : (
+                            // Fallback to default priorities if none in settings
+                            <>
+                              <option value="Low">Low</option>
+                              <option value="Medium">Medium</option>
+                              <option value="High">Urgent</option>
+                            </>
+                          )}
                         </select>
                       </div>
                     </div>

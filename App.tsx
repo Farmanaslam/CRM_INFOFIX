@@ -147,6 +147,94 @@ function useSmartSync<T>(
 
   return [data, updateData];
 }
+// Add after mergeWithDefaults function, before DEFAULT_SETTINGS
+const fetchWorkflows = async (force = false) => {
+  if (!supabase) {
+    console.log("⚠️ Supabase not configured");
+    return null;
+  }
+
+  try {
+    console.log("📥 Fetching workflows from Supabase...");
+    const { data, error } = await supabase
+      .from("workflows")
+      .select("*")
+      .order("display_order", { ascending: true });
+
+    if (error) {
+      console.error("❌ Error fetching workflows:", error);
+      throw error;
+    }
+
+    console.log(`✅ Fetched ${data.length} workflow items from database`);
+
+    // Transform to AppSettings format
+    const grouped: any = {
+      ticketStatuses: [],
+      priorities: [],
+      deviceTypes: [],
+      serviceBrands: [],
+      holdReasons: [],
+      progressReasons: [],
+      laptopDealers: [],
+    };
+
+    // Count items per category for logging
+    const categoryCounts: Record<string, number> = {};
+
+    data.forEach((item: any) => {
+      if (grouped[item.category]) {
+        categoryCounts[item.category] =
+          (categoryCounts[item.category] || 0) + 1;
+
+        if (item.category === "laptopDealers") {
+          grouped[item.category].push({
+            id: item.id,
+            name: item.name,
+            ...(item.metadata || {}),
+          });
+        } else {
+          grouped[item.category].push({
+            id: item.id,
+            name: item.name,
+            ...(item.is_system ? { isSystem: item.is_system } : {}),
+          });
+        }
+      } else {
+        console.warn(`⚠️ Unknown workflow category: ${item.category}`);
+      }
+    });
+
+    // Log category counts
+    console.log("📊 Workflow categories:", categoryCounts);
+    console.log("📋 Workflow summary:", {
+      ticketStatuses: grouped.ticketStatuses.length,
+      priorities: grouped.priorities.length,
+      deviceTypes: grouped.deviceTypes.length,
+      serviceBrands: grouped.serviceBrands.length,
+      holdReasons: grouped.holdReasons.length,
+      progressReasons: grouped.progressReasons.length,
+      laptopDealers: grouped.laptopDealers.length,
+    });
+
+    return grouped;
+  } catch (error) {
+    console.error("❌ Error in fetchWorkflows:", error);
+
+    // Fallback to localStorage if available
+    try {
+      const cached = localStorage.getItem("settings_global");
+      if (cached) {
+        console.log("🔄 Falling back to cached settings");
+        return JSON.parse(cached);
+      }
+    } catch (e) {
+      console.error("❌ Failed to parse cached settings:", e);
+    }
+
+    return null;
+  }
+};
 
 const DEFAULT_SETTINGS: AppSettings = {
   zones: [],
@@ -211,6 +299,8 @@ function App() {
   const [isLoadingTeamData, setIsLoadingTeamData] = useState(false);
   const [isResetPasswordRoute, setIsResetPasswordRoute] = useState(false);
   const [isCheckingResetRoute, setIsCheckingResetRoute] = useState(true);
+  const [workflowsLastFetched, setWorkflowsLastFetched] = useState(0);
+  const isFetchingWorkflowsRef = useRef(false);
   // Add this function to fetch all team-related data
   const fetchTeamData = useCallback(async () => {
     if (!supabase) {
@@ -438,12 +528,33 @@ function App() {
   };
 
   const syncZone = selectedZoneId === "all" ? "global" : selectedZoneId;
-  const [appSettings, setAppSettings] = useSmartSync<AppSettings>(
-    "settings",
-    DEFAULT_SETTINGS,
-    "global",
-    setSyncStatus,
-  );
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const applyWorkflowsToSettings = useCallback((workflows: any) => {
+    setAppSettings((prev) => ({
+      ...prev,
+
+      // 🔥 force new references so React re-renders
+      ticketStatuses: [...workflows.ticketStatuses],
+      priorities: [...workflows.priorities],
+      deviceTypes: [...workflows.deviceTypes],
+      serviceBrands: [...workflows.serviceBrands],
+      holdReasons: [...workflows.holdReasons],
+      progressReasons: [...workflows.progressReasons],
+      laptopDealers: [...workflows.laptopDealers],
+    }));
+  }, []);
+  const refreshWorkflows = useCallback(async () => {
+    if (!supabase) return;
+
+    const workflows = await fetchWorkflows(true);
+    if (workflows) {
+      applyWorkflowsToSettings(workflows);
+      setWorkflowsLastFetched(Date.now());
+    }
+  }, []);
+
+  // Flag to track if workflows have been loaded from Supabase
+  const [workflowsLoadedFromDB, setWorkflowsLoadedFromDB] = useState(false);
   const [globalCustomers, setGlobalCustomers] = useSmartSync<Customer[]>(
     "customers",
     [],
@@ -620,8 +731,6 @@ function App() {
     setSyncStatus,
   );
 
-  // Add after const [laptopReports, setLaptopReports] = useState<Report[]>([]);
-
   // Fetch laptop reports from Supabase
   const fetchLaptopReports = useCallback(async (zoneId?: string) => {
     if (!supabase) return;
@@ -702,6 +811,56 @@ function App() {
       supabase.removeChannel(channel);
     };
   }, [currentUser, fetchNotifications]);
+
+  useEffect(() => {
+    const loadWorkflows = async () => {
+      if (!supabase || !currentUser) {
+        console.log("⏸️ Skipping workflow load - no supabase or user");
+        return;
+      }
+
+      try {
+        console.log("🔄 Loading workflows from Supabase (initial load)");
+        const workflows = await fetchWorkflows();
+
+        if (workflows) {
+          console.log("✅ Workflows fetched, updating state");
+
+          applyWorkflowsToSettings(workflows);
+          setWorkflowsLastFetched(Date.now());
+
+          setWorkflowsLastFetched(Date.now());
+          setWorkflowsLoadedFromDB(true);
+        }
+      } catch (error) {
+        console.error("❌ Error loading workflows on initial load:", error);
+      }
+    };
+
+    loadWorkflows();
+  }, [currentUser]);
+  useEffect(() => {
+    if (!supabase || !currentUser) return;
+
+    const channel = supabase
+      .channel("workflows-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "workflows" },
+        async () => {
+          const workflows = await fetchWorkflows(true);
+          if (workflows) {
+            applyWorkflowsToSettings(workflows);
+            setWorkflowsLastFetched(Date.now());
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser]);
 
   const [laptopReports, setLaptopReports] = useState<Report[]>([]);
 
@@ -977,25 +1136,26 @@ function App() {
           />
         );
       case "settings":
-        return (
-          <Settings
-            currentUser={currentUser}
-            tickets={tickets}
-            onUpdateTickets={setTickets}
-            customers={customers}
-            onUpdateCustomers={setCustomers}
-            tasks={tasks}
-            onUpdateTasks={setTasks}
-            laptopReports={laptopReports}
-            onUpdateLaptopReports={setLaptopReports}
-            settings={appSettings}
-            onUpdateSettings={setAppSettings}
-            teamMembers={teamMembers}
-            zones={zones}
-            stores={stores}
-            onRefreshTeamData={fetchTeamData}
-          />
-        );
+        return React.createElement(Settings, {
+          key: `${currentUser.id}-${workflowsLastFetched}-${appSettings.deviceTypes.length}-${appSettings.ticketStatuses.length}`,
+          currentUser,
+          tickets,
+          onUpdateTickets: setTickets,
+          customers,
+          onUpdateCustomers: setCustomers,
+          tasks,
+          onUpdateTasks: setTasks,
+          laptopReports,
+          onUpdateLaptopReports: setLaptopReports,
+          settings: appSettings,
+          onUpdateSettings: setAppSettings,
+          teamMembers,
+          zones,
+          stores,
+          onRefreshTeamData: fetchTeamData,
+          workflowsLastFetched,
+          onWorkflowsRefresh: refreshWorkflows,
+        });
       default:
         return (
           <Dashboard

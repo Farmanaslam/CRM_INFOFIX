@@ -90,6 +90,8 @@ interface SettingsProps {
   zones: OperationalZone[];
   stores: Store[];
   onRefreshTeamData: () => void;
+  workflowsLastFetched?: number;
+  onWorkflowsRefresh: () => Promise<void>;
 }
 
 // --- SUB-COMPONENTS ---
@@ -111,7 +113,8 @@ const AccessDenied = ({ message }: { message?: string }) => (
 const DealerManager: React.FC<{
   dealers: Dealer[];
   onUpdate: (dealers: Dealer[]) => void;
-}> = ({ dealers, onUpdate }) => {
+  onWorkflowsRefresh: () => Promise<void>;
+}> = ({ dealers, onUpdate, onWorkflowsRefresh }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDealer, setEditingDealer] = useState<Dealer | null>(null);
   const [formData, setFormData] = useState<Partial<Dealer>>({
@@ -143,28 +146,85 @@ const DealerManager: React.FC<{
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.name) return;
 
-    let updatedDealers;
-    if (editingDealer) {
-      updatedDealers = dealers.map((d) =>
-        d.id === editingDealer.id ? ({ ...d, ...formData } as Dealer) : d,
-      );
-    } else {
-      updatedDealers = [
-        ...dealers,
-        { ...formData, id: `dl-${Date.now()}` } as Dealer,
-      ];
-    }
+    try {
+      if (editingDealer) {
+        console.log(`✏️ Updating laptop dealer: ${editingDealer.id}`);
+        // Update existing dealer
+        const { error } = await supabase
+          .from("workflows")
+          .update({
+            name: formData.name,
+            metadata: {
+              address: formData.address,
+              phone: formData.phone,
+              serviceTeamPhone: formData.serviceTeamPhone,
+              officePhone: formData.officePhone,
+              speciality: formData.speciality,
+              notes: formData.notes,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", editingDealer.id);
 
-    onUpdate(updatedDealers);
-    setIsModalOpen(false);
+        if (error) throw error;
+        await onWorkflowsRefresh();
+        console.log(`✅ Laptop dealer updated in database`);
+      } else {
+        console.log(`➕ Adding new laptop dealer: ${formData.name}`);
+        // Insert new dealer
+        const { data, error } = await supabase
+          .from("workflows")
+          .insert({
+            category: "laptopDealers",
+            name: formData.name,
+            is_system: false,
+            metadata: {
+              address: formData.address,
+              phone: formData.phone,
+              serviceTeamPhone: formData.serviceTeamPhone,
+              officePhone: formData.officePhone,
+              speciality: formData.speciality,
+              notes: formData.notes,
+            },
+            display_order: dealers.length + 1,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        console.log(`✅ Laptop dealer added to database:`, data);
+
+        await onWorkflowsRefresh();
+      }
+
+      setIsModalOpen(false);
+      await onWorkflowsRefresh();
+      // Note: Real-time subscription in App.tsx will handle syncing to other windows
+    } catch (err: any) {
+      console.error("❌ Error saving laptop dealer:", err);
+      alert(`Failed to save dealer: ${err.message}`);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this dealer?")) {
-      onUpdate(dealers.filter((d) => d.id !== id));
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this dealer?")) return;
+
+    try {
+      console.log(`🗑️ Deleting laptop dealer: ${id}`);
+      const { error } = await supabase.from("workflows").delete().eq("id", id);
+
+      if (error) throw error;
+
+      console.log(`✅ Laptop dealer deleted from database`);
+      await onWorkflowsRefresh();
+      // Note: Real-time subscription in App.tsx will handle syncing to other windows
+    } catch (err: any) {
+      console.error("❌ Error deleting laptop dealer:", err);
+      alert(`Failed to delete dealer: ${err.message}`);
     }
   };
 
@@ -1142,6 +1202,7 @@ interface SimpleListManagerProps {
   onDelete: (id: string) => void;
   placeholder: string;
   dependencyCheck?: (name: string) => boolean;
+  onWorkflowsRefresh: () => Promise<void>;
 }
 
 const SimpleListManager: React.FC<SimpleListManagerProps> = ({
@@ -1152,14 +1213,16 @@ const SimpleListManager: React.FC<SimpleListManagerProps> = ({
   onDelete,
   placeholder,
   dependencyCheck,
+  onWorkflowsRefresh,
 }) => {
   const [newItemName, setNewItemName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!newItemName.trim()) return;
+
     if (
       items.some(
         (i) => i.name.toLowerCase() === newItemName.trim().toLowerCase(),
@@ -1168,7 +1231,10 @@ const SimpleListManager: React.FC<SimpleListManagerProps> = ({
       setError("Item already exists");
       return;
     }
-    onAdd(newItemName.trim());
+
+    await onAdd(newItemName.trim());
+    await onWorkflowsRefresh(); // 🔥 KEY LINE
+
     setNewItemName("");
     setError(null);
   };
@@ -1179,26 +1245,29 @@ const SimpleListManager: React.FC<SimpleListManagerProps> = ({
     setError(null);
   };
 
-  const saveEdit = (id: string) => {
+  const saveEdit = async (id: string) => {
     if (!editValue.trim()) return;
-    onEdit(id, editValue.trim());
+
+    await onEdit(id, editValue.trim());
+    await onWorkflowsRefresh(); // 🔥
+
     setEditingId(null);
   };
 
-  const attemptDelete = (item: {
-    id: string;
-    name: string;
-    isSystem?: boolean;
-  }) => {
+  const attemptDelete = async (item) => {
     if (item.isSystem) {
       setError("Cannot delete system default items");
       return;
     }
+
     if (dependencyCheck && dependencyCheck(item.name)) {
       setError(`Cannot delete "${item.name}" because it is currently in use.`);
       return;
     }
-    onDelete(item.id);
+
+    await onDelete(item.id);
+    await onWorkflowsRefresh(); // 🔥
+
     setError(null);
   };
 
@@ -2074,7 +2143,19 @@ export default function Settings({
   zones,
   stores,
   onRefreshTeamData,
+  workflowsLastFetched,
+  onWorkflowsRefresh,
 }: SettingsProps) {
+  console.log("🔍 Settings component render:", {
+    deviceTypes: settings.deviceTypes?.length,
+    ticketStatuses: settings.ticketStatuses?.length,
+    priorities: settings.priorities?.length,
+    serviceBrands: settings.serviceBrands?.length,
+    holdReasons: settings.holdReasons?.length,
+    progressReasons: settings.progressReasons?.length,
+    laptopDealers: settings.laptopDealers?.length,
+    workflowsLastFetched,
+  });
   const [activeSection, setActiveSection] = useState<string>("team");
 
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
@@ -2171,38 +2252,85 @@ export default function Settings({
     listKey: keyof AppSettings,
     dependencyKey?: keyof Ticket,
   ) => {
-    const list = settings[listKey] as any[];
+    // CRITICAL: Read from settings prop at render time, not closure time
+    const getCurrentList = () => settings[listKey] as any[];
+
     return {
-      items: list,
-      onAdd: (name: string) => {
-        onUpdateSettings({
-          ...settings,
-          [listKey]: [...list, { id: Date.now().toString(), name }],
-        });
+      // Use getter to always get fresh data
+      get items() {
+        return getCurrentList();
       },
-      onEdit: (id: string, newName: string) => {
-        const oldItem = list.find((i) => i.id === id);
-        onUpdateSettings({
-          ...settings,
-          [listKey]: list.map((item) =>
-            item.id === id ? { ...item, name: newName } : item,
-          ),
-        });
-        if (oldItem && dependencyKey) {
-          const updatedTickets = tickets.map((t) =>
-            t[dependencyKey] === oldItem.name
-              ? { ...t, [dependencyKey]: newName }
-              : t,
-          );
-          onUpdateTickets(updatedTickets);
+
+      onAdd: async (name: string) => {
+        try {
+          console.log(`➕ Adding workflow item: ${listKey} - ${name}`);
+          const { data, error } = await supabase
+            .from("workflows")
+            .insert({
+              category: listKey,
+              name: name,
+              is_system: false,
+              display_order: getCurrentList().length + 1,
+            })
+            .select()
+            .single();
+
+          if (error) throw error;
+
+          console.log(`✅ Workflow item added to database:`, data);
+        } catch (err: any) {
+          console.error("❌ Error adding workflow item:", err);
+          alert(`Failed to add item: ${err.message}`);
         }
       },
-      onDelete: (id: string) => {
-        onUpdateSettings({
-          ...settings,
-          [listKey]: list.filter((item) => item.id !== id),
-        });
+
+      onEdit: async (id: string, newName: string) => {
+        const oldItem = getCurrentList().find((i) => i.id === id);
+
+        try {
+          console.log(
+            `✏️ Editing workflow item: ${listKey} - ${id} -> ${newName}`,
+          );
+          const { error } = await supabase
+            .from("workflows")
+            .update({ name: newName, updated_at: new Date().toISOString() })
+            .eq("id", id);
+
+          if (error) throw error;
+
+          console.log(`✅ Workflow item updated in database`);
+
+          if (oldItem && dependencyKey) {
+            const updatedTickets = tickets.map((t) =>
+              t[dependencyKey] === oldItem.name
+                ? { ...t, [dependencyKey]: newName }
+                : t,
+            );
+            onUpdateTickets(updatedTickets);
+          }
+        } catch (err: any) {
+          console.error("❌ Error updating workflow item:", err);
+          alert(`Failed to update item: ${err.message}`);
+        }
       },
+
+      onDelete: async (id: string) => {
+        try {
+          console.log(`🗑️ Deleting workflow item: ${listKey} - ${id}`);
+          const { error } = await supabase
+            .from("workflows")
+            .delete()
+            .eq("id", id);
+
+          if (error) throw error;
+
+          console.log(`✅ Workflow item deleted from database`);
+        } catch (err: any) {
+          console.error("❌ Error deleting workflow item:", err);
+          alert(`Failed to delete item: ${err.message}`);
+        }
+      },
+
       dependencyCheck: (name: string) =>
         dependencyKey ? tickets.some((t) => t[dependencyKey] === name) : false,
     };
@@ -2244,7 +2372,10 @@ export default function Settings({
   };
 
   const handleSlaUpdate = (key: keyof SLAConfig, value: number) => {
-    onUpdateSettings({ ...settings, sla: { ...settings.sla, [key]: value } });
+    const updatedSettings = {
+      ...settings,
+      sla: { ...settings.sla, [key]: value },
+    };
   };
 
   const handleExportBackup = () => {
@@ -2432,18 +2563,22 @@ export default function Settings({
             <SimpleListManager
               title="Ticket Statuses"
               {...createListHandlers("ticketStatuses", "status")}
+              onWorkflowsRefresh={onWorkflowsRefresh}
             />
             <SimpleListManager
               title="Priorities"
               {...createListHandlers("priorities", "priority")}
+              onWorkflowsRefresh={onWorkflowsRefresh}
             />
             <SimpleListManager
               title="Hold Reasons"
               {...createListHandlers("holdReasons")}
+              onWorkflowsRefresh={onWorkflowsRefresh}
             />
             <SimpleListManager
               title="Progress Reasons"
               {...createListHandlers("progressReasons")}
+              onWorkflowsRefresh={onWorkflowsRefresh}
             />
           </div>
         )}
@@ -2453,6 +2588,7 @@ export default function Settings({
             <SimpleListManager
               title="Device Types"
               {...createListHandlers("deviceTypes", "deviceType")}
+              onWorkflowsRefresh={onWorkflowsRefresh}
             />
           </div>
         )}
@@ -2461,15 +2597,15 @@ export default function Settings({
             <SimpleListManager
               title="Service Brands"
               {...createListHandlers("serviceBrands", "brand")}
+              onWorkflowsRefresh={onWorkflowsRefresh}
             />
           </div>
         )}
         {activeSection === "laptop" && (
           <DealerManager
             dealers={settings.laptopDealers}
-            onUpdate={(d) =>
-              onUpdateSettings({ ...settings, laptopDealers: d })
-            }
+            onUpdate={() => {}}
+            onWorkflowsRefresh={onWorkflowsRefresh}
           />
         )}
 
