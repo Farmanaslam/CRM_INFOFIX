@@ -770,7 +770,7 @@ export default function LaptopReports({
       return alert("Laptop No is required");
 
     // Generate a unique ID for new reports
-    const reportId = currentReport.id || Date.now().toString();
+    const reportId = currentReport.id || `report-${Date.now()}`;
 
     const original = reports.find((r) => r.id === reportId);
     let reportToSave: Report;
@@ -792,28 +792,81 @@ export default function LaptopReports({
           `Action: ${original.actionRequired || "None"} → ${currentReport.actionRequired || "None"}`,
         );
       }
+      // Add technician notes comparison
+      if (original.notes !== currentReport.notes) {
+        const originalNote = original.notes || "No notes";
+        const newNote = currentReport.notes || "No notes";
+
+        // Truncate long notes for display
+        const truncateNote = (note: string) => {
+          if (note.length > 50) {
+            return note.substring(0, 47) + "...";
+          }
+          return note;
+        };
+
+        if (originalNote === "No notes" && newNote !== "No notes") {
+          changes.push(`Notes added: "${truncateNote(newNote)}"`);
+        } else if (originalNote !== "No notes" && newNote === "No notes") {
+          changes.push(`Notes removed`);
+        } else {
+          changes.push(
+            `Notes updated: "${truncateNote(originalNote)}" → "${truncateNote(newNote)}"`,
+          );
+        }
+      }
+
+      // Add dealer comparison
+      if (
+        original.deviceInfo.customerName !==
+        currentReport.deviceInfo.customerName
+      ) {
+        const originalDealer = original.deviceInfo.customerName || "Unassigned";
+        const newDealer = currentReport.deviceInfo.customerName || "Unassigned";
+        changes.push(`Dealer: ${originalDealer} → ${newDealer}`);
+      }
+
+      // Add technician comparison
+      if (
+        original.deviceInfo.technicianName !==
+        currentReport.deviceInfo.technicianName
+      ) {
+        const originalTech = original.deviceInfo.technicianName || "Unassigned";
+        const newTech = currentReport.deviceInfo.technicianName || "Unassigned";
+        changes.push(`Technician: ${originalTech} → ${newTech}`);
+      }
+
+      // Add battery health comparison
+      if (original.battery.health !== currentReport.battery.health) {
+        changes.push(
+          `Battery Health: ${original.battery.health} → ${currentReport.battery.health}`,
+        );
+      }
 
       const details =
-        changes.length > 0 ? changes.join(", ") : "Report updated";
+        changes.length > 0
+          ? changes.join(", ")
+          : "Report updated with no visible changes";
 
       const historyEntry: ReportHistory = {
         id: Date.now().toString(),
         timestamp: Date.now(),
         date: new Date().toLocaleString(),
         actor: currentUser?.name || "Unknown User",
-        action: "Report Updated",
+        action: changes.length > 0 ? "Report Updated" : "Report Saved",
         details: details,
       };
 
       reportToSave = {
         ...currentReport,
+        id: reportId,
         history: [...(currentReport.history || []), historyEntry],
         status:
           currentReport.progress === 100 ? "Completed" : currentReport.status,
       };
     } else {
       // For new reports
-      const details = `New report created. Progress: ${currentReport.progress}%. Status: ${currentReport.status || "Draft"}`;
+      const details = `New report created. Progress: ${currentReport.progress}%. Status: ${currentReport.status || "Draft"}. Dealer: ${currentReport.deviceInfo.customerName || "Unassigned"}, Technician: ${currentReport.deviceInfo.technicianName || "Unassigned"}`;
 
       const historyEntry: ReportHistory = {
         id: Date.now().toString(),
@@ -865,7 +918,7 @@ export default function LaptopReports({
       });
       setInternalView("list");
 
-      // Optional: Show success message
+      // Show success message
       alert(`Report saved successfully!`);
     } else {
       alert("Failed to save report. Please try again.");
