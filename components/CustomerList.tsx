@@ -86,7 +86,7 @@ const CustomerFormModal: React.FC<{
     // Check for duplicates (by email) if creating new
     if (!editingCustomer && formData.email) {
       const exists = existingCustomers.some(
-        (c) => c.email.toLowerCase() === formData.email?.toLowerCase()
+        (c) => c.email.toLowerCase() === formData.email?.toLowerCase(),
       );
       if (exists) {
         setError("A customer with this email already exists.");
@@ -117,7 +117,7 @@ const CustomerFormModal: React.FC<{
 
         if (data && data.length > 0) {
           setCustomers((prev) =>
-            prev.map((c) => (c.id === editingCustomer.id ? data[0] : c))
+            prev.map((c) => (c.id === editingCustomer.id ? data[0] : c)),
           );
         }
       } else {
@@ -132,7 +132,7 @@ const CustomerFormModal: React.FC<{
             const { data: authData, error: authError } =
               await supabase.auth.signUp({
                 email: formData.email,
-                password: formData.phone + "!Aa1", // Add some complexity for password
+                password: formData.phone, // Add some complexity for password
                 options: {
                   data: {
                     name: formData.name,
@@ -145,7 +145,7 @@ const CustomerFormModal: React.FC<{
             if (authError) {
               console.warn(
                 "Auth signup failed, proceeding without auth:",
-                authError.message
+                authError.message,
               );
               // Continue without auth - not all customers need auth accounts
             } else if (authData.user) {
@@ -219,7 +219,7 @@ const CustomerFormModal: React.FC<{
     } catch (error: any) {
       console.error("Error in handleSubmit:", error);
       setError(
-        "An unexpected error occurred: " + (error.message || "Unknown error")
+        "An unexpected error occurred: " + (error.message || "Unknown error"),
       );
     }
   };
@@ -392,7 +392,7 @@ const CustomerList: React.FC = () => {
     (c) =>
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.phone.includes(searchTerm)
+      c.phone.includes(searchTerm),
   );
 
   {
@@ -445,7 +445,7 @@ const CustomerList: React.FC = () => {
         auth_id: c.auth_id,
         created_at: c.created_at,
         updated_at: c.updated_at,
-      }))
+      })),
     );
   };
 
