@@ -158,75 +158,166 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     "No Display",
     "WiFi Not Working",
   ];
-const safeDateToISO = (dateStr?: string) => {
-  if (!dateStr) return null;
 
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return null;
-
-  return date.toISOString();
-};
-
-  // Initialize form
-  useEffect(() => {
-    if (isOpen) {
-      setActiveTab("details");
-      setIsSubmitting(false);
-      if (editingTicket) {
-       const formatDateForInput = (dateValue?: string | null): string => {
+    // Move this function OUTSIDE of the useEffect, at the top level of the component:
+const formatDateForInput = (dateValue?: string | null): string => {
   if (!dateValue) return "";
-
-  const date = new Date(dateValue);
-  if (isNaN(date.getTime())) return "";
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+  
+  try {
+    // Handle empty or null values
+    if (!dateValue.trim()) return "";
+    
+    // If it's already in YYYY-MM-DD format (from mobile input or database)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      return dateValue;
+    }
+    
+    // Try to parse the date - handle different formats
+    let date: Date;
+    
+    // Check if it's a timestamp
+    if (/^\d+$/.test(dateValue)) {
+      date = new Date(parseInt(dateValue));
+    } 
+    // Check if it's already an ISO string
+    else if (dateValue.includes('T')) {
+      date = new Date(dateValue);
+    }
+    // Try parsing as locale string
+    else {
+      // Remove any timezone info and parse
+      const cleanedDate = dateValue.split(' GMT')[0];
+      date = new Date(cleanedDate);
+      
+      // If still invalid, try parsing as DD/MM/YYYY or MM/DD/YYYY
+      if (isNaN(date.getTime())) {
+        const parts = cleanedDate.split(/[/\-.]/);
+        if (parts.length === 3) {
+          // Try YYYY-MM-DD first (standard)
+          const isoString = `${parts[0]}-${parts[1]}-${parts[2]}`;
+          date = new Date(isoString);
+          
+          // If still invalid, try other formats
+          if (isNaN(date.getTime())) {
+            // Try with day first (for formats like DD/MM/YYYY)
+            date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+          }
+        }
+      }
+    }
+    
+    // Final validation
+    if (isNaN(date.getTime())) {
+      console.warn("Invalid date value:", dateValue);
+      return "";
+    }
+    
+    // Format as YYYY-MM-DD for input[type="date"]
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    
+    return `${year}-${month}-${day}`;
+  } catch (error) {
+    console.error("Error formatting date:", error, dateValue);
+    return "";
+  }
 };
 
-        setFormData({
-          email: editingTicket.email || "",
-          name: editingTicket.name || "",
-          mobile: editingTicket.number || "",
-          address: editingTicket.address || "",
-          deviceType: editingTicket.deviceType || "Smartphone",
-          brand: editingTicket.brand || "",
-          model: editingTicket.model || "",
-          serial: editingTicket.serial || "",
-          jobId: editingTicket.jobId || "",
-          chargerIncluded: editingTicket.chargerIncluded ? "Yes" : "No",
-          deviceDescription: editingTicket.deviceDescription || "",
-          issueDescription: editingTicket.issueDescription || "",
-        store:
-  stores.find(
-    (s) => s.name.trim() === editingTicket.store?.trim(),
-  )?.name || "",
-
-          estimatedAmount: editingTicket.estimatedAmount?.toString() || "",
-          warranty: editingTicket.warranty ? "Yes" : "No",
-          billNumber: editingTicket.billNumber || "",
-          priority: editingTicket.priority || "Medium",
-          status: editingTicket.status || "New",
-          holdReason: editingTicket.holdReason || "",
-          progressReason: editingTicket.progressReason || "",
-          progressNote: editingTicket.progressNote || "",
-          scheduledDate: editingTicket.scheduledDate || "",
-          assignedToId: editingTicket.assignedToId || "",
-          resolvedAt: editingTicket.resolvedAt || "",
-          rejectionReasonStaff: editingTicket.rejectionReasonStaff || "",
-          rejectionReasonCustomer: editingTicket.rejectionReasonCustomer || "",
-          createdDate: formatDateForInput(
-            editingTicket.created_at || editingTicket.date,
-          ),
-        });
-      } else {
-        setFormData(initialFormState);
-      }
-      setError(null);
+// Update safeDateToISO function to be more robust:
+const safeDateToISO = (dateStr?: string) => {
+  if (!dateStr || !dateStr.trim()) return null;
+  
+  try {
+    // If it's already in YYYY-MM-DD format (from mobile input)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      // Append time for proper ISO string (midnight)
+      const date = new Date(`${dateStr}T00:00:00`);
+      if (isNaN(date.getTime())) return null;
+      return date.toISOString();
     }
-  }, [isOpen, editingTicket]);
+    
+    // If it's a simple date without time
+    if (/^\d{4}[-/]\d{2}[-/]\d{2}$/.test(dateStr)) {
+      const normalizedDate = dateStr.replace(/\//g, '-');
+      const date = new Date(`${normalizedDate}T00:00:00`);
+      if (isNaN(date.getTime())) return null;
+      return date.toISOString();
+    }
+    
+    // Otherwise try parsing as ISO or other format
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+      // Try as timestamp
+      const timestamp = parseInt(dateStr);
+      if (!isNaN(timestamp)) {
+        const dateFromTimestamp = new Date(timestamp);
+        if (!isNaN(dateFromTimestamp.getTime())) {
+          return dateFromTimestamp.toISOString();
+        }
+      }
+      return null;
+    }
+    
+    return date.toISOString();
+  } catch (error) {
+    console.error("Error converting date to ISO:", error);
+    return null;
+  }
+};
+
+useEffect(() => {
+  if (isOpen) {
+    setActiveTab("details");
+    setIsSubmitting(false);
+    
+    if (editingTicket) {
+      console.log("Editing ticket data:", {
+        store: editingTicket.store,
+        created_at: editingTicket.created_at,
+        date: editingTicket.date
+      });
+      
+      // Get the date value - try multiple sources
+      const dateSource = editingTicket.created_at || editingTicket.date;
+      
+      setFormData({
+        email: editingTicket.email || "",
+        name: editingTicket.name || "",
+        mobile: editingTicket.number || "",
+        address: editingTicket.address || "",
+        deviceType: editingTicket.deviceType || "Smartphone",
+        brand: editingTicket.brand || "",
+        model: editingTicket.model || "",
+        serial: editingTicket.serial || "",
+        jobId: editingTicket.jobId || "",
+        chargerIncluded: editingTicket.chargerIncluded ? "Yes" : "No",
+        deviceDescription: editingTicket.deviceDescription || "",
+        issueDescription: editingTicket.issueDescription || "",
+        // ✅ FIX: Store handling - use exact store name from editingTicket
+        store: editingTicket.store || "", // REMOVED the stores.find() logic
+        estimatedAmount: editingTicket.estimatedAmount?.toString() || "",
+        warranty: editingTicket.warranty ? "Yes" : "No",
+        billNumber: editingTicket.billNumber || "",
+        priority: editingTicket.priority || "Medium",
+        status: editingTicket.status || "New",
+        holdReason: editingTicket.holdReason || "",
+        progressReason: editingTicket.progressReason || "",
+        progressNote: editingTicket.progressNote || "",
+        scheduledDate: editingTicket.scheduledDate || "",
+        assignedToId: editingTicket.assignedToId || "",
+        resolvedAt: editingTicket.resolvedAt || "",
+        rejectionReasonStaff: editingTicket.rejectionReasonStaff || "",
+        rejectionReasonCustomer: editingTicket.rejectionReasonCustomer || "",
+        // ✅ FIX: Use the improved date formatting function
+        createdDate: formatDateForInput(dateSource),
+      });
+    } else {
+      setFormData(initialFormState);
+    }
+    setError(null);
+  }
+}, [isOpen, editingTicket, stores]); // ✅ ADD stores to dependencies
   useEffect(() => {
     if (formData.status === "Resolved" && !formData.resolvedAt) {
       setFormData((prev) => ({
@@ -1336,40 +1427,44 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                       <Building2 size={16} /> 03. Workflow
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                          Store *
-                        </label>
-                        <select
-                          value={formData.store}
-                          onChange={(e) =>
-                            setFormData({ ...formData, store: e.target.value })
-                          }
-                          className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none cursor-pointer"
-                        >
-                          <option value="">Choose Store</option>
-                          {(() => {
-                            // For technicians, show only their assigned stores
-                            const availableStores =
-                              currentUser.role === "TECHNICIAN"
-                                ? stores.filter(
-                                    (s) => s.id === currentUser.storeId,
-                                  )
-                                : stores;
+                     <div className="space-y-2">
+  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+    Store *
+  </label>
+  <select
+    value={formData.store} // This should now work correctly
+    onChange={(e) =>
+      setFormData({ ...formData, store: e.target.value })
+    }
+    className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none cursor-pointer"
+  >
+    <option value="">Choose Store</option>
+    {(() => {
+      // For technicians, show only their assigned stores
+      const availableStores =
+        currentUser.role === "TECHNICIAN"
+          ? stores.filter(
+              (s) => s.id === currentUser.storeId
+            )
+          : stores;
 
-                            return availableStores?.length > 0
-                              ? availableStores.map((s) => (
-                                  <option key={s.id} value={s.name}>
-                                    {s.name}
-                                  </option>
-                                ))
-                              : null;
-                          })()}
-                        </select>
-                      </div>
+      return availableStores?.length > 0
+        ? availableStores.map((s) => (
+            <option 
+              key={s.id} 
+              value={s.name}
+              selected={s.name === formData.store} // Add selected attribute
+            >
+              {s.name}
+            </option>
+          ))
+        : null;
+    })()}
+  </select>
+</div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                          Ticket Date *
+                          Ticket Date 
                         </label>
                         <div className="relative">
                           <CalendarDays
