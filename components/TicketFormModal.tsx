@@ -159,49 +159,79 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     "WiFi Not Working",
   ];
 
-  // Initialize form
-  useEffect(() => {
-    if (isOpen) {
-      setActiveTab("details");
-      setIsSubmitting(false);
-      if (editingTicket) {
-        setFormData({
-          email: editingTicket.email || "",
-          name: editingTicket.name || "",
-          mobile: editingTicket.number || "",
-          address: editingTicket.address || "",
-          deviceType: editingTicket.deviceType || "Smartphone",
-          brand: editingTicket.brand || "",
-          model: editingTicket.model || "",
-          serial: editingTicket.serial || "",
-          jobId: editingTicket.jobId || "",
-          chargerIncluded: editingTicket.chargerIncluded ? "Yes" : "No",
-          deviceDescription: editingTicket.deviceDescription || "",
-          issueDescription: editingTicket.issueDescription || "",
-          store: editingTicket.store || "",
-          estimatedAmount: editingTicket.estimatedAmount?.toString() || "",
-          warranty: editingTicket.warranty ? "Yes" : "No",
-          billNumber: editingTicket.billNumber || "",
-          priority: editingTicket.priority || "Medium",
-          status: editingTicket.status || "New",
-          holdReason: editingTicket.holdReason || "",
-          progressReason: editingTicket.progressReason || "",
-          progressNote: editingTicket.progressNote || "",
-          scheduledDate: editingTicket.scheduledDate || "",
-          assignedToId: editingTicket.assignedToId || "",
-          resolvedAt: editingTicket.resolvedAt || "",
-          rejectionReasonStaff: editingTicket.rejectionReasonStaff || "",
-          rejectionReasonCustomer: editingTicket.rejectionReasonCustomer || "",
-          createdDate: editingTicket.date
-            ? new Date(editingTicket.date).toISOString().split("T")[0]
-            : new Date().toISOString().split("T")[0],
-        });
-      } else {
-        setFormData(initialFormState);
-      }
-      setError(null);
+// Initialize form
+useEffect(() => {
+  if (isOpen) {
+    setActiveTab("details");
+    setIsSubmitting(false);
+    if (editingTicket) {
+      // ✅ SAFE DATE PARSER - Works on mobile
+      const parseTicketDate = (ticket: any): string => {
+        try {
+          // Try created_at first (from database)
+          if (ticket.created_at) {
+            const date = new Date(ticket.created_at);
+            if (!isNaN(date.getTime())) {
+              return date.toISOString().split("T")[0];
+            }
+          }
+          
+          // Try date field
+          if (ticket.date) {
+            // If already in YYYY-MM-DD format, use directly
+            if (typeof ticket.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ticket.date)) {
+              return ticket.date;
+            }
+            
+            const date = new Date(ticket.date);
+            if (!isNaN(date.getTime())) {
+              return date.toISOString().split("T")[0];
+            }
+          }
+          
+          // Fallback to today
+          return new Date().toISOString().split("T")[0];
+        } catch (err) {
+          console.error("Date parsing error:", err, ticket);
+          return new Date().toISOString().split("T")[0];
+        }
+      };
+
+      setFormData({
+        email: editingTicket.email || "",
+        name: editingTicket.name || "",
+        mobile: editingTicket.number || "",
+        address: editingTicket.address || "",
+        deviceType: editingTicket.deviceType || "Smartphone",
+        brand: editingTicket.brand || "",
+        model: editingTicket.model || "",
+        serial: editingTicket.serial || "",
+        jobId: editingTicket.jobId || "",
+        chargerIncluded: editingTicket.chargerIncluded ? "Yes" : "No",
+        deviceDescription: editingTicket.deviceDescription || "",
+        issueDescription: editingTicket.issueDescription || "",
+        store: editingTicket.store || "",
+        estimatedAmount: editingTicket.estimatedAmount?.toString() || "",
+        warranty: editingTicket.warranty ? "Yes" : "No",
+        billNumber: editingTicket.billNumber || "",
+        priority: editingTicket.priority || "Medium",
+        status: editingTicket.status || "New",
+        holdReason: editingTicket.holdReason || "",
+        progressReason: editingTicket.progressReason || "",
+        progressNote: editingTicket.progressNote || "",
+        scheduledDate: editingTicket.scheduledDate || "",
+        assignedToId: editingTicket.assignedToId || "",
+        resolvedAt: editingTicket.resolvedAt || "",
+        rejectionReasonStaff: editingTicket.rejectionReasonStaff || "",
+        rejectionReasonCustomer: editingTicket.rejectionReasonCustomer || "",
+        createdDate: parseTicketDate(editingTicket), // ✅ FIXED LINE
+      });
+    } else {
+      setFormData(initialFormState);
     }
-  }, [isOpen, editingTicket]);
+    setError(null);
+  }
+}, [isOpen, editingTicket]);
 
   useEffect(() => {
     if (formData.status === "Resolved" && !formData.resolvedAt) {
