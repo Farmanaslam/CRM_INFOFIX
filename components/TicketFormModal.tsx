@@ -76,7 +76,7 @@ interface TicketFormModalProps {
     forceUser?: AppUser,
   ) => void;
 }
-  // Add this function to get today's date in YYYY-MM-DD format
+// Add this function to get today's date in YYYY-MM-DD format
 const getTodayDate = (): string => {
   const today = new Date();
   const year = today.getFullYear();
@@ -320,7 +320,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           chargerIncluded: editingTicket.chargerIncluded ? "Yes" : "No",
           deviceDescription: editingTicket.deviceDescription || "",
           issueDescription: editingTicket.issueDescription || "",
-          store: editingTicket.store || "", 
+          store: editingTicket.store || "",
           estimatedAmount: editingTicket.estimatedAmount?.toString() || "",
           warranty: editingTicket.warranty ? "Yes" : "No",
           billNumber: editingTicket.billNumber || "",
@@ -337,11 +337,10 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           createdDate: formatDateForInput(dateSource),
         });
       } else {
-         setFormData({
-    ...initialFormState,
-    createdDate: getTodayDate(),
-  });
-        
+        setFormData({
+          ...initialFormState,
+          createdDate: getTodayDate(),
+        });
       }
       setError(null);
     }
@@ -364,6 +363,34 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
       }));
     }
   }, [currentUser, editingTicket]);
+
+  const availableStores = (() => {
+    // Admins & Managers → all stores
+    if (
+      currentUser.role === "SUPER_ADMIN" ||
+      currentUser.role === "ADMIN" ||
+      currentUser.role === "MANAGER"
+    ) {
+      return stores;
+    }
+
+    // Technicians
+    if (currentUser.role === "TECHNICIAN") {
+      // Try matching by storeId first
+      if (currentUser.storeId) {
+        const matched = stores.filter((s) => s.id === currentUser.storeId);
+        if (matched.length > 0) return matched;
+      }
+
+      // 🔥 FALLBACK: allow all stores if mapping missing
+      console.warn(
+        "Technician storeId missing or not matched. Showing all stores.",
+      );
+      return stores;
+    }
+
+    return stores;
+  })();
 
   // Check if selected brand is a Service Brand
   const isServiceBrand = useMemo(() => {
@@ -1478,29 +1505,18 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                           Store *
                         </label>
                         <select
-                          value={formData.store} // This controls the selected value
+                          value={formData.store}
                           onChange={(e) =>
                             setFormData({ ...formData, store: e.target.value })
                           }
                           className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none cursor-pointer"
                         >
                           <option value="">Choose Store</option>
-                          {(() => {
-                            const availableStores =
-                              currentUser.role === "TECHNICIAN"
-                                ? stores.filter(
-                                    (s) => s.id === currentUser.storeId,
-                                  )
-                                : stores;
-
-                            return availableStores?.length > 0
-                              ? availableStores.map((s) => (
-                                  <option key={s.id} value={s.name}>
-                                    {s.name}
-                                  </option>
-                                ))
-                              : null;
-                          })()}
+                          {availableStores.map((s) => (
+                            <option key={s.id} value={s.name}>
+                              {s.name}
+                            </option>
+                          ))}
                         </select>
                       </div>
                       <div className="space-y-2">
