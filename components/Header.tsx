@@ -1,5 +1,5 @@
 import React from "react";
-import { Menu, Bell } from "lucide-react";
+import { Menu, Bell, RefreshCw } from "lucide-react";
 import { User, AppNotification } from "../types";
 
 interface HeaderProps {
@@ -17,8 +17,11 @@ const Header: React.FC<HeaderProps> = ({
   visibleNotifications = [],
   onBellClick,
 }) => {
+  const handleRefresh = () => {
+    window.location.reload();
+  };
   const unreadCount = visibleNotifications.filter(
-    (n) => !n.readBy?.includes(currentUser.id)
+    (n) => !n.readBy?.includes(currentUser.id),
   ).length;
 
   return (
@@ -37,6 +40,17 @@ const Header: React.FC<HeaderProps> = ({
 
       <div className="flex items-center gap-3 lg:gap-6">
         <div className="flex items-center gap-3">
+          {/* Refresh Button - Added before notification bell */}
+          <button
+            onClick={handleRefresh}
+            className="relative p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all active:scale-90 group"
+            title="Refresh page"
+          >
+            <RefreshCw
+              size={20}
+              className="group-hover:rotate-180 transition-transform duration-500"
+            />
+          </button>
           <button
             onClick={onBellClick}
             className="relative p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all active:scale-90"

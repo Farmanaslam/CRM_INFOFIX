@@ -2,14 +2,15 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 const rootElement = document.getElementById("root");
-import vConsole from "vconsole";
 
-const enableVConsole =
+{
+  /*const enableVConsole =
   import.meta.env.DEV ||
   new URLSearchParams(window.location.search).has("vconsole");
 
 if (enableVConsole) {
   new vConsole();
+}*/
 }
 
 if (!rootElement) {
