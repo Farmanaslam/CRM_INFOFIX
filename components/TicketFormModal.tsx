@@ -124,6 +124,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     jobId: "",
     rejectionReasonStaff: "",
     rejectionReasonCustomer: "",
+    createdDate: new Date().toISOString().split("T")[0],
     priority:
       settings.priorities && settings.priorities.length > 0
         ? settings.priorities.find((p) => p.name === "Medium")?.name || "Medium"
@@ -191,6 +192,9 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           resolvedAt: editingTicket.resolvedAt || "",
           rejectionReasonStaff: editingTicket.rejectionReasonStaff || "",
           rejectionReasonCustomer: editingTicket.rejectionReasonCustomer || "",
+          createdDate: editingTicket.date
+            ? new Date(editingTicket.date).toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0],
         });
       } else {
         setFormData(initialFormState);
@@ -360,7 +364,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
             .from("customers")
             .update({
               name: formData.name,
-              mobile: formData.mobile,
+              phone: formData.mobile,
               address: formData.address,
             })
             .eq("id", customerId);
@@ -419,7 +423,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                         auth_id: signInData.user.id,
                         name: formData.name,
                         email: formData.email,
-                        mobile: formData.mobile,
+                        phone: formData.mobile,
                         address: formData.address,
                       },
                     ])
@@ -446,7 +450,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                     auth_id: authData.user.id,
                     name: formData.name,
                     email: formData.email,
-                    mobile: formData.mobile,
+                    phone: formData.mobile,
                     address: formData.address,
                   },
                 ])
@@ -470,7 +474,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         .from("tickets")
         .select("id")
         .like("id", "TKT-IF-%")
-        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .limit(1)
         .single();
 
@@ -483,6 +487,30 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
       }
 
       const ticketId = `TKT-IF-${nextNumber.toString().padStart(3, "0")}`;
+      // ✅ ADD THIS CHECK - Verify the ID doesn't already exist
+      const { data: existingTicket } = await supabase
+        .from("tickets")
+        .select("id")
+        .eq("id", ticketId)
+        .maybeSingle();
+
+      // If ID exists, increment until we find an available one
+      let finalNextNumber = nextNumber;
+      while (
+        existingTicket &&
+        existingTicket.id ===
+          `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`
+      ) {
+        finalNextNumber++;
+        const { data: checkTicket } = await supabase
+          .from("tickets")
+          .select("id")
+          .eq("id", `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`)
+          .maybeSingle();
+        if (!checkTicket) break;
+      }
+
+      const finalTicketId = `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`;
 
       if (editingTicket) {
         const historyLogs: TicketHistory[] = [];
@@ -697,8 +725,8 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
         const initialHistory = [
           {
             id: Date.now().toString(),
-            date: new Date().toLocaleString(),
-            timestamp: Date.now(),
+            date: new Date(formData.createdDate).toLocaleString(), // Update this line
+            timestamp: new Date(formData.createdDate).getTime(),
             actorName: currentUser.name,
             actorRole: currentUser.role,
             action: "Ticket Created",
@@ -710,7 +738,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
           .from("tickets")
           .insert([
             {
-              id: ticketId,
+              id: finalTicketId,
               customer_id: customerId,
               subject: formData.issueDescription,
               status: formData.status,
@@ -730,7 +758,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
               name: formData.name,
               mobile: formData.mobile,
               address: formData.address,
-              created_at: new Date().toISOString(),
+              created_at: new Date(formData.createdDate).toISOString(),
               resolved_at: formData.resolvedAt
                 ? (() => {
                     try {
@@ -1312,6 +1340,28 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                               : null;
                           })()}
                         </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                          Ticket Date *
+                        </label>
+                        <div className="relative">
+                          <CalendarDays
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                            size={18}
+                          />
+                          <input
+                            type="date"
+                            value={formData.createdDate}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                createdDate: e.target.value,
+                              })
+                            }
+                            className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none cursor-pointer text-slate-700"
+                          />
+                        </div>
                       </div>
 
                       {/* Status */}
