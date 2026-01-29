@@ -159,80 +159,66 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     "WiFi Not Working",
   ];
 
-// Initialize form
-useEffect(() => {
-  if (isOpen) {
-    setActiveTab("details");
-    setIsSubmitting(false);
-    if (editingTicket) {
-      // ✅ SAFE DATE PARSER - Works on mobile
-      const parseTicketDate = (ticket: any): string => {
-        try {
-          // Try created_at first (from database)
-          if (ticket.created_at) {
-            const date = new Date(ticket.created_at);
-            if (!isNaN(date.getTime())) {
-              return date.toISOString().split("T")[0];
-            }
+  // Initialize form
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab("details");
+      setIsSubmitting(false);
+      if (editingTicket) {
+        const formatDateForInput = (
+          dateValue: string | null | undefined,
+        ): string => {
+          if (!dateValue) {
+            return new Date().toISOString().slice(0, 10);
           }
-          
-          // Try date field
-          if (ticket.date) {
-            // If already in YYYY-MM-DD format, use directly
-            if (typeof ticket.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ticket.date)) {
-              return ticket.date;
-            }
-            
-            const date = new Date(ticket.date);
-            if (!isNaN(date.getTime())) {
-              return date.toISOString().split("T")[0];
-            }
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+            return dateValue;
           }
-          
-          // Fallback to today
-          return new Date().toISOString().split("T")[0];
-        } catch (err) {
-          console.error("Date parsing error:", err, ticket);
-          return new Date().toISOString().split("T")[0];
-        }
-      };
 
-      setFormData({
-        email: editingTicket.email || "",
-        name: editingTicket.name || "",
-        mobile: editingTicket.number || "",
-        address: editingTicket.address || "",
-        deviceType: editingTicket.deviceType || "Smartphone",
-        brand: editingTicket.brand || "",
-        model: editingTicket.model || "",
-        serial: editingTicket.serial || "",
-        jobId: editingTicket.jobId || "",
-        chargerIncluded: editingTicket.chargerIncluded ? "Yes" : "No",
-        deviceDescription: editingTicket.deviceDescription || "",
-        issueDescription: editingTicket.issueDescription || "",
-        store: editingTicket.store || "",
-        estimatedAmount: editingTicket.estimatedAmount?.toString() || "",
-        warranty: editingTicket.warranty ? "Yes" : "No",
-        billNumber: editingTicket.billNumber || "",
-        priority: editingTicket.priority || "Medium",
-        status: editingTicket.status || "New",
-        holdReason: editingTicket.holdReason || "",
-        progressReason: editingTicket.progressReason || "",
-        progressNote: editingTicket.progressNote || "",
-        scheduledDate: editingTicket.scheduledDate || "",
-        assignedToId: editingTicket.assignedToId || "",
-        resolvedAt: editingTicket.resolvedAt || "",
-        rejectionReasonStaff: editingTicket.rejectionReasonStaff || "",
-        rejectionReasonCustomer: editingTicket.rejectionReasonCustomer || "",
-        createdDate: parseTicketDate(editingTicket), // ✅ FIXED LINE
-      });
-    } else {
-      setFormData(initialFormState);
+          const date = new Date(dateValue);
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const day = String(date.getDate()).padStart(2, "0");
+
+          return `${year}-${month}-${day}`;
+        };
+        setFormData({
+          email: editingTicket.email || "",
+          name: editingTicket.name || "",
+          mobile: editingTicket.number || "",
+          address: editingTicket.address || "",
+          deviceType: editingTicket.deviceType || "Smartphone",
+          brand: editingTicket.brand || "",
+          model: editingTicket.model || "",
+          serial: editingTicket.serial || "",
+          jobId: editingTicket.jobId || "",
+          chargerIncluded: editingTicket.chargerIncluded ? "Yes" : "No",
+          deviceDescription: editingTicket.deviceDescription || "",
+          issueDescription: editingTicket.issueDescription || "",
+          store: editingTicket.store || "",
+          estimatedAmount: editingTicket.estimatedAmount?.toString() || "",
+          warranty: editingTicket.warranty ? "Yes" : "No",
+          billNumber: editingTicket.billNumber || "",
+          priority: editingTicket.priority || "Medium",
+          status: editingTicket.status || "New",
+          holdReason: editingTicket.holdReason || "",
+          progressReason: editingTicket.progressReason || "",
+          progressNote: editingTicket.progressNote || "",
+          scheduledDate: editingTicket.scheduledDate || "",
+          assignedToId: editingTicket.assignedToId || "",
+          resolvedAt: editingTicket.resolvedAt || "",
+          rejectionReasonStaff: editingTicket.rejectionReasonStaff || "",
+          rejectionReasonCustomer: editingTicket.rejectionReasonCustomer || "",
+          createdDate: formatDateForInput(
+            editingTicket.created_at || editingTicket.date,
+          ),
+        });
+      } else {
+        setFormData(initialFormState);
+      }
+      setError(null);
     }
-    setError(null);
-  }
-}, [isOpen, editingTicket]);
-
+  }, [isOpen, editingTicket]);
   useEffect(() => {
     if (formData.status === "Resolved" && !formData.resolvedAt) {
       setFormData((prev) => ({
@@ -671,7 +657,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
             warranty: formData.warranty === "Yes",
             bill_number: formData.billNumber || null,
             scheduled_date: formData.scheduledDate || null,
-             created_at: new Date(formData.createdDate).toISOString(), 
+            created_at: new Date(formData.createdDate).toISOString(),
             resolved_at: formData.resolvedAt
               ? (() => {
                   try {
@@ -715,7 +701,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                   warranty: formData.warranty === "Yes",
                   billNumber: formData.billNumber || "",
                   scheduledDate: formData.scheduledDate || "",
-                     date: new Date(formData.createdDate).toISOString(),
+                  date: new Date(formData.createdDate).toISOString(),
                   resolvedAt: formData.resolvedAt,
                   history: updatedHistory,
                   serial: formData.serial || "",
@@ -1373,29 +1359,29 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                           })()}
                         </select>
                       </div>
-                    <div className="space-y-2">
-  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-    Ticket Date *
-  </label>
-  <div className="relative">
-    <CalendarDays
-      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-      size={18}
-    />
-    <input
-      type="date"
-      value={formData.createdDate}
-      onChange={(e) =>
-        setFormData({
-          ...formData,
-          createdDate: e.target.value,
-        })
-      }
-      max={new Date().toISOString().split("T")[0]}
-      className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none cursor-pointer text-slate-700"
-    />
-  </div>
-</div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                          Ticket Date *
+                        </label>
+                        <div className="relative">
+                          <CalendarDays
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                            size={18}
+                          />
+                          <input
+                            type="date"
+                            value={formData.createdDate}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                createdDate: e.target.value,
+                              })
+                            }
+                            max={new Date().toISOString().split("T")[0]}
+                            className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none cursor-pointer text-slate-700"
+                          />
+                        </div>
+                      </div>
 
                       {/* Status */}
                       <div className="space-y-2">
