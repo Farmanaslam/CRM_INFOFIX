@@ -641,6 +641,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
             warranty: formData.warranty === "Yes",
             bill_number: formData.billNumber || null,
             scheduled_date: formData.scheduledDate || null,
+             created_at: new Date(formData.createdDate).toISOString(), 
             resolved_at: formData.resolvedAt
               ? (() => {
                   try {
@@ -684,6 +685,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                   warranty: formData.warranty === "Yes",
                   billNumber: formData.billNumber || "",
                   scheduledDate: formData.scheduledDate || "",
+                     date: new Date(formData.createdDate).toISOString(),
                   resolvedAt: formData.resolvedAt,
                   history: updatedHistory,
                   serial: formData.serial || "",

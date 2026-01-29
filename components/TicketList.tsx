@@ -766,7 +766,7 @@ const TicketList: React.FC<TicketListProps> = ({
   <span>
     {(() => {
       try {
-        const date = new Date(ticket.date);
+         const date = new Date(ticket.created_at || ticket.date);
         return !isNaN(date.getTime()) 
           ? date.toLocaleDateString("en-GB") 
           : ticket.date;
