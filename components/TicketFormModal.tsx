@@ -1341,28 +1341,29 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                           })()}
                         </select>
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                          Ticket Date *
-                        </label>
-                        <div className="relative">
-                          <CalendarDays
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                            size={18}
-                          />
-                          <input
-                            type="date"
-                            value={formData.createdDate}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                createdDate: e.target.value,
-                              })
-                            }
-                            className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none cursor-pointer text-slate-700"
-                          />
-                        </div>
-                      </div>
+                    <div className="space-y-2">
+  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+    Ticket Date *
+  </label>
+  <div className="relative">
+    <CalendarDays
+      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+      size={18}
+    />
+    <input
+      type="date"
+      value={formData.createdDate}
+      onChange={(e) =>
+        setFormData({
+          ...formData,
+          createdDate: e.target.value,
+        })
+      }
+      max={new Date().toISOString().split("T")[0]}
+      className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none cursor-pointer text-slate-700"
+    />
+  </div>
+</div>
 
                       {/* Status */}
                       <div className="space-y-2">

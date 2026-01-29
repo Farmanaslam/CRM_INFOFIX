@@ -762,17 +762,25 @@ const TicketList: React.FC<TicketListProps> = ({
                       </div>
                     </div>
                   </div>
-
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                    <span>
-                      {new Date(ticket.date).toLocaleDateString("en-GB")}
-                    </span>
-                    {ticket.warranty && (
-                      <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
-                        <AlertTriangle size={10} /> Warranty
-                      </span>
-                    )}
-                  </div>
+<div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+  <span>
+    {(() => {
+      try {
+        const date = new Date(ticket.date);
+        return !isNaN(date.getTime()) 
+          ? date.toLocaleDateString("en-GB") 
+          : ticket.date;
+      } catch {
+        return ticket.date;
+      }
+    })()}
+  </span>
+  {ticket.warranty && (
+    <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+      <AlertTriangle size={10} /> Warranty
+    </span>
+  )}
+</div>
                 </div>
               ))}
             </div>
