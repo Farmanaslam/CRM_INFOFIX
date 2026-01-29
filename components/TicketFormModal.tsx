@@ -124,7 +124,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     jobId: "",
     rejectionReasonStaff: "",
     rejectionReasonCustomer: "",
-    createdDate: new Date().toISOString().split("T")[0],
+    createdDate: "",
     priority:
       settings.priorities && settings.priorities.length > 0
         ? settings.priorities.find((p) => p.name === "Medium")?.name || "Medium"
@@ -158,6 +158,14 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     "No Display",
     "WiFi Not Working",
   ];
+const safeDateToISO = (dateStr?: string) => {
+  if (!dateStr) return null;
+
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return null;
+
+  return date.toISOString();
+};
 
   // Initialize form
   useEffect(() => {
@@ -165,23 +173,19 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
       setActiveTab("details");
       setIsSubmitting(false);
       if (editingTicket) {
-        const formatDateForInput = (
-          dateValue: string | null | undefined,
-        ): string => {
-          if (!dateValue) {
-            return new Date().toISOString().slice(0, 10);
-          }
-          if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-            return dateValue;
-          }
+       const formatDateForInput = (dateValue?: string | null): string => {
+  if (!dateValue) return "";
 
-          const date = new Date(dateValue);
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, "0");
-          const day = String(date.getDate()).padStart(2, "0");
+  const date = new Date(dateValue);
+  if (isNaN(date.getTime())) return "";
 
-          return `${year}-${month}-${day}`;
-        };
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
         setFormData({
           email: editingTicket.email || "",
           name: editingTicket.name || "",
@@ -195,7 +199,11 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
           chargerIncluded: editingTicket.chargerIncluded ? "Yes" : "No",
           deviceDescription: editingTicket.deviceDescription || "",
           issueDescription: editingTicket.issueDescription || "",
-          store: editingTicket.store || "",
+        store:
+  stores.find(
+    (s) => s.name.trim() === editingTicket.store?.trim(),
+  )?.name || "",
+
           estimatedAmount: editingTicket.estimatedAmount?.toString() || "",
           warranty: editingTicket.warranty ? "Yes" : "No",
           billNumber: editingTicket.billNumber || "",
@@ -657,7 +665,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
             warranty: formData.warranty === "Yes",
             bill_number: formData.billNumber || null,
             scheduled_date: formData.scheduledDate || null,
-            created_at: new Date(formData.createdDate).toISOString(),
+            created_at: safeDateToISO(formData.createdDate),
             resolved_at: formData.resolvedAt
               ? (() => {
                   try {
@@ -701,7 +709,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                   warranty: formData.warranty === "Yes",
                   billNumber: formData.billNumber || "",
                   scheduledDate: formData.scheduledDate || "",
-                  date: new Date(formData.createdDate).toISOString(),
+                  date: safeDateToISO(formData.createdDate),
                   resolvedAt: formData.resolvedAt,
                   history: updatedHistory,
                   serial: formData.serial || "",
@@ -776,7 +784,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
               name: formData.name,
               mobile: formData.mobile,
               address: formData.address,
-              created_at: new Date(formData.createdDate).toISOString(),
+              created_at: safeDateToISO(formData.createdDate),
               resolved_at: formData.resolvedAt
                 ? (() => {
                     try {
