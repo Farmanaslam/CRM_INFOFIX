@@ -122,6 +122,7 @@ export interface Ticket {
   jobId?: string;
   rejectionReasonStaff?: string;
   rejectionReasonCustomer?: string;
+  mobile?: string;
 }
 
 export interface Task {

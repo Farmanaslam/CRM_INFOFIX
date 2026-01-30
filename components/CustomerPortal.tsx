@@ -155,7 +155,7 @@ export default function CustomerPortal({
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
 
-  const [deviceType, setDeviceType] = useState("Smartphone");
+  const [deviceType, setDeviceType] = useState("Laptop");
   const [issue, setIssue] = useState("");
   const [store, setStore] = useState(settings.stores[0]?.name || "");
   const [isLoading, setIsLoading] = useState(false);
@@ -222,7 +222,29 @@ export default function CustomerPortal({
     setIsLoading(true);
 
     try {
-      // 🔑 get next ticket id (same sequence as staff)
+      // ✅ FETCH CUSTOMER MOBILE FROM DATABASE
+      const { data: customerData, error: customerError } = await supabase
+        .from("customers")
+        .select("mobile, phone")
+        .eq("email", currentUser.email)
+        .single();
+
+      if (customerError) {
+        console.error("Error fetching customer:", customerError);
+        alert("Error loading profile. Please try again.");
+        setIsLoading(false);
+        return;
+      }
+      const customerMobile = customerData.mobile || customerData.phone;
+
+      if (!customerMobile) {
+        alert(
+          "Your account is missing a mobile number. Please contact support.",
+        );
+        setIsLoading(false);
+        return;
+      }
+
       const ticketId = await getNextTicketIdForCustomer();
 
       const now = new Date().toISOString();
@@ -251,11 +273,11 @@ export default function CustomerPortal({
         scheduled_date: null,
         internal_progress_reason: null,
         internal_progress_note: null,
-        user_id: null,
+        user_id: currentUser.id,
         address: currentUser.address || null,
         name: currentUser.name,
         email: currentUser.email,
-        mobile: currentUser.mobile || null,
+        mobile: customerMobile,
         zone_id: null,
       };
 
@@ -290,13 +312,16 @@ export default function CustomerPortal({
           customerId: finalData?.customer_id || currentUser?.id,
           name: finalData?.name || currentUser.name,
           email: finalData?.email || currentUser.email,
-          number: finalData?.mobile || currentUser.mobile || "",
+          number: finalData?.mobile ?? "",
+          mobile: finalData?.mobile || currentUser.mobile || "",
           address: finalData?.address || currentUser.address || "",
           date: new Date(finalData.created_at).toLocaleDateString(),
-          deviceType: finalData?.device_type || deviceType,
+          deviceType: finalData.device_type || deviceType,
+
           issueDescription:
             finalData?.subject || finalData?.device_description || issue,
-          store: finalData?.store || store,
+          store: finalData?.store ?? "",
+
           status: finalData?.status || "Pending Approval",
           priority: finalData?.priority || "Medium",
           warranty: finalData?.warranty === "YES" ? true : false,
@@ -337,6 +362,7 @@ export default function CustomerPortal({
 
         alert("Ticket created successfully! Status: Pending Approval");
       }
+      console.log("Customer mobile:", currentUser.mobile);
     } catch (error: any) {
       console.error("Error:", error);
       alert(error.message || "Failed to create ticket");
