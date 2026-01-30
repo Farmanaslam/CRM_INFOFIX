@@ -190,7 +190,26 @@ export default function CustomerPortal({
     ).length,
     resolved: myTickets.filter((t) => t.status === "Resolved").length,
   };
+  const getNextTicketIdForCustomer = async (): Promise<string> => {
+    const { data, error } = await supabase
+      .from("tickets")
+      .select("id")
+      .like("id", "TKT-IF-%")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
+    if (error) {
+      console.error("Failed to fetch last ticket ID", error);
+      throw error;
+    }
+
+    const lastId = data?.id || "TKT-IF-000";
+    const match = lastId.match(/TKT-IF-(\d+)/);
+
+    const nextNumber = match ? parseInt(match[1], 10) + 1 : 1;
+    return `TKT-IF-${nextNumber}`;
+  };
   // --- HANDLERS ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,11 +222,8 @@ export default function CustomerPortal({
     setIsLoading(true);
 
     try {
-      const latestId = tickets.length > 0 ? tickets[0]?.ticketId : "TKT-IF-000";
-      const match = latestId.match(/TKT-IF-(\d+)/);
-      const nextNumber = match ? parseInt(match[1]) + 1 : tickets.length + 1;
-      const padded = nextNumber.toString().padStart(3, "0");
-      const ticketId = `TKT-IF-${padded}`;
+      // 🔑 get next ticket id (same sequence as staff)
+      const ticketId = await getNextTicketIdForCustomer();
 
       const now = new Date().toISOString();
 
