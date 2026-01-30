@@ -155,7 +155,6 @@ const fetchWorkflows = async (force = false) => {
   }
 
   try {
-    console.log("📥 Fetching workflows from Supabase...");
     const { data, error } = await supabase
       .from("workflows")
       .select("*")
@@ -165,8 +164,6 @@ const fetchWorkflows = async (force = false) => {
       console.error("❌ Error fetching workflows:", error);
       throw error;
     }
-
-    console.log(`✅ Fetched ${data.length} workflow items from database`);
 
     // Transform to AppSettings format
     const grouped: any = {
@@ -204,19 +201,6 @@ const fetchWorkflows = async (force = false) => {
         console.warn(`⚠️ Unknown workflow category: ${item.category}`);
       }
     });
-
-    // Log category counts
-    console.log("📊 Workflow categories:", categoryCounts);
-    console.log("📋 Workflow summary:", {
-      ticketStatuses: grouped.ticketStatuses.length,
-      priorities: grouped.priorities.length,
-      deviceTypes: grouped.deviceTypes.length,
-      serviceBrands: grouped.serviceBrands.length,
-      holdReasons: grouped.holdReasons.length,
-      progressReasons: grouped.progressReasons.length,
-      laptopDealers: grouped.laptopDealers.length,
-    });
-
     return grouped;
   } catch (error) {
     console.error("❌ Error in fetchWorkflows:", error);
@@ -442,7 +426,6 @@ function App() {
           } = await supabase.auth.getSession();
 
           if (session) {
-            console.log("✅ Valid password reset session detected");
             setIsResetPasswordRoute(true);
           } else {
             console.warn("❌ No valid session for password reset");
@@ -466,7 +449,6 @@ function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY" && session) {
-        console.log("✅ Password recovery event detected");
         setIsResetPasswordRoute(true);
         setIsCheckingResetRoute(false);
       }
@@ -815,17 +797,13 @@ function App() {
   useEffect(() => {
     const loadWorkflows = async () => {
       if (!supabase || !currentUser) {
-        console.log("⏸️ Skipping workflow load - no supabase or user");
         return;
       }
 
       try {
-        console.log("🔄 Loading workflows from Supabase (initial load)");
         const workflows = await fetchWorkflows();
 
         if (workflows) {
-          console.log("✅ Workflows fetched, updating state");
-
           applyWorkflowsToSettings(workflows);
           setWorkflowsLastFetched(Date.now());
 

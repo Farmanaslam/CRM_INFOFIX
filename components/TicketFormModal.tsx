@@ -298,12 +298,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
       setIsSubmitting(false);
 
       if (editingTicket) {
-        console.log("Editing ticket data:", {
-          store: editingTicket.store,
-          created_at: editingTicket.created_at,
-          date: editingTicket.date,
-        });
-
         // Get the date value - try multiple sources
         const dateSource = editingTicket.created_at || editingTicket.date;
 
@@ -551,8 +545,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         if (existingCustomer) {
           customerId = existingCustomer.id;
           customerUserId = existingCustomer.auth_id || null;
-
-          console.log("✅ Using existing customer:", existingCustomer.email);
         } else {
           try {
             const { data: authData, error: authErr } =

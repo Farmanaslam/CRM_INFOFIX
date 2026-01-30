@@ -151,7 +151,6 @@ const DealerManager: React.FC<{
 
     try {
       if (editingDealer) {
-        console.log(`✏️ Updating laptop dealer: ${editingDealer.id}`);
         // Update existing dealer
         const { error } = await supabase
           .from("workflows")
@@ -171,9 +170,7 @@ const DealerManager: React.FC<{
 
         if (error) throw error;
         await onWorkflowsRefresh();
-        console.log(`✅ Laptop dealer updated in database`);
       } else {
-        console.log(`➕ Adding new laptop dealer: ${formData.name}`);
         // Insert new dealer
         const { data, error } = await supabase
           .from("workflows")
@@ -196,8 +193,6 @@ const DealerManager: React.FC<{
 
         if (error) throw error;
 
-        console.log(`✅ Laptop dealer added to database:`, data);
-
         await onWorkflowsRefresh();
       }
 
@@ -214,12 +209,10 @@ const DealerManager: React.FC<{
     if (!confirm("Are you sure you want to delete this dealer?")) return;
 
     try {
-      console.log(`🗑️ Deleting laptop dealer: ${id}`);
       const { error } = await supabase.from("workflows").delete().eq("id", id);
 
       if (error) throw error;
 
-      console.log(`✅ Laptop dealer deleted from database`);
       await onWorkflowsRefresh();
       // Note: Real-time subscription in App.tsx will handle syncing to other windows
     } catch (err: any) {
@@ -2146,16 +2139,6 @@ export default function Settings({
   workflowsLastFetched,
   onWorkflowsRefresh,
 }: SettingsProps) {
-  console.log("🔍 Settings component render:", {
-    deviceTypes: settings.deviceTypes?.length,
-    ticketStatuses: settings.ticketStatuses?.length,
-    priorities: settings.priorities?.length,
-    serviceBrands: settings.serviceBrands?.length,
-    holdReasons: settings.holdReasons?.length,
-    progressReasons: settings.progressReasons?.length,
-    laptopDealers: settings.laptopDealers?.length,
-    workflowsLastFetched,
-  });
   const [activeSection, setActiveSection] = useState<string>("team");
 
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
@@ -2263,7 +2246,6 @@ export default function Settings({
 
       onAdd: async (name: string) => {
         try {
-          console.log(`➕ Adding workflow item: ${listKey} - ${name}`);
           const { data, error } = await supabase
             .from("workflows")
             .insert({
@@ -2276,8 +2258,6 @@ export default function Settings({
             .single();
 
           if (error) throw error;
-
-          console.log(`✅ Workflow item added to database:`, data);
         } catch (err: any) {
           console.error("❌ Error adding workflow item:", err);
           alert(`Failed to add item: ${err.message}`);
@@ -2288,17 +2268,12 @@ export default function Settings({
         const oldItem = getCurrentList().find((i) => i.id === id);
 
         try {
-          console.log(
-            `✏️ Editing workflow item: ${listKey} - ${id} -> ${newName}`,
-          );
           const { error } = await supabase
             .from("workflows")
             .update({ name: newName, updated_at: new Date().toISOString() })
             .eq("id", id);
 
           if (error) throw error;
-
-          console.log(`✅ Workflow item updated in database`);
 
           if (oldItem && dependencyKey) {
             const updatedTickets = tickets.map((t) =>
@@ -2316,15 +2291,12 @@ export default function Settings({
 
       onDelete: async (id: string) => {
         try {
-          console.log(`🗑️ Deleting workflow item: ${listKey} - ${id}`);
           const { error } = await supabase
             .from("workflows")
             .delete()
             .eq("id", id);
 
           if (error) throw error;
-
-          console.log(`✅ Workflow item deleted from database`);
         } catch (err: any) {
           console.error("❌ Error deleting workflow item:", err);
           alert(`Failed to delete item: ${err.message}`);
