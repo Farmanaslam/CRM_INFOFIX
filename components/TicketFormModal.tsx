@@ -358,33 +358,18 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     }
   }, [currentUser, editingTicket]);
 
-  const availableStores = (() => {
-    // Admins & Managers → all stores
-    if (
-      currentUser.role === "SUPER_ADMIN" ||
-      currentUser.role === "ADMIN" ||
-      currentUser.role === "MANAGER"
-    ) {
-      return stores;
-    }
-
-    // Technicians
-    if (currentUser.role === "TECHNICIAN") {
-      // Try matching by storeId first
-      if (currentUser.storeId) {
-        const matched = stores.filter((s) => s.id === currentUser.storeId);
-        if (matched.length > 0) return matched;
-      }
-
-      // 🔥 FALLBACK: allow all stores if mapping missing
-      console.warn(
-        "Technician storeId missing or not matched. Showing all stores.",
-      );
-      return stores;
-    }
-
+  const availableStores = useMemo(() => {
+  if (
+    currentUser.role === "SUPER_ADMIN" ||
+    currentUser.role === "ADMIN" ||
+    currentUser.role === "MANAGER" ||
+    currentUser.role === "TECHNICIAN"
+  ) {
     return stores;
-  })();
+  }
+
+  return [];
+}, [currentUser.role, stores]);
 
   // Check if selected brand is a Service Brand
   const isServiceBrand = useMemo(() => {
@@ -632,47 +617,51 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         }
       }
 
-      const { data: lastTicket, error: lastErr } = await supabase
-        .from("tickets")
-        .select("id")
-        .like("id", "TKT-IF-%")
-        .order("id", { ascending: false })
-        .limit(1)
-        .single();
+     const { data: lastTicket, error: lastErr } = await supabase
+  .from("tickets")
+  .select("id")
+  .like("id", "TKT-IF-%")
+  .order("id", { ascending: false })
+  .limit(1)
+  .single();
 
-      if (lastErr && lastErr.code !== "PGRST116") throw lastErr;
+if (lastErr && lastErr.code !== "PGRST116") throw lastErr;
 
-      let nextNumber = 1;
-      if (lastTicket?.id) {
-        const match = lastTicket.id.match(/TKT-IF-(\d+)/);
-        if (match) nextNumber = parseInt(match[1], 10) + 1;
-      }
+let nextNumber = 1;
+if (lastTicket?.id) {
+  const match = lastTicket.id.match(/TKT-IF-(\d+)/);
+  if (match) nextNumber = parseInt(match[1], 10) + 1;
+}
 
-      const ticketId = `TKT-IF-${nextNumber.toString().padStart(3, "0")}`;
-      // ✅ ADD THIS CHECK - Verify the ID doesn't already exist
-      const { data: existingTicket } = await supabase
-        .from("tickets")
-        .select("id")
-        .eq("id", ticketId)
-        .maybeSingle();
+// Check if this ID already exists and find next available
+let finalNextNumber = nextNumber;
+let attempts = 0;
+const maxAttempts = 100;
 
-      // If ID exists, increment until we find an available one
-      let finalNextNumber = nextNumber;
-      while (
-        existingTicket &&
-        existingTicket.id ===
-          `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`
-      ) {
-        finalNextNumber++;
-        const { data: checkTicket } = await supabase
-          .from("tickets")
-          .select("id")
-          .eq("id", `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`)
-          .maybeSingle();
-        if (!checkTicket) break;
-      }
+while (attempts < maxAttempts) {
+  const candidateId = `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`;
+  
+  const { data: existingTicket } = await supabase
+    .from("tickets")
+    .select("id")
+    .eq("id", candidateId)
+    .maybeSingle();
+  
+  // If this ID doesn't exist, we found our ticket ID
+  if (!existingTicket) {
+    break;
+  }
+  
+  // ID exists, try next number
+  finalNextNumber++;
+  attempts++;
+}
 
-      const finalTicketId = `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`;
+if (attempts >= maxAttempts) {
+  throw new Error("Unable to generate unique ticket ID. Please try again.");
+}
+
+const finalTicketId = `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`;
 
       if (editingTicket) {
         const historyLogs: TicketHistory[] = [];
@@ -994,7 +983,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
             {
               type: "urgent",
               title: `🔴 URGENT: ${formData.deviceType} • ${formData.brand}`,
-              message: `New HIGH priority ticket created: ${ticketId}. Issue: ${formData.issueDescription}`,
+              message: `New HIGH priority ticket created: ${finalTicketId}. Issue: ${formData.issueDescription}`,
               userName: currentUser.name,
               userRole: currentUser.role,
               link: "tickets",
@@ -1030,7 +1019,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
         );
 
         const ticketPayload = {
-          ticketId: ticketId,
+          ticketId: finalTicketId,
           customerName: formData.name,
           customerEmail: formData.email,
           issueDescription: formData.issueDescription,

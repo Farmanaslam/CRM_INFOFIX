@@ -267,36 +267,36 @@ export default function CustomerPortal({
           throw error;
         }
       }
-
       if (finalData) {
         const newTicket: Ticket = {
-          id: data.id,
-          ticketId: data.id,
-          customerId: data.customer_id || currentUser.id,
-          name: data.name || currentUser.name,
-          email: data.email || currentUser.email,
-          number: data.mobile || currentUser.mobile || "",
-          address: data.address || currentUser.address || "",
-          date: new Date(data.created_at).toLocaleDateString(),
-          deviceType: data.device_type || deviceType,
-          issueDescription: data.subject || data.device_description || issue,
-          store: data.store || store,
-          status: data.status || "Pending Approval",
-          priority: data.priority || "Medium",
-          warranty: data.warranty === "YES" ? true : false,
-          estimatedAmount: data.amount_estimate,
-          holdReason: data.hold_reason,
-          brand: data.device_brand,
-          model: data.device_model,
+          id: finalData?.id,
+          ticketId: finalData?.id,
+          customerId: finalData?.customer_id || currentUser?.id,
+          name: finalData?.name || currentUser.name,
+          email: finalData?.email || currentUser.email,
+          number: finalData?.mobile || currentUser.mobile || "",
+          address: finalData?.address || currentUser.address || "",
+          date: new Date(finalData.created_at).toLocaleDateString(),
+          deviceType: finalData?.device_type || deviceType,
+          issueDescription:
+            finalData?.subject || finalData?.device_description || issue,
+          store: finalData?.store || store,
+          status: finalData?.status || "Pending Approval",
+          priority: finalData?.priority || "Medium",
+          warranty: finalData?.warranty === "YES" ? true : false,
+          estimatedAmount: finalData?.amount_estimate,
+          holdReason: finalData?.hold_reason,
+          brand: finalData?.device_brand,
+          model: finalData?.device_model,
           history: [
             {
-              id: data.id,
-              timestamp: new Date(data.created_at).getTime(),
-              date: new Date(data.created_at).toLocaleString(),
+              id: finalData.id,
+              timestamp: new Date(finalData.created_at).getTime(),
+              date: new Date(finalData.created_at).toLocaleString(),
               actorName: currentUser.name,
               actorRole: "CUSTOMER",
               action: "Ticket Created",
-              details: `Service request submitted for ${data.device_type}`,
+              details: `Service request submitted for ${finalData?.device_type || deviceType}`,
             },
           ],
         };
@@ -304,7 +304,7 @@ export default function CustomerPortal({
         await sendEmail(
           "TICKET_CREATED",
           {
-            ticketId: ticketId,
+            ticketId: finalData?.id || ticketId,
             customerName: currentUser.name,
             customerEmail: currentUser.email,
             issueDescription: issue,
