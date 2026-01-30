@@ -157,7 +157,7 @@ export default function CustomerPortal({
 
   const [deviceType, setDeviceType] = useState("Laptop");
   const [issue, setIssue] = useState("");
-  const [store, setStore] = useState(settings.stores[0]?.name || "");
+  const [store, setStore] = useState(settings.stores[0]?.name);
   const [isLoading, setIsLoading] = useState(false);
   // --- FILTERING LOGIC ---
   const myTickets = useMemo(() => {
