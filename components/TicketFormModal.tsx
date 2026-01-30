@@ -359,17 +359,17 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
   }, [currentUser, editingTicket]);
 
   const availableStores = useMemo(() => {
-  if (
-    currentUser.role === "SUPER_ADMIN" ||
-    currentUser.role === "ADMIN" ||
-    currentUser.role === "MANAGER" ||
-    currentUser.role === "TECHNICIAN"
-  ) {
-    return stores;
-  }
+    if (
+      currentUser.role === "SUPER_ADMIN" ||
+      currentUser.role === "ADMIN" ||
+      currentUser.role === "MANAGER" ||
+      currentUser.role === "TECHNICIAN"
+    ) {
+      return stores;
+    }
 
-  return [];
-}, [currentUser.role, stores]);
+    return [];
+  }, [currentUser.role, stores]);
 
   // Check if selected brand is a Service Brand
   const isServiceBrand = useMemo(() => {
@@ -617,51 +617,53 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         }
       }
 
-     const { data: lastTicket, error: lastErr } = await supabase
-  .from("tickets")
-  .select("id")
-  .like("id", "TKT-IF-%")
-  .order("id", { ascending: false })
-  .limit(1)
-  .single();
+      const { data: lastTicket, error: lastErr } = await supabase
+        .from("tickets")
+        .select("id")
+        .like("id", "TKT-IF-%")
+        .order("id", { ascending: false })
+        .limit(1)
+        .single();
 
-if (lastErr && lastErr.code !== "PGRST116") throw lastErr;
+      if (lastErr && lastErr.code !== "PGRST116") throw lastErr;
 
-let nextNumber = 1;
-if (lastTicket?.id) {
-  const match = lastTicket.id.match(/TKT-IF-(\d+)/);
-  if (match) nextNumber = parseInt(match[1], 10) + 1;
-}
+      let nextNumber = 1;
+      if (lastTicket?.id) {
+        const match = lastTicket.id.match(/TKT-IF-(\d+)/);
+        if (match) nextNumber = parseInt(match[1], 10) + 1;
+      }
 
-// Check if this ID already exists and find next available
-let finalNextNumber = nextNumber;
-let attempts = 0;
-const maxAttempts = 100;
+      // Check if this ID already exists and find next available
+      let finalNextNumber = nextNumber;
+      let attempts = 0;
+      const maxAttempts = 100;
 
-while (attempts < maxAttempts) {
-  const candidateId = `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`;
-  
-  const { data: existingTicket } = await supabase
-    .from("tickets")
-    .select("id")
-    .eq("id", candidateId)
-    .maybeSingle();
-  
-  // If this ID doesn't exist, we found our ticket ID
-  if (!existingTicket) {
-    break;
-  }
-  
-  // ID exists, try next number
-  finalNextNumber++;
-  attempts++;
-}
+      while (attempts < maxAttempts) {
+        const candidateId = `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`;
 
-if (attempts >= maxAttempts) {
-  throw new Error("Unable to generate unique ticket ID. Please try again.");
-}
+        const { data: existingTicket } = await supabase
+          .from("tickets")
+          .select("id")
+          .eq("id", candidateId)
+          .maybeSingle();
 
-const finalTicketId = `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`;
+        // If this ID doesn't exist, we found our ticket ID
+        if (!existingTicket) {
+          break;
+        }
+
+        // ID exists, try next number
+        finalNextNumber++;
+        attempts++;
+      }
+
+      if (attempts >= maxAttempts) {
+        throw new Error(
+          "Unable to generate unique ticket ID. Please try again.",
+        );
+      }
+
+      const finalTicketId = `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`;
 
       if (editingTicket) {
         const historyLogs: TicketHistory[] = [];
