@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Ticket, User, AppSettings, TicketHistory } from "../types";
 import {
   Plus,
@@ -157,7 +157,9 @@ export default function CustomerPortal({
 
   const [deviceType, setDeviceType] = useState("Laptop");
   const [issue, setIssue] = useState("");
-  const [store, setStore] = useState(settings.stores[0]?.name);
+  const [store, setStore] = useState(
+    settings.stores[0]?.name || "No Store Selected",
+  );
   const [isLoading, setIsLoading] = useState(false);
   // --- FILTERING LOGIC ---
   const myTickets = useMemo(() => {
@@ -165,6 +167,11 @@ export default function CustomerPortal({
       .filter((t) => t.email.toLowerCase() === currentUser.email.toLowerCase())
       .sort((a, b) => b.id.localeCompare(a.id));
   }, [tickets, currentUser.email]);
+  useEffect(() => {
+    if (!store && settings.stores?.length > 0) {
+      setStore(settings.stores[0].name);
+    }
+  }, [settings.stores]);
 
   const filteredTickets = useMemo(() => {
     return myTickets.filter((ticket) => {
@@ -357,7 +364,7 @@ export default function CustomerPortal({
         );
         setIsModalOpen(false);
         setIssue("");
-        setDeviceType("Smartphone");
+        setDeviceType("Laptop");
         setStore(settings.stores[0]?.name || "");
 
         alert("Ticket created successfully! Status: Pending Approval");
