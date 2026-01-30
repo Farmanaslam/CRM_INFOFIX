@@ -166,7 +166,7 @@ export default function CustomerPortal({
       .filter((t) => t.email.toLowerCase() === currentUser.email.toLowerCase())
       .sort((a, b) => b.id.localeCompare(a.id));
   }, [tickets, currentUser.email]);
- 
+
   const filteredTickets = useMemo(() => {
     return myTickets.filter((ticket) => {
       const matchesSearch =
@@ -911,11 +911,10 @@ export default function CustomerPortal({
                     onChange={(e) => setStore(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 appearance-none cursor-pointer"
                   >
-                      <option value="" disabled>
-    Choose Store
-  </option>
+                    <option value="" disabled>
+                      Choose Store
+                    </option>
                     {settings.stores.map((s) => (
-                      
                       <option key={s.id} value={s.name}>
                         {s.name}
                       </option>
