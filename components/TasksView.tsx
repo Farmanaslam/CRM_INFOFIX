@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   CheckCircle2,
   Trash2,
@@ -47,11 +47,86 @@ export default function TasksView({
   const [chartView, setChartView] = useState<"monthly" | "yearly">("monthly");
   const [quickTaskTitle, setQuickTaskTitle] = useState("");
 
+  useEffect(() => {
+    const loadTasksFromDB = async () => {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .order("task_date", { ascending: false });
+
+      if (!error && data) {
+        const mappedTasks = data.map(mapDbTask);
+        setTasks(mappedTasks);
+      }
+    };
+
+    loadTasksFromDB();
+
+    const subscription = supabase
+      .channel("tasks_realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tasks",
+        },
+        (payload) => {
+          if (payload.eventType === "UPDATE" && payload.new) {
+            const updatedTask = mapDbTask(payload.new);
+            setTasks(
+              tasks.map((t) => (t.id === updatedTask.id ? updatedTask : t)),
+            ); // ✅ FIXED
+          } else if (payload.eventType === "INSERT" && payload.new) {
+            const newTask = mapDbTask(payload.new);
+            setTasks([newTask, ...tasks]); // ✅ FIXED
+          } else if (payload.eventType === "DELETE" && payload.old) {
+            setTasks(tasks.filter((t) => t.id !== payload.old.id)); // ✅ FIXED
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [tasks, setTasks]); // ✅ ADD DEPENDENCIES
+
   const isAdmin =
     currentUser.role === "SUPER_ADMIN" ||
     currentUser.role === "ADMIN" ||
     currentUser.role === "MANAGER";
 
+  function mapDbTask(db: any): Task {
+    return {
+      id: db.id,
+      title: db.title,
+      date: db.task_date,
+      time: db.task_time,
+      description: db.description,
+      technicianNote: db.technician_note,
+      type: db.type,
+      assignedToId: db.assigned_to,
+      createdBy: db.created_by,
+      status: db.status,
+      priority: db.priority,
+      history: (() => {
+        try {
+          if (!db.history) return [];
+          if (typeof db.history === "string") {
+            const trimmed = db.history.trim();
+            if (trimmed === "" || trimmed === "null") return [];
+            return JSON.parse(trimmed);
+          }
+          if (Array.isArray(db.history)) return db.history;
+          return [];
+        } catch (e) {
+          console.warn(`Failed to parse history for task ${db.id}:`, e);
+          return [];
+        }
+      })(),
+    };
+  }
   // --- DERIVED DATA & PERMISSIONS ---
   const accessibleMembers = useMemo(() => {
     if (currentUser.role === "SUPER_ADMIN") {
@@ -374,26 +449,40 @@ export default function TasksView({
     const task = tasks.find((t) => t.id === id);
     if (!task) return;
 
-    const updatedTask = {
-      ...task,
-      status: task.status === "completed" ? "pending" : "completed",
-    } as Task;
+    const newStatus = task.status === "completed" ? "pending" : "completed";
 
-    // ✅ Save to Supabase
-    const savedTask = await saveTaskToSupabase(updatedTask);
+    const newHistoryEntry = {
+      id: Date.now().toString() + Math.random().toString().slice(2, 5),
+      date: new Date().toLocaleString(),
+      timestamp: Date.now(),
+      actorName: currentUser.name,
+      actorRole: currentUser.role,
+      action: "Status Changed",
+      details: `Status changed from "${task.status}" to "${newStatus}" by ${currentUser.name} (${currentUser.role})`,
+    };
 
-    if (savedTask) {
-      setTasks(
-        tasks.map((t) =>
-          t.id === id
-            ? {
-                ...t,
-                status: t.status === "completed" ? "pending" : "completed",
-              }
-            : t,
-        ),
-      );
-    } else {
+    const updatedHistory = [...(task.history || []), newHistoryEntry];
+
+    try {
+      const { data, error } = await supabase
+        .from("tasks")
+        .update({
+          status: newStatus,
+          history: JSON.stringify(updatedHistory),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (!error && data) {
+        const mappedTask = mapDbTask(data);
+        setTasks(tasks.map((t) => (t.id === id ? mappedTask : t)));
+      } else {
+        alert("Failed to update task. Please try again.");
+      }
+    } catch (err) {
+      console.error("Error toggling task:", err);
       alert("Failed to update task. Please try again.");
     }
   };

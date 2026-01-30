@@ -122,7 +122,50 @@ export default function Schedule({
     "November",
     "December",
   ];
+  useEffect(() => {
+    const loadTasksFromDB = async () => {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .order("task_date", { ascending: true });
 
+      if (!error && data) {
+        const mappedTasks = data.map(mapDbTask);
+        setTasks(mappedTasks);
+      }
+    };
+
+    loadTasksFromDB();
+
+    const subscription = supabase
+      .channel("tasks_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tasks",
+        },
+        (payload) => {
+          if (payload.eventType === "INSERT" && payload.new) {
+            const newTask = mapDbTask(payload.new);
+            setTasks([...tasks, newTask]); // ✅ FIXED
+          } else if (payload.eventType === "UPDATE" && payload.new) {
+            const updatedTask = mapDbTask(payload.new);
+            setTasks(
+              tasks.map((t) => (t.id === updatedTask.id ? updatedTask : t)),
+            ); // ✅ FIXED
+          } else if (payload.eventType === "DELETE" && payload.old) {
+            setTasks(tasks.filter((t) => t.id !== payload.old.id)); // ✅ FIXED
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [tasks, setTasks]); // ✅ ADD DEPENDENCIES
   const events = useMemo(() => {
     const allEvents: CalendarEvent[] = [];
 
@@ -399,7 +442,7 @@ export default function Schedule({
         historyLogs.push(
           createHistoryEntry(
             "Title Updated",
-            `Title changed from "${editingTask.title}" to "${task.title}"`,
+            `Title changed from "${editingTask.title}" to "${task.title}" by ${currentUser.name} (${currentUser.role})`,
           ),
         );
       }
@@ -408,7 +451,7 @@ export default function Schedule({
         historyLogs.push(
           createHistoryEntry(
             "Schedule Changed",
-            `Date/Time changed from ${editingTask.date} ${editingTask.time || ""} to ${task.date} ${task.time || ""}`,
+            `Date/Time changed from ${editingTask.date} ${editingTask.time || ""} to ${task.date} ${task.time || ""} by ${currentUser.name} (${currentUser.role})`,
           ),
         );
       }
@@ -459,7 +502,7 @@ export default function Schedule({
         historyLogs.push(
           createHistoryEntry(
             "Status Updated",
-            `Status changed from ${editingTask.status} to ${task.status}`,
+            `Status changed from ${editingTask.status} to ${task.status} by ${currentUser.name} (${currentUser.role})`,
           ),
         );
       }
@@ -936,6 +979,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
       setActiveTab("details"); // ✅ RESET TO DETAILS
     }
   }, [taskToEdit, initialDate, currentUser]);
+
   const isAdmin =
     currentUser.role === "SUPER_ADMIN" ||
     currentUser.role === "ADMIN" ||

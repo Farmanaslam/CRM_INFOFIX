@@ -108,15 +108,45 @@ export default function TaskManager({
       const { data, error } = await supabase
         .from("tasks")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("task_date", { ascending: false });
 
       if (!error && data) {
-        setTasks(data.map(mapDbTask));
+        const mappedTasks = data.map(mapDbTask);
+        setTasks(mappedTasks);
       }
     };
 
     loadTasks();
-  }, []);
+
+    const subscription = supabase
+      .channel("task_manager_updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tasks",
+        },
+        (payload) => {
+          if (payload.eventType === "UPDATE" && payload.new) {
+            const updatedTask = mapDbTask(payload.new);
+            setTasks(
+              tasks.map((t) => (t.id === updatedTask.id ? updatedTask : t)),
+            ); // ✅ FIXED
+          } else if (payload.eventType === "INSERT" && payload.new) {
+            const newTask = mapDbTask(payload.new);
+            setTasks([newTask, ...tasks]); // ✅ FIXED
+          } else if (payload.eventType === "DELETE" && payload.old) {
+            setTasks(tasks.filter((t) => t.id !== payload.old.id)); // ✅ FIXED
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [tasks, setTasks]); // ✅ ADD DEPENDENCIES
   function mapDbTask(db: any): Task {
     return {
       id: db.id,
@@ -130,9 +160,23 @@ export default function TaskManager({
       createdBy: db.created_by,
       status: db.status,
       priority: db.priority,
+      history: (() => {
+        try {
+          if (!db.history) return [];
+          if (typeof db.history === "string") {
+            const trimmed = db.history.trim();
+            if (trimmed === "" || trimmed === "null") return [];
+            return JSON.parse(trimmed);
+          }
+          if (Array.isArray(db.history)) return db.history;
+          return [];
+        } catch (e) {
+          console.warn(`Failed to parse history for task ${db.id}:`, e);
+          return [];
+        }
+      })(),
     };
   }
-
   const stats = useMemo(() => {
     const total = tasks.length;
     const completed = tasks.filter((t) => t.status === "completed").length;
