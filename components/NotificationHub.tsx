@@ -492,9 +492,14 @@ export default function NotificationHub({
                         </h4>
 
                         {isAdmin && note.userName && (
-                          <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
-                            <User size={8} /> {note.userName.split(" ")[0]}
-                          </span>
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
+                              <User size={8} /> {note.userName.split(" ")[0]}
+                            </span>
+                            <span className="text-[8px] font-medium text-slate-400 capitalize">
+                              ({note.userRole?.toLowerCase().replace("_", " ")})
+                            </span>
+                          </div>
                         )}
                       </div>
 

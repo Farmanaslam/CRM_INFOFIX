@@ -85,12 +85,42 @@ export default function Reports({
   const [memberFilter, setMemberFilter] = useState<string>("All");
   const [isExporting, setIsExporting] = useState(false);
 
+  // --- DATE HELPERS ---
+  // --- DATE HELPERS ---
+  const safeDate = (value?: string) => {
+    if (!value) return null;
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  // Parse DD/MM/YYYY format to proper Date object
+  const parseTicketDate = (dateStr?: string) => {
+    if (!dateStr) return null;
+
+    // Check if it's in DD/MM/YYYY format
+    const parts = dateStr.split("/");
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+      const year = parseInt(parts[2], 10);
+
+      const d = new Date(year, month, day);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // Fallback to regular parsing
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
+  };
   // --- HELPER FUNCTIONS ---
   const calculateDaysDiff = (date1: string, date2: string) => {
-    const d1 = new Date(date1);
-    const d2 = new Date(date2);
-    const diffTime = Math.abs(d2.getTime() - d1.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const d1 = parseTicketDate(date1);
+    const d2 = parseTicketDate(date2);
+
+    if (!d1 || !d2) return 0;
+
+    const diffMs = d2.getTime() - d1.getTime();
+    return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
   };
 
   // --- DATA PROCESSING ---
@@ -106,10 +136,8 @@ export default function Reports({
       startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
     return tickets.filter((ticket) => {
-      const ticketDate = new Date(ticket.date);
-      // Date Check
-      if (ticketDate < startDate) return false;
-
+      const ticketDate = parseTicketDate(ticket.date);
+      if (!ticketDate || ticketDate < startDate) return false;
       // Store Check
       if (storeFilter !== "All" && ticket.store !== storeFilter) return false;
 
@@ -207,10 +235,10 @@ export default function Reports({
     const trendMap: Record<string, { date: string; tickets: number }> = {};
 
     filteredData.forEach((t) => {
-      const d = new Date(t.date);
+      const d = parseTicketDate(t.date);
 
       // Skip invalid dates
-      if (isNaN(d.getTime())) {
+      if (!d) {
         console.warn(`Invalid date found in ticket: ${t.id}, date: ${t.date}`);
         return;
       }
