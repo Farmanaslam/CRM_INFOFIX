@@ -1784,22 +1784,13 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                           }
                           className={`w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none text-slate-700 ${
                             currentUser.role === "TECHNICIAN"
-                              ? "cursor-not-allowed opacity-70"
+                              ? "cursor-pointer opacity-70"
                               : "cursor-pointer"
                           }`}
                         >
                           <option value="">-- Unassigned --</option>
                           {(() => {
-                            // For technicians, auto-assign to themselves
-                            if (currentUser.role === "TECHNICIAN") {
-                              return (
-                                <option value={currentUser.id}>
-                                  {currentUser.name} (You)
-                                </option>
-                              );
-                            }
-
-                            // For admins/managers, show all technicians
+                            // For admins/managers/technicians, show all technicians
                             return technicians.map((t) => (
                               <option key={t.id} value={t.id}>
                                 {t.name} ({t.role})

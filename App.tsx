@@ -370,7 +370,6 @@ function App() {
     fetchTeamData();
   }, [currentUser, fetchTeamData]);
 
-  // Health check to determine actual Supabase connectivity
   useEffect(() => {
     const checkSupabaseConnection = async () => {
       if (!supabase) {
