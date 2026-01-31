@@ -191,25 +191,52 @@ export default function CustomerPortal({
     ).length,
     resolved: myTickets.filter((t) => t.status === "Resolved").length,
   };
+  // ✅ FIXED: Sequential ID generator matching staff-side logic
   const getNextTicketIdForCustomer = async (): Promise<string> => {
     const { data, error } = await supabase
       .from("tickets")
       .select("id")
       .like("id", "TKT-IF-%")
-      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (error) {
+    if (error && error.code !== "PGRST116") {
       console.error("Failed to fetch last ticket ID", error);
       throw error;
     }
 
-    const lastId = data?.id || "TKT-IF-000";
-    const match = lastId.match(/TKT-IF-(\d+)/);
+    let nextNumber = 1;
+    if (data?.id) {
+      const match = data.id.match(/TKT-IF-(\d+)/);
+      if (match) {
+        nextNumber = parseInt(match[1], 10) + 1;
+      }
+    }
 
-    const nextNumber = match ? parseInt(match[1], 10) + 1 : 1;
-    return `TKT-IF-${nextNumber}`;
+    // ✅ Check for duplicates and find next available ID
+    let finalNextNumber = nextNumber;
+    let attempts = 0;
+    const maxAttempts = 100;
+
+    while (attempts < maxAttempts) {
+      const candidateId = `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`;
+
+      const { data: existingTicket } = await supabase
+        .from("tickets")
+        .select("id")
+        .eq("id", candidateId)
+        .maybeSingle();
+
+      if (!existingTicket) {
+        return candidateId; // ✅ Found available ID
+      }
+
+      finalNextNumber++;
+      attempts++;
+    }
+
+    throw new Error("Unable to generate unique ticket ID. Please try again.");
   };
   // --- HANDLERS ---
   const handleSubmit = async (e: React.FormEvent) => {
@@ -226,7 +253,7 @@ export default function CustomerPortal({
       // ✅ FETCH CUSTOMER MOBILE FROM DATABASE
       const { data: customerData, error: customerError } = await supabase
         .from("customers")
-        .select("mobile, phone")
+        .select("mobile, phone, auth_id")
         .eq("email", currentUser.email)
         .single();
 
@@ -236,8 +263,8 @@ export default function CustomerPortal({
         setIsLoading(false);
         return;
       }
-      const customerMobile = customerData.mobile || customerData.phone;
 
+      const customerMobile = customerData.mobile || customerData.phone;
       if (!customerMobile) {
         alert(
           "Your account is missing a mobile number. Please contact support.",
@@ -246,17 +273,17 @@ export default function CustomerPortal({
         return;
       }
 
+      // ✅ GENERATE PROPER SEQUENTIAL ID
       const ticketId = await getNextTicketIdForCustomer();
-
       const now = new Date().toISOString();
 
       const ticketData = {
-        id: ticketId,
+        id: ticketId, // ✅ Use generated ID, not timestamp
         customer_id: currentUser.id,
         subject: issue,
         status: "Pending Approval",
         hold_reason: null,
-        priority: "MEDIUM",
+        priority: "Medium",
         assigned_to: null,
         created_at: now,
         resolved_at: null,
@@ -274,79 +301,114 @@ export default function CustomerPortal({
         scheduled_date: null,
         internal_progress_reason: null,
         internal_progress_note: null,
-        user_id: currentUser.id,
+        user_id: customerData.auth_id || currentUser.id,
         address: currentUser.address || null,
         name: currentUser.name,
         email: currentUser.email,
         mobile: customerMobile,
         zone_id: null,
+        history: JSON.stringify([
+          {
+            id: ticketId,
+            timestamp: Date.now(),
+            date: new Date().toLocaleString(),
+            actorName: currentUser.name,
+            actorRole: "CUSTOMER",
+            action: "Ticket Created",
+            details: `Service request submitted for ${deviceType}`,
+          },
+        ]),
       };
 
+      // ✅ TRY INSERT WITH CONFLICT HANDLING
       const { data, error } = await supabase
         .from("tickets")
         .insert([ticketData])
         .select()
-        .single();
-
-      let finalData = data;
+        .maybeSingle();
 
       if (error) {
-        console.error("Error creating ticket:", error);
-        if (error.message.includes("duplicate key")) {
-          const fallbackId = `TKT-${Date.now()}`;
-          const { data: fallbackData, error: fallbackError } = await supabase
+        // ✅ HANDLE DUPLICATE KEY ERROR
+        if (error.code === "23505") {
+          console.warn("⚠️ Duplicate ticket ID detected, retrying...");
+
+          // Retry with new ID
+          const retryId = await getNextTicketIdForCustomer();
+          const retryData = { ...ticketData, id: retryId };
+
+          const { data: retryResult, error: retryError } = await supabase
             .from("tickets")
-            .insert([{ ...ticketData, id: fallbackId }])
+            .insert([retryData])
             .select()
             .single();
 
-          if (fallbackError) throw fallbackError;
-          finalData = fallbackData;
-        } else {
-          throw error;
+          if (retryError) throw retryError;
+
+          const newTicket: Ticket = {
+            id: retryResult.id,
+            ticketId: retryResult.id,
+            customerId: retryResult.customer_id || currentUser.id,
+            name: retryResult.name || currentUser.name,
+            email: retryResult.email || currentUser.email,
+            number: retryResult.mobile ?? "",
+            address: retryResult.address || currentUser.address || "",
+            date: new Date(retryResult.created_at).toLocaleDateString(),
+            deviceType: retryResult.device_type || deviceType,
+            issueDescription: retryResult.subject || issue,
+            store: retryResult.store ?? "",
+            status: retryResult.status || "Pending Approval",
+            priority: retryResult.priority || "Medium",
+            warranty: retryResult.warranty === "YES",
+            estimatedAmount: retryResult.amount_estimate,
+            holdReason: retryResult.hold_reason,
+            brand: retryResult.device_brand,
+            model: retryResult.device_model,
+            history: JSON.parse(retryResult.history || "[]"),
+          };
+
+          setTickets([newTicket, ...tickets]);
+          setIsModalOpen(false);
+          setIssue("");
+          setDeviceType("Laptop");
+          setStore(settings.stores[0]?.name || "");
+          alert(
+            `Ticket ${retryResult.id} created successfully! Status: Pending Approval`,
+          );
+          return;
         }
+
+        throw error;
       }
-      if (finalData) {
+
+      if (data) {
         const newTicket: Ticket = {
-          id: finalData?.id,
-          ticketId: finalData?.id,
-          customerId: finalData?.customer_id || currentUser?.id,
-          name: finalData?.name || currentUser.name,
-          email: finalData?.email || currentUser.email,
-          number: finalData?.mobile ?? "",
-          mobile: finalData?.mobile || currentUser.mobile || "",
-          address: finalData?.address || currentUser.address || "",
-          date: new Date(finalData.created_at).toLocaleDateString(),
-          deviceType: finalData.device_type || deviceType,
-
-          issueDescription:
-            finalData?.subject || finalData?.device_description || issue,
-          store: finalData?.store ?? "",
-
-          status: finalData?.status || "Pending Approval",
-          priority: finalData?.priority || "Medium",
-          warranty: finalData?.warranty === "YES" ? true : false,
-          estimatedAmount: finalData?.amount_estimate,
-          holdReason: finalData?.hold_reason,
-          brand: finalData?.device_brand,
-          model: finalData?.device_model,
-          history: [
-            {
-              id: finalData.id,
-              timestamp: new Date(finalData.created_at).getTime(),
-              date: new Date(finalData.created_at).toLocaleString(),
-              actorName: currentUser.name,
-              actorRole: "CUSTOMER",
-              action: "Ticket Created",
-              details: `Service request submitted for ${finalData?.device_type || deviceType}`,
-            },
-          ],
+          id: data.id,
+          ticketId: data.id,
+          customerId: data.customer_id || currentUser.id,
+          name: data.name || currentUser.name,
+          email: data.email || currentUser.email,
+          number: data.mobile ?? "",
+          address: data.address || currentUser.address || "",
+          date: new Date(data.created_at).toLocaleDateString(),
+          deviceType: data.device_type || deviceType,
+          issueDescription: data.subject || issue,
+          store: data.store ?? "",
+          status: data.status || "Pending Approval",
+          priority: data.priority || "Medium",
+          warranty: data.warranty === "YES",
+          estimatedAmount: data.amount_estimate,
+          holdReason: data.hold_reason,
+          brand: data.device_brand,
+          model: data.device_model,
+          history: JSON.parse(data.history || "[]"),
         };
+
         setTickets([newTicket, ...tickets]);
+
         await sendEmail(
           "TICKET_CREATED",
           {
-            ticketId: finalData?.id || ticketId,
+            ticketId: data.id,
             customerName: currentUser.name,
             customerEmail: currentUser.email,
             issueDescription: issue,
@@ -356,17 +418,18 @@ export default function CustomerPortal({
           },
           null,
         );
+
         setIsModalOpen(false);
         setIssue("");
         setDeviceType("Laptop");
         setStore(settings.stores[0]?.name || "");
-
-        alert("Ticket created successfully! Status: Pending Approval");
+        alert(
+          `Ticket ${data.id} created successfully! Status: Pending Approval`,
+        );
       }
-      console.log("Customer mobile:", currentUser.mobile);
     } catch (error: any) {
-      console.error("Error:", error);
-      alert(error.message || "Failed to create ticket");
+      console.error("❌ Error creating ticket:", error);
+      alert(error.message || "Failed to create ticket. Please try again.");
     } finally {
       setIsLoading(false);
     }
