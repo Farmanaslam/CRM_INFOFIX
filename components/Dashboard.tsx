@@ -86,7 +86,10 @@ const Dashboard: React.FC<DashboardProps> = ({
     );
   }, [selectedZoneId, settings.zones]);
 
-  const isSystemBlank = tickets.length === 0;
+  const isSystemBlank =
+    tickets.length === 0 &&
+    settings.zones.length === 0 &&
+    settings.stores.length === 0;
 
   // --- STATS ENGINE ---
 
@@ -94,14 +97,19 @@ const Dashboard: React.FC<DashboardProps> = ({
     const activeTickets = zoneFilteredTickets.filter(
       (t) => t.status !== "Resolved" && t.status !== "Rejected",
     );
-    const today = new Date().toDateString();
-    const resolvedToday = zoneFilteredTickets.filter(
-      (t) =>
-        t.status === "Resolved" &&
-        (t.resolvedAt
-          ? new Date(t.resolvedAt).toDateString() === today
-          : new Date(t.date).toDateString() === today),
-    ).length;
+    const resolvedToday = zoneFilteredTickets.filter((t) => {
+      if (t.status !== "Resolved") return false;
+      if (!t.resolvedAt) return false;
+
+      const resolved = new Date(t.resolvedAt);
+      const today = new Date();
+
+      // normalize both to start of day (LOCAL)
+      resolved.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+
+      return resolved.getTime() === today.getTime();
+    }).length;
 
     // SLA Overdue Calculation
     const overdueCount = activeTickets.filter((t) => {
@@ -114,7 +122,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       return diffDays > allowedDays;
     }).length;
 
-    // Strict Zonal Customer Filter: Identify unique customers present in the current zone's ticket list
+    // Strict Zonal Customer Filter
     const customerIdsInZone = new Set(
       zoneFilteredTickets.map((t) => t.customerId),
     );
