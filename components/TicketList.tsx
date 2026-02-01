@@ -318,70 +318,83 @@ const TicketList: React.FC<TicketListProps> = ({
   const normalize = (value?: string) => value?.toString().toLowerCase() || "";
 
   const filteredTickets = useMemo(() => {
-    return zoneFilteredTickets.filter((ticket) => {
-      // 1. Text Search
-      const search = searchTerm.trim().toLowerCase();
+    return zoneFilteredTickets
+      .filter((ticket) => {
+        // 1. Text Search
+        const search = searchTerm.trim().toLowerCase();
 
-      const matchesSearch =
-        search === "" ||
-        normalize(ticket.issueDescription).includes(search) ||
-        normalize(ticket.name).includes(search) ||
-        normalize(ticket.brand).includes(search) ||
-        normalize(ticket.model).includes(search) ||
-        normalize(ticket.deviceType).includes(search) ||
-        normalize(ticket.store).includes(search);
+        const matchesSearch =
+          search === "" ||
+          normalize(ticket.id).includes(search) ||
+          normalize(ticket.ticketId).includes(search) ||
+          normalize(ticket.number).includes(search) ||
+          normalize(ticket.issueDescription).includes(search) ||
+          normalize(ticket.name).includes(search) ||
+          normalize(ticket.brand).includes(search) ||
+          normalize(ticket.model).includes(search) ||
+          normalize(ticket.deviceType).includes(search) ||
+          normalize(ticket.store).includes(search);
+        // 2. Assignee Filter
+        const matchesAssignee =
+          filterAssignee === "all" || ticket.assignedToId === filterAssignee;
 
-      // 2. Assignee Filter
-      const matchesAssignee =
-        filterAssignee === "all" || ticket.assignedToId === filterAssignee;
+        // 3. Store Filter
+        const matchesStore =
+          filterStore === "all" || ticket.store === filterStore;
 
-      // 3. Store Filter
-      const matchesStore =
-        filterStore === "all" || ticket.store === filterStore;
+        // 4. Status Filter
+        const matchesStatus =
+          filterStatus === "all" || ticket.status === filterStatus;
 
-      // 4. Status Filter
-      const matchesStatus =
-        filterStatus === "all" || ticket.status === filterStatus;
+        // 5. Priority Filter
+        const matchesPriority =
+          filterPriority === "all" || ticket.priority === filterPriority;
 
-      // 5. Priority Filter
-      const matchesPriority =
-        filterPriority === "all" || ticket.priority === filterPriority;
+        // 6. Device Type Filter
+        const matchesDevice =
+          filterDevice === "all" || ticket.deviceType === filterDevice;
 
-      // 6. Device Type Filter
-      const matchesDevice =
-        filterDevice === "all" || ticket.deviceType === filterDevice;
+        // 7. Date Range Filter
+        let matchesDate = true;
+        if (filterStartDate || filterEndDate) {
+          const ticketDate = new Date(ticket.date);
 
-      // 7. Date Range Filter
-      let matchesDate = true;
-      if (filterStartDate || filterEndDate) {
-        const ticketDate = new Date(ticket.date);
+          if (!isNaN(ticketDate.getTime())) {
+            ticketDate.setHours(0, 0, 0, 0);
 
-        if (!isNaN(ticketDate.getTime())) {
-          ticketDate.setHours(0, 0, 0, 0);
-
-          if (filterStartDate) {
-            const start = new Date(filterStartDate);
-            start.setHours(0, 0, 0, 0);
-            if (ticketDate < start) matchesDate = false;
-          }
-          if (filterEndDate && matchesDate) {
-            const end = new Date(filterEndDate);
-            end.setHours(23, 59, 59, 999);
-            if (ticketDate > end) matchesDate = false;
+            if (filterStartDate) {
+              const start = new Date(filterStartDate);
+              start.setHours(0, 0, 0, 0);
+              if (ticketDate < start) matchesDate = false;
+            }
+            if (filterEndDate && matchesDate) {
+              const end = new Date(filterEndDate);
+              end.setHours(23, 59, 59, 999);
+              if (ticketDate > end) matchesDate = false;
+            }
           }
         }
-      }
 
-      return (
-        matchesSearch &&
-        matchesAssignee &&
-        matchesStore &&
-        matchesStatus &&
-        matchesPriority &&
-        matchesDevice &&
-        matchesDate
-      );
-    });
+        return (
+          matchesSearch &&
+          matchesAssignee &&
+          matchesStore &&
+          matchesStatus &&
+          matchesPriority &&
+          matchesDevice &&
+          matchesDate
+        );
+      })
+      .sort((a, b) => {
+        // Extract ticket number from ID (e.g., "TKT-IF-208" -> 208)
+        const getTicketNumber = (id: string) => {
+          const match = id.match(/\d+$/);
+          return match ? parseInt(match[0], 10) : 0;
+        };
+
+        // Sort by ticket ID descending (newest/highest number first)
+        return getTicketNumber(b.id) - getTicketNumber(a.id);
+      });
   }, [
     zoneFilteredTickets,
     searchTerm,
@@ -487,9 +500,7 @@ const TicketList: React.FC<TicketListProps> = ({
               type="text"
               placeholder="Search tickets by ID, Name, Mobile..."
               value={searchTerm}
-              onChange={(e) =>
-                setSearchTerm(e.target.value.trim().toLowerCase())
-              }
+              onChange={(e) => setSearchTerm(e.target.value.toLowerCase())}
               className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none shadow-sm text-slate-700"
             />
           </div>
