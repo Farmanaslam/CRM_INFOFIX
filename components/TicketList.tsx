@@ -262,6 +262,68 @@ const DeleteConfirmationModal: React.FC<{
   );
 };
 
+
+// Add this helper function to parse DD/MM/YYYY dates from ticket history
+const parseTicketDateFromHistory = (ticket: Ticket): Date | null => {
+  // Try to get date from history first (most accurate)
+  if (ticket.history && Array.isArray(ticket.history) && ticket.history.length > 0) {
+    try {
+      const creationEntry = ticket.history.find((h: any) => 
+        h.action === "Ticket Created"
+      );
+      
+      if (creationEntry && creationEntry.date) {
+        // Extract date from format "01/02/2026, 19:27:44"
+        const datePart = creationEntry.date.split(',')[0].trim();
+        const parts = datePart.split("/");
+        
+        if (parts.length === 3) {
+          const day = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10) - 1;
+          const year = parseInt(parts[2], 10);
+          
+          if (day <= 31 && month <= 11) {
+            const d = new Date(year, month, day);
+            if (!isNaN(d.getTime())) return d;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse history date');
+    }
+  }
+
+  // Fallback to parsing ticket.date
+  if (!ticket.date) return null;
+
+  // Try DD/MM/YYYY format
+  let parts = ticket.date.split("/");
+  if (parts.length === 3) {
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+
+    if (day <= 31 && month <= 11) {
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+
+  // Try M/D/YYYY format
+  parts = ticket.date.split("/");
+  if (parts.length === 3) {
+    const month = parseInt(parts[0], 10) - 1;
+    const day = parseInt(parts[1], 10);
+    const year = parseInt(parts[2], 10);
+
+    if (day <= 31 && month <= 11) {
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+
+  return null;
+};
 // --- MAIN COMPONENT ---
 
 const TicketList: React.FC<TicketListProps> = ({
@@ -355,25 +417,31 @@ const TicketList: React.FC<TicketListProps> = ({
           filterDevice === "all" || ticket.deviceType === filterDevice;
 
         // 7. Date Range Filter
-        let matchesDate = true;
-        if (filterStartDate || filterEndDate) {
-          const ticketDate = new Date(ticket.date);
+    // 7. Date Range Filter
+let matchesDate = true;
+if (filterStartDate || filterEndDate) {
+  const ticketDate = parseTicketDateFromHistory(ticket);
 
-          if (!isNaN(ticketDate.getTime())) {
-            ticketDate.setHours(0, 0, 0, 0);
+  if (ticketDate) {
+    // Normalize to start of day
+    ticketDate.setHours(0, 0, 0, 0);
 
-            if (filterStartDate) {
-              const start = new Date(filterStartDate);
-              start.setHours(0, 0, 0, 0);
-              if (ticketDate < start) matchesDate = false;
-            }
-            if (filterEndDate && matchesDate) {
-              const end = new Date(filterEndDate);
-              end.setHours(23, 59, 59, 999);
-              if (ticketDate > end) matchesDate = false;
-            }
-          }
-        }
+    if (filterStartDate) {
+      const start = new Date(filterStartDate);
+      start.setHours(0, 0, 0, 0);
+      if (ticketDate < start) matchesDate = false;
+    }
+    
+    if (filterEndDate && matchesDate) {
+      const end = new Date(filterEndDate);
+      end.setHours(23, 59, 59, 999);
+      if (ticketDate > end) matchesDate = false;
+    }
+  } else {
+    // If we can't parse the date, exclude it from filtered results when date filter is active
+    matchesDate = false;
+  }
+}
 
         return (
           matchesSearch &&

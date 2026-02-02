@@ -94,18 +94,68 @@ export default function Reports({
   };
 
   // Parse DD/MM/YYYY format to proper Date object
-  const parseTicketDate = (dateStr?: string) => {
+  // Parse DD/MM/YYYY format to proper Date object
+  const parseTicketDate = (dateStr?: string, ticketHistory?: any[]) => {
     if (!dateStr) return null;
 
-    // Check if it's in DD/MM/YYYY format
-    const parts = dateStr.split("/");
+    // 🔥 NEW: Try to extract date from ticket history first (most accurate)
+    if (
+      ticketHistory &&
+      Array.isArray(ticketHistory) &&
+      ticketHistory.length > 0
+    ) {
+      try {
+        const creationEntry = ticketHistory.find(
+          (h: any) => h.action === "Ticket Created",
+        );
+
+        if (creationEntry && creationEntry.date) {
+          // Extract date from format "01/02/2026, 19:27:44"
+          const datePart = creationEntry.date.split(",")[0].trim();
+          const parts = datePart.split("/");
+
+          if (parts.length === 3) {
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const year = parseInt(parts[2], 10);
+
+            if (day <= 31 && month <= 11) {
+              const d = new Date(year, month, day);
+              if (!isNaN(d.getTime())) return d;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(
+          "Failed to parse history date, falling back to ticket.date",
+        );
+      }
+    }
+
+    // Try DD/MM/YYYY format
+    let parts = dateStr.split("/");
     if (parts.length === 3) {
       const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+      const month = parseInt(parts[1], 10) - 1;
       const year = parseInt(parts[2], 10);
 
-      const d = new Date(year, month, day);
-      return isNaN(d.getTime()) ? null : d;
+      if (day <= 31 && month <= 11) {
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+      }
+    }
+
+    // Try M/D/YYYY format (US locale)
+    parts = dateStr.split("/");
+    if (parts.length === 3) {
+      const month = parseInt(parts[0], 10) - 1;
+      const day = parseInt(parts[1], 10);
+      const year = parseInt(parts[2], 10);
+
+      if (day <= 31 && month <= 11) {
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+      }
     }
 
     // Fallback to regular parsing
@@ -126,22 +176,35 @@ export default function Reports({
   // --- DATA PROCESSING ---
   const filteredData = useMemo(() => {
     const now = new Date();
-    let startDate = new Date(0); // Default all time
+    now.setHours(23, 59, 59, 999);
+    let startDate = new Date(0);
 
-    if (timeFilter === "7d")
+    if (timeFilter === "7d") {
       startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    if (timeFilter === "30d")
+      startDate.setHours(0, 0, 0, 0);
+    }
+    if (timeFilter === "30d") {
       startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    if (timeFilter === "90d")
+      startDate.setHours(0, 0, 0, 0);
+    }
+    if (timeFilter === "90d") {
       startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      startDate.setHours(0, 0, 0, 0);
+    }
 
     return tickets.filter((ticket) => {
-      const ticketDate = parseTicketDate(ticket.date);
-      if (!ticketDate || ticketDate < startDate) return false;
-      // Store Check
+      // 🔥 PASS HISTORY TO parseTicketDate
+      const ticketDate = parseTicketDate(ticket.date, ticket.history);
+      if (!ticketDate) return false;
+
+      const normalizedTicketDate = new Date(ticketDate);
+      normalizedTicketDate.setHours(0, 0, 0, 0);
+
+      if (normalizedTicketDate < startDate || normalizedTicketDate > now)
+        return false;
+
       if (storeFilter !== "All" && ticket.store !== storeFilter) return false;
 
-      // Role & Member Check
       if (roleFilter !== "All" || memberFilter !== "All") {
         const assignee = settings.teamMembers.find(
           (m) => m.id === ticket.assignedToId,
@@ -235,7 +298,8 @@ export default function Reports({
     const trendMap: Record<string, { date: string; tickets: number }> = {};
 
     filteredData.forEach((t) => {
-      const d = parseTicketDate(t.date);
+      // 🔥 PASS HISTORY TO parseTicketDate
+      const d = parseTicketDate(t.date, t.history);
 
       // Skip invalid dates
       if (!d) {
