@@ -439,7 +439,7 @@ const CustomerList: React.FC = () => {
         id: c.id,
         name: c.name,
         email: c.email ?? "",
-        phone: c.phone,
+        phone: c.phone || c.mobile || "",
         address: c.address ?? "",
         notes: c.notes ?? "",
         auth_id: c.auth_id,
@@ -542,7 +542,7 @@ const CustomerList: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <Phone size={14} className="text-slate-400" />{" "}
-                      {customer.phone}
+                      {customer.phone || "No phone"}
                     </div>
                     <div className="flex items-start gap-2">
                       <MapPin
