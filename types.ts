@@ -72,7 +72,8 @@ export interface Customer {
   id: string;
   name: string;
   email: string;
-  mobile: string;
+  mobile?: string;
+  phone?: string;
   address: string;
   city?: string;
   pincode?: string;
