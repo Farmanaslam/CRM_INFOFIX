@@ -206,6 +206,21 @@ export default function Login({
 
     loadCachedCredentials();
   }, [activeTab]);
+
+  const getNextCustomerId = async (): Promise<string> => {
+    const { count, error } = await supabase
+      .from("customers")
+      .select("*", { count: "exact", head: true });
+
+    if (error) {
+      throw new Error("Failed to fetch customer count");
+    }
+
+    const nextNumber = (count ?? 0) + 1;
+
+    return `CUST-${nextNumber.toString().padStart(3, "0")}`;
+  };
+
   const handleCustomerSignup = async () => {
     setIsLoading(true);
     setError(null);
@@ -237,10 +252,12 @@ export default function Login({
       const authUser = signUpData.user;
 
       // ✅ STEP 2: INSERT CUSTOMER PROFILE
+      const customerId = await getNextCustomerId();
       const { data: customer, error: insertError } = await supabase
         .from("customers")
         .insert({
-          auth_id: authUser.id, // 🔥 VERY IMPORTANT
+          id: customerId,
+          auth_id: authUser.id,
           name: regName,
           email: cleanEmail,
           mobile: cleanPhone,

@@ -470,6 +470,18 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
 
     doc.save(`History_${editingTicket.ticketId}.pdf`);
   };
+  const getNextCustomerId = async (): Promise<string> => {
+    const { count, error } = await supabase
+      .from("customers")
+      .select("*", { count: "exact", head: true });
+
+    if (error) {
+      throw new Error("Failed to fetch customer count");
+    }
+
+    const nextNumber = (count ?? 0) + 1;
+    return `CUST-${nextNumber.toString().padStart(3, "0")}`;
+  };
 
   const isStoreChanged =
     editingTicket && formData.store !== editingTicket.store;
@@ -561,12 +573,13 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                   );
                 }
 
-                customerUserId = signInData.user.id;
+                const customerSeqId = await getNextCustomerId();
                 const { data: recoveredCustomer, error: recoverErr } =
                   await supabase
                     .from("customers")
                     .insert([
                       {
+                        id: customerSeqId,
                         auth_id: signInData.user.id,
                         name: formData.name,
                         email: formData.email,
@@ -589,11 +602,12 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                 throw authErr;
               }
             } else if (authData.user) {
-              customerUserId = authData.user.id;
+              const customerSeqId = await getNextCustomerId();
               const { data: newCustomer, error: custErr } = await supabase
                 .from("customers")
                 .insert([
                   {
+                    id: customerSeqId,
                     auth_id: authData.user.id,
                     name: formData.name,
                     email: formData.email,

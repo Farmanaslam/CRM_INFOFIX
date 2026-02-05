@@ -17,22 +17,6 @@ import {
 import { Customer } from "../types";
 import { supabase } from "@/supabaseClient";
 
-{
-  /*interface CustomerListProps {
-  customers: Customer[];
-  setCustomers: (customers: Customer[]) => void;
-}
-*/
-}
-// Helper to generate IDs (Duplicate of TicketList helper to keep self-contained)
-{
-  /*const generateId = (prefix: string, list: any[]) => {
-  const count = list.length + 1;
-  const padded = count.toString().padStart(3, "0");
-  return `${prefix}-${padded}`;
-};*/
-}
-
 // --- Customer Form Modal ---
 const CustomerFormModal: React.FC<{
   isOpen: boolean;
@@ -72,8 +56,19 @@ const CustomerFormModal: React.FC<{
       setError(null);
     }
   }, [isOpen, editingCustomer]);
-  const generateCustomerId = () => {
-    return `CUST-${Date.now().toString().slice(-6)}`;
+
+  const getNextCustomerId = async (): Promise<string> => {
+    const { count, error } = await supabase
+      .from("customers")
+      .select("*", { count: "exact", head: true });
+
+    if (error) {
+      throw new Error("Failed to fetch customer count");
+    }
+
+    const nextNumber = (count ?? 0) + 1;
+
+    return `CUST-${nextNumber.toString().padStart(3, "0")}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,17 +76,6 @@ const CustomerFormModal: React.FC<{
     if (!formData.name || !formData.phone) {
       setError("Name and phone are required.");
       return;
-    }
-
-    // Check for duplicates (by email) if creating new
-    if (!editingCustomer && formData.email) {
-      const exists = existingCustomers.some(
-        (c) => c.email.toLowerCase() === formData.email?.toLowerCase(),
-      );
-      if (exists) {
-        setError("A customer with this email already exists.");
-        return;
-      }
     }
 
     try {
@@ -121,10 +105,7 @@ const CustomerFormModal: React.FC<{
           );
         }
       } else {
-        // Create new customer - simpler ID generation
-        // Use timestamp-based ID to avoid conflicts
-        const customerId = `CUST-${Date.now().toString().slice(-9)}`;
-
+        const customerId = await getNextCustomerId();
         // Create auth user if email is provided
         let authId = null;
         if (formData.email) {
@@ -174,39 +155,7 @@ const CustomerFormModal: React.FC<{
           .single();
 
         if (dbError) {
-          console.error("Database error:", dbError);
-          if (dbError.code === "23505") {
-            // Unique violation
-            // If there's still a conflict, try one more time with different ID
-            const fallbackId = `CUST-${Date.now()
-              .toString()
-              .slice(-9)}-${Math.random().toString(36).slice(2, 5)}`;
-
-            const { data: retryData, error: retryError } = await supabase
-              .from("customers")
-              .insert({
-                id: fallbackId,
-                name: formData.name,
-                email: formData.email || null,
-                phone: formData.phone,
-                address: formData.address || null,
-                notes: formData.notes || null,
-                auth_id: authId,
-              })
-              .select()
-              .single();
-
-            if (retryError) {
-              setError("Failed to create customer: " + retryError.message);
-              return;
-            }
-
-            if (retryData) {
-              setCustomers((prev) => [retryData, ...prev]);
-            }
-          } else {
-            setError("Failed to create customer: " + dbError.message);
-          }
+          setError(dbError.message);
           return;
         }
 
@@ -214,7 +163,7 @@ const CustomerFormModal: React.FC<{
           setCustomers((prev) => [newCustomer, ...prev]);
         }
       }
-
+      setError(null);
       onClose();
     } catch (error: any) {
       console.error("Error in handleSubmit:", error);
