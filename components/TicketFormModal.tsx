@@ -471,18 +471,51 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     doc.save(`History_${editingTicket.ticketId}.pdf`);
   };
   const getNextCustomerId = async (): Promise<string> => {
-    const { count, error } = await supabase
-      .from("customers")
-      .select("*", { count: "exact", head: true });
+    let attempts = 0;
+    const maxAttempts = 10;
 
-    if (error) {
-      throw new Error("Failed to fetch customer count");
+    while (attempts < maxAttempts) {
+      // Fetch the highest existing customer ID
+      const { data: lastCustomer, error: fetchError } = await supabase
+        .from("customers")
+        .select("id")
+        .like("id", "CUST-%")
+        .order("id", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (fetchError && fetchError.code !== "PGRST116") {
+        throw new Error("Failed to fetch last customer ID");
+      }
+
+      let nextNumber = 1;
+      if (lastCustomer?.id) {
+        const match = lastCustomer.id.match(/CUST-(\d+)/);
+        if (match) {
+          nextNumber = parseInt(match[1], 10) + 1;
+        }
+      }
+
+      const candidateId = `CUST-${nextNumber.toString().padStart(3, "0")}`;
+
+      // Check if this ID already exists
+      const { data: existingCustomer } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("id", candidateId)
+        .maybeSingle();
+
+      // If ID doesn't exist, we found our customer ID
+      if (!existingCustomer) {
+        return candidateId;
+      }
+
+      // ID exists, try next number
+      attempts++;
     }
 
-    const nextNumber = (count ?? 0) + 1;
-    return `CUST-${nextNumber.toString().padStart(3, "0")}`;
+    throw new Error("Unable to generate unique customer ID. Please try again.");
   };
-
   const isStoreChanged =
     editingTicket && formData.store !== editingTicket.store;
 
@@ -509,6 +542,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
     try {
       let customerId: string;
       let customerUserId: string | null = null;
+
       if (editingTicket) {
         customerId = editingTicket.customerId;
         const { data: existingCustomer, error: fetchErr } = await supabase
@@ -520,8 +554,10 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         if (fetchErr) throw fetchErr;
 
         customerUserId = existingCustomer?.auth_id || null;
+
         if (existingCustomer) {
-          await supabase
+          // Update customer table
+          const { error: customerUpdateError } = await supabase
             .from("customers")
             .update({
               name: formData.name,
@@ -529,8 +565,34 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
               address: formData.address,
             })
             .eq("id", customerId);
+
+          if (customerUpdateError) {
+            console.error("Customer update failed:", customerUpdateError);
+            throw new Error("Failed to update customer information");
+          }
+
+          const { error: ticketCustomerUpdateError } = await supabase
+            .from("tickets")
+            .update({
+              name: formData.name,
+              mobile: formData.mobile,
+              address: formData.address,
+              email: formData.email,
+            })
+            .eq("id", editingTicket.id);
+
+          if (ticketCustomerUpdateError) {
+            console.error(
+              "Ticket customer fields update failed:",
+              ticketCustomerUpdateError,
+            );
+            throw new Error("Failed to update ticket customer information");
+          }
+
+          console.log("✅ Customer and ticket updated successfully");
         }
       } else {
+        // Check if customer already exists by email
         const { data: existingCustomer, error: fetchErr } = await supabase
           .from("customers")
           .select("id, email, auth_id")
@@ -540,9 +602,21 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         if (fetchErr) throw fetchErr;
 
         if (existingCustomer) {
+          // Customer already exists - use existing ID
           customerId = existingCustomer.id;
           customerUserId = existingCustomer.auth_id || null;
+
+          // Optionally update customer info
+          await supabase
+            .from("customers")
+            .update({
+              name: formData.name,
+              phone: formData.mobile,
+              address: formData.address,
+            })
+            .eq("id", customerId);
         } else {
+          // Create new customer
           try {
             const { data: authData, error: authErr } =
               await supabase.auth.signUp({
@@ -555,11 +629,12 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                   },
                 },
               });
+
             if (authErr) {
               if (authErr.message.includes("User already registered")) {
-                console.warn(
-                  "⚠️ Auth user exists but customer profile missing. Attempting recovery...",
-                );
+                // Auth user exists but customer profile missing
+                console.warn("⚠️ Auth user exists, attempting recovery...");
+
                 const { data: signInData, error: signInErr } =
                   await supabase.auth.signInWithPassword({
                     email: formData.email,
@@ -567,17 +642,18 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                   });
 
                 if (signInErr) {
-                  console.error("Sign in failed:", signInErr);
                   throw new Error(
-                    "Cannot recover customer account. The password may have changed. Please contact support.",
+                    "Cannot recover customer account. Password may have changed. Please contact support.",
                   );
                 }
 
                 const customerSeqId = await getNextCustomerId();
+
+                // Use INSERT with conflict handling
                 const { data: recoveredCustomer, error: recoverErr } =
                   await supabase
                     .from("customers")
-                    .insert([
+                    .upsert(
                       {
                         id: customerSeqId,
                         auth_id: signInData.user.id,
@@ -586,7 +662,8 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                         phone: formData.mobile,
                         address: formData.address,
                       },
-                    ])
+                      { onConflict: "id", ignoreDuplicates: false },
+                    )
                     .select("id")
                     .single();
 
@@ -596,6 +673,7 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                 }
 
                 customerId = recoveredCustomer.id;
+                customerUserId = signInData.user.id;
                 setCustomers([...customers, recoveredCustomer as Customer]);
                 await supabase.auth.signOut();
               } else {
@@ -603,9 +681,11 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
               }
             } else if (authData.user) {
               const customerSeqId = await getNextCustomerId();
+
+              // Use upsert for safer insertion
               const { data: newCustomer, error: custErr } = await supabase
                 .from("customers")
-                .insert([
+                .upsert(
                   {
                     id: customerSeqId,
                     auth_id: authData.user.id,
@@ -614,12 +694,18 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
                     phone: formData.mobile,
                     address: formData.address,
                   },
-                ])
+                  { onConflict: "id", ignoreDuplicates: false },
+                )
                 .select("id")
                 .single();
 
-              if (custErr) throw custErr;
+              if (custErr) {
+                console.error("Customer creation error:", custErr);
+                throw custErr;
+              }
+
               customerId = newCustomer.id;
+              customerUserId = authData.user.id;
               setCustomers([...customers, newCustomer as Customer]);
             } else {
               throw new Error("Auth user creation failed");
@@ -1245,6 +1331,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                         }
                         className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none transition-all shadow-inner"
                         placeholder="+91..."
+                        disabled={!!editingTicket}
                       />
                     </div>
                     <div className="space-y-2">

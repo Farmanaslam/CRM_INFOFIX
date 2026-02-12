@@ -76,12 +76,12 @@ export default function TasksView({
             const updatedTask = mapDbTask(payload.new);
             setTasks(
               tasks.map((t) => (t.id === updatedTask.id ? updatedTask : t)),
-            ); // ✅ FIXED
+            );
           } else if (payload.eventType === "INSERT" && payload.new) {
             const newTask = mapDbTask(payload.new);
-            setTasks([newTask, ...tasks]); // ✅ FIXED
+            setTasks([newTask, ...tasks]);
           } else if (payload.eventType === "DELETE" && payload.old) {
-            setTasks(tasks.filter((t) => t.id !== payload.old.id)); // ✅ FIXED
+            setTasks(tasks.filter((t) => t.id !== payload.old.id));
           }
         },
       )
@@ -90,7 +90,7 @@ export default function TasksView({
     return () => {
       subscription.unsubscribe();
     };
-  }, [tasks, setTasks]); // ✅ ADD DEPENDENCIES
+  }, [tasks, setTasks]);
 
   const isAdmin =
     currentUser.role === "SUPER_ADMIN" ||
@@ -200,11 +200,7 @@ export default function TasksView({
       .filter((m) => m.role === "TECHNICIAN")
       .map((m) => m.id);
   }, [accessibleMembers]);
-
-  // In TasksView.tsx, replace the kpiData useMemo calculation (around line 106-158)
-
   const kpiData = useMemo(() => {
-    // Filter reports by selected technician/team
     const reportsForKPI =
       memberFilter === "all"
         ? accessibleReports.filter((r) => {
@@ -221,13 +217,9 @@ export default function TasksView({
                   member.name.trim().toLowerCase()
               : false;
           });
-
-    // ✅ Count QC reports passed (progress >= 50% and no action required)
     const qcPassedReports = reportsForKPI.filter(
       (r) => r.progress >= 50 && !r.actionRequired,
     );
-
-    // ✅ FIX: Count tasks correctly based on filter
     const tasksForMetrics =
       memberFilter === "all"
         ? accessibleTasks.filter((t) => t.assignedToId === currentUser.id)
@@ -246,8 +238,6 @@ export default function TasksView({
 
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
-
-    // ✅ Count QC reports passed THIS MONTH
     const qcPassedThisMonth = qcPassedReports.filter((r) => {
       const reportDate = new Date(r.date);
       return (
@@ -255,8 +245,6 @@ export default function TasksView({
         reportDate.getFullYear() === currentYear
       );
     }).length;
-
-    // Monthly target calculation
     const monthlyTarget =
       memberFilter === "all"
         ? accessibleMembers.filter((m) => m.role === "TECHNICIAN").length * 20
@@ -268,7 +256,7 @@ export default function TasksView({
     );
 
     return {
-      active: activeTasks, // ✅ Fixed to show active tasks
+      active: activeTasks,
       completed: completedTasks,
       urgentPending,
       completionRate,
@@ -283,7 +271,7 @@ export default function TasksView({
     memberFilter,
     accessibleMembers,
     teamMembers,
-    currentUser.id, // ✅ Added currentUser.id dependency
+    currentUser.id,
   ]);
 
   const chartData = useMemo(() => {
@@ -354,20 +342,17 @@ export default function TasksView({
       }));
     }
   }, [accessibleReports, chartView, memberFilter, teamMembers]);
-
-  // Supabase helper functions for tasks
   const saveTaskToSupabase = async (task: Task) => {
     if (!supabase) return null;
 
     try {
-      // ✅ Map priority to match database constraint
-      let dbPriority = "medium"; // default
+      let dbPriority = "medium";
       if (task.priority === "urgent") {
         dbPriority = "high";
       } else if (task.priority === "normal") {
         dbPriority = "medium";
       } else {
-        dbPriority = task.priority; // already low/medium/high
+        dbPriority = task.priority;
       }
 
       const { data, error } = await supabase
@@ -381,7 +366,7 @@ export default function TasksView({
           assigned_to: task.assignedToId,
           type: task.type,
           status: task.status,
-          priority: dbPriority, // ✅ Use mapped priority
+          priority: dbPriority,
           created_by: task.createdBy,
           technician_note: task.technicianNote || "",
           zone_id: task.zoneId || null,
@@ -394,7 +379,7 @@ export default function TasksView({
       return data;
     } catch (err) {
       console.error("❌ Error saving task:", err);
-      console.error("❌ Task data:", task); // Debug log
+      console.error("❌ Task data:", task);
       return null;
     }
   };
@@ -425,12 +410,12 @@ export default function TasksView({
       time: new Date().toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
-        hour12: false, // ✅ Use 24-hour format to match database
+        hour12: false,
       }),
       assignedToId: memberFilter !== "all" ? memberFilter : currentUser.id,
       type: "general",
       status: "pending",
-      priority: "normal", // ✅ This will be mapped to "medium" in saveTaskToSupabase
+      priority: "normal",
       createdBy: currentUser.id,
       zoneId: currentUser.zoneId || undefined,
     };
@@ -496,7 +481,6 @@ export default function TasksView({
       technicianNote: note,
     } as Task;
 
-    // ✅ Save to Supabase
     const savedTask = await saveTaskToSupabase(updatedTask);
 
     if (savedTask) {
@@ -504,13 +488,10 @@ export default function TasksView({
         tasks.map((t) => (t.id === id ? { ...t, technicianNote: note } : t)),
       );
     }
-    // Note: We don't show error for note updates as they happen on every keystroke
   };
 
   const deleteTask = async (id: string) => {
     if (!confirm("Delete this task?")) return;
-
-    // ✅ Delete from Supabase
     const success = await deleteTaskFromSupabase(id);
 
     if (success) {
@@ -530,13 +511,11 @@ export default function TasksView({
     if (completedTaskIds.length === 0) return;
 
     if (!supabase) {
-      // Fallback to local if Supabase not configured
       setTasks(tasks.filter((t) => !completedTaskIds.includes(t.id)));
       return;
     }
 
     try {
-      // ✅ Delete from Supabase in batch
       const { error } = await supabase
         .from("tasks")
         .delete()
