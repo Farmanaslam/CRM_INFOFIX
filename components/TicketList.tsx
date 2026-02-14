@@ -131,7 +131,7 @@ export const generateTicketReceipt = async (
   doc.text("Customer Information", 15, 72);
   doc.setFont("helvetica", "normal");
   doc.text(`Name: ${customer.name}`, 15, 80);
-  doc.text(`Mobile: ${customer.mobile}`, 15, 86);
+  doc.text(`Mobile: ${customer?.phone || customer?.mobile}`, 15, 86);
   doc.text(`Email: ${customer.email}`, 15, 92);
 
   // Section: Device Info
@@ -364,17 +364,25 @@ const TicketList: React.FC<TicketListProps> = ({
   const zoneFilteredTickets = useMemo(() => {
     let result = tickets.filter((t) => t.status !== "Pending Approval");
 
-    // Zone Filter
+    if (currentUser.role === "TECHNICIAN") {
+      const technicianStore = stores.find((s) => s.id === currentUser.storeId);
+
+      if (technicianStore) {
+        result = result.filter(
+          (t) =>
+            t.assignedToId === currentUser.id ||
+            t.store === technicianStore.name,
+        );
+      } else {
+        result = result.filter((t) => t.assignedToId === currentUser.id);
+      }
+      return result;
+    }
     if (selectedZoneId !== "all") {
       const zoneStoreNames = stores
         .filter((s) => s.zoneId === selectedZoneId)
         .map((s) => s.name);
       result = result.filter((t) => zoneStoreNames.includes(t.store));
-    }
-
-    // Role Specific Filter
-    if (currentUser.role === "TECHNICIAN") {
-      result = result.filter((t) => t.assignedToId === currentUser.id);
     }
 
     return result;
@@ -387,7 +395,6 @@ const TicketList: React.FC<TicketListProps> = ({
       .filter((ticket) => {
         // 1. Text Search
         const search = searchTerm.trim().toLowerCase();
-
         const matchesSearch =
           search === "" ||
           normalize(ticket.id).includes(search) ||
@@ -402,11 +409,9 @@ const TicketList: React.FC<TicketListProps> = ({
         // 2. Assignee Filter
         const matchesAssignee =
           filterAssignee === "all" || ticket.assignedToId === filterAssignee;
-
         // 3. Store Filter
         const matchesStore =
           filterStore === "all" || ticket.store === filterStore;
-
         // 4. Status Filter
         const matchesStatus =
           filterStatus === "all" || ticket.status === filterStatus;
@@ -414,12 +419,9 @@ const TicketList: React.FC<TicketListProps> = ({
         // 5. Priority Filter
         const matchesPriority =
           filterPriority === "all" || ticket.priority === filterPriority;
-
         // 6. Device Type Filter
         const matchesDevice =
           filterDevice === "all" || ticket.deviceType === filterDevice;
-
-        // 7. Date Range Filter
         // 7. Date Range Filter
         let matchesDate = true;
         if (filterStartDate || filterEndDate) {
