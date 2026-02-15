@@ -74,6 +74,7 @@ import {
   ChecklistCategory,
   ChecklistItem,
   ChecklistState,
+  Store,
 } from "../types";
 import { supabase } from "@/supabaseClient";
 // --- DATA ---
@@ -331,6 +332,7 @@ interface LaptopReportsProps {
   setReports?: (reports: Report[]) => void;
   // Fix: Added missing selectedZoneId property to interface
   selectedZoneId: string;
+  stores?: Store[];
 }
 
 // --- COMPONENTS ---
@@ -502,6 +504,7 @@ export default function LaptopReports({
   reports = [],
   setReports,
   selectedZoneId,
+  stores = [],
 }: LaptopReportsProps) {
   // internalView controls List vs Editor inside the Data tab
   const isTechnician = currentUser?.role === "TECHNICIAN";
@@ -775,8 +778,63 @@ export default function LaptopReports({
     const original = reports.find((r) => r.id === reportId);
     let reportToSave: Report;
 
+    const getTechnicianZoneId = (): string | undefined => {
+      if (!currentReport.deviceInfo.technicianName) {
+        console.log("⚠️ No technician name in report");
+        return undefined;
+      }
+      // Find the technician in team members
+      const technician = settings?.teamMembers?.find(
+        (m) => m.name === currentReport.deviceInfo.technicianName,
+      );
+
+      if (!technician) {
+        console.log("❌ Technician not found in team members");
+        return undefined;
+      }
+
+      console.log("👤 Found technician:", {
+        name: technician.name,
+        zoneId: technician.zoneId,
+        storeId: technician.storeId,
+      });
+
+      if (technician.zoneId) {
+        return technician.zoneId;
+      }
+      if (technician.storeId && stores && stores.length > 0) {
+        console.log("🔍 Looking for store with id:", technician.storeId);
+        const techStore = stores.find((s) => s.id === technician.storeId);
+
+        if (techStore) {
+          if (techStore.zoneId) {
+            return techStore.zoneId;
+          }
+        } else {
+          console.log("❌ Store not found with id:", technician.storeId);
+        }
+      }
+      if (currentUser?.name === technician.name) {
+        console.log("🔍 Trying current user data:", {
+          zoneId: currentUser.zoneId,
+          storeId: currentUser.storeId,
+        });
+
+        if (currentUser.zoneId) {
+          return currentUser.zoneId;
+        }
+
+        if (currentUser.storeId && stores && stores.length > 0) {
+          const userStore = stores.find((s) => s.id === currentUser.storeId);
+          if (userStore?.zoneId) {
+            return userStore.zoneId;
+          }
+        }
+      }
+      return undefined;
+    };
+
     if (original) {
-      // Updating existing report
       const changes: string[] = [];
 
       if (original.progress !== currentReport.progress) {
@@ -857,12 +915,15 @@ export default function LaptopReports({
         details: details,
       };
 
+      const technicianZoneId = getTechnicianZoneId();
+
       reportToSave = {
         ...currentReport,
         id: reportId,
         history: [...(currentReport.history || []), historyEntry],
         status:
           currentReport.progress === 100 ? "Completed" : currentReport.status,
+        zoneId: technicianZoneId || currentReport.zoneId,
       };
     } else {
       // For new reports
@@ -877,21 +938,33 @@ export default function LaptopReports({
         details: details,
       };
 
+      const technicianZoneId = getTechnicianZoneId();
+
       reportToSave = {
         ...currentReport,
         id: reportId,
         history: [historyEntry],
         status: currentReport.progress === 100 ? "Completed" : "Draft",
         zoneId:
+          technicianZoneId ||
           currentReport.zoneId ||
           (selectedZoneId !== "all" ? selectedZoneId : undefined),
       };
+
+      console.log("🔍 New report zone assignment:", {
+        technicianZoneId,
+        currentReportZoneId: currentReport.zoneId,
+        selectedZoneId,
+        finalZoneId: reportToSave.zoneId,
+      });
     }
 
     // SAVE TO SUPABASE
     const savedReport = await saveReportToSupabase(reportToSave);
 
     if (savedReport) {
+      console.log("✅ Report saved with zone_id:", savedReport.zone_id);
+
       if (setReports) {
         const existingIndex = reports.findIndex(
           (r) => r.id === reportToSave.id,
@@ -919,7 +992,7 @@ export default function LaptopReports({
       setInternalView("list");
 
       // Show success message
-      alert(`Report saved successfully!`);
+      alert("Report saved successfully!");
     } else {
       alert("Failed to save report. Please try again.");
     }
