@@ -1,7 +1,9 @@
-
 import { GoogleGenAI } from "@google/genai";
 
-export const generateAIResponse = async (prompt: string, context?: string): Promise<string> => {
+export const generateAIResponse = async (
+  prompt: string,
+  context?: string,
+): Promise<string> => {
   // Always use a new instance with direct access to process.env.API_KEY right before making the call
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -10,7 +12,7 @@ export const generateAIResponse = async (prompt: string, context?: string): Prom
     You are a helpful AI assistant embedded within a web application.
     
     Context about the current application state:
-    ${context || 'No specific context provided.'}
+    ${context || "No specific context provided."}
 
     User Query: ${prompt}
 
@@ -19,7 +21,7 @@ export const generateAIResponse = async (prompt: string, context?: string): Prom
 
     // Updated model to gemini-3-flash-preview as recommended for basic text tasks
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: "gemini-3-flash-preview",
       contents: fullPrompt,
     });
 

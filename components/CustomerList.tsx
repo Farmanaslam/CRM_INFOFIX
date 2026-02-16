@@ -58,16 +58,27 @@ const CustomerFormModal: React.FC<{
   }, [isOpen, editingCustomer]);
 
   const getNextCustomerId = async (): Promise<string> => {
-    const { count, error } = await supabase
+    const { data, error } = await supabase
       .from("customers")
-      .select("*", { count: "exact", head: true });
+      .select("id")
+      .like("id", "CUST-%")
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (error) {
-      throw new Error("Failed to fetch customer count");
+      console.error("getNextCustomerId error:", error);
+      throw new Error("Failed to fetch last customer ID");
     }
 
-    const nextNumber = (count ?? 0) + 1;
+    if (!data?.id) {
+      const ts = Date.now().toString().slice(-6);
+      return `CUST-${ts}`;
+    }
 
+    const match = data.id.match(/CUST-(\d+)/);
+    const lastNumber = match ? parseInt(match[1], 10) : 0;
+    const nextNumber = lastNumber + 1;
     return `CUST-${nextNumber.toString().padStart(3, "0")}`;
   };
 
