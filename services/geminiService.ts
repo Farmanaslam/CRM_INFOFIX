@@ -5,7 +5,7 @@ export const generateAIResponse = async (
   context?: string,
 ): Promise<string> => {
   // Always use a new instance with direct access to process.env.API_KEY right before making the call
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
   try {
     const fullPrompt = `
