@@ -309,7 +309,12 @@ const getProgressColor = (progress: number) => {
 const INITIAL_REPORT: Report = {
   id: "",
   date: new Date().toISOString(),
-  deviceInfo: { laptopNo: "", customerName: "", technicianName: "" },
+  deviceInfo: {
+    laptopNo: "",
+    customerName: "",
+    technicianName: "",
+    deviceModel: "",
+  },
   checklist: {},
   battery: {
     chargePercent: "",
@@ -1040,8 +1045,9 @@ export default function LaptopReports({
       "Progress",
       "Status",
       "Action Req.",
+      "Tech Notes",
     ];
-    const colWidths = [30, 30, 45, 45, 25, 25, 60];
+    const colWidths = [28, 26, 38, 38, 20, 20, 45, 50];
     const totalWidth = colWidths.reduce((a, b) => a + b, 0);
     const startX = (pageWidth - totalWidth) / 2;
 
@@ -1095,6 +1101,14 @@ export default function LaptopReports({
       currentX += colWidths[5];
       doc.text(report.actionRequired || "None", currentX + 2, y, {
         maxWidth: colWidths[6] - 4,
+      });
+      currentX += colWidths[6];
+      const notesText =
+        report.notes && report.notes.trim() !== ""
+          ? report.notes.trim()
+          : "No notes";
+      doc.text(notesText, currentX + 2, y, {
+        maxWidth: colWidths[7] - 4,
       });
 
       y += 8;
@@ -1987,7 +2001,7 @@ export default function LaptopReports({
           className="max-w-4xl mx-auto space-y-8 bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100"
         >
           {/* SECTION A: DEVICE INFO */}
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 focus-within:ring-2 ring-indigo-100 transition-all">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
                 Laptop No / Serial
@@ -2007,6 +2021,28 @@ export default function LaptopReports({
                   }
                   className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg"
                   placeholder="Enter ID..."
+                />
+              </div>
+            </div>
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 focus-within:ring-2 ring-indigo-100 transition-all">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
+                Device Model / Brand
+              </label>
+              <div className="flex items-center gap-3">
+                <Box className="text-blue-400" size={20} />
+                <input
+                  value={currentReport.deviceInfo.deviceModel || ""}
+                  onChange={(e) =>
+                    setCurrentReport({
+                      ...currentReport,
+                      deviceInfo: {
+                        ...currentReport.deviceInfo,
+                        deviceModel: e.target.value,
+                      },
+                    })
+                  }
+                  className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg"
+                  placeholder="e.g. HP, Dell, Lenovo..."
                 />
               </div>
             </div>

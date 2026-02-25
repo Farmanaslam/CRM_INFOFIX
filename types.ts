@@ -186,6 +186,7 @@ export interface Report {
     laptopNo: string;
     customerName: string;
     technicianName: string;
+    deviceModel: string;
   };
   checklist: ChecklistState;
   battery: BatteryStats;
