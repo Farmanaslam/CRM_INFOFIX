@@ -1039,6 +1039,7 @@ export default function LaptopReports({
     let y = 35;
     const headers = [
       "Device No",
+      "Model/Brand",
       "Date",
       "Dealer",
       "Technician",
@@ -1047,7 +1048,7 @@ export default function LaptopReports({
       "Action Req.",
       "Tech Notes",
     ];
-    const colWidths = [28, 26, 38, 38, 20, 20, 45, 50];
+    const colWidths = [26, 26, 24, 35, 35, 18, 18, 40, 45];
     const totalWidth = colWidths.reduce((a, b) => a + b, 0);
     const startX = (pageWidth - totalWidth) / 2;
 
@@ -1085,32 +1086,35 @@ export default function LaptopReports({
       currentX = startX;
       doc.text(report.deviceInfo.laptopNo, currentX + 2, y);
       currentX += colWidths[0];
-      doc.text(new Date(report.date).toLocaleDateString(), currentX + 2, y);
-      currentX += colWidths[1];
-      doc.text(report.deviceInfo.customerName || "N/A", currentX + 2, y, {
-        maxWidth: colWidths[2] - 4,
+      doc.text(report.deviceInfo.deviceModel || "N/A", currentX + 2, y, {
+        maxWidth: colWidths[1] - 4,
       });
+      currentX += colWidths[1];
+      doc.text(new Date(report.date).toLocaleDateString(), currentX + 2, y);
       currentX += colWidths[2];
-      doc.text(report.deviceInfo.technicianName || "N/A", currentX + 2, y, {
+      doc.text(report.deviceInfo.customerName || "N/A", currentX + 2, y, {
         maxWidth: colWidths[3] - 4,
       });
       currentX += colWidths[3];
-      doc.text(`${report.progress}%`, currentX + 2, y);
-      currentX += colWidths[4];
-      doc.text(report.status, currentX + 2, y);
-      currentX += colWidths[5];
-      doc.text(report.actionRequired || "None", currentX + 2, y, {
-        maxWidth: colWidths[6] - 4,
+      doc.text(report.deviceInfo.technicianName || "N/A", currentX + 2, y, {
+        maxWidth: colWidths[4] - 4,
       });
+      currentX += colWidths[4];
+      doc.text(`${report.progress}%`, currentX + 2, y);
+      currentX += colWidths[5];
+      doc.text(report.status, currentX + 2, y);
       currentX += colWidths[6];
+      doc.text(report.actionRequired || "None", currentX + 2, y, {
+        maxWidth: colWidths[7] - 4,
+      });
+      currentX += colWidths[7];
       const notesText =
         report.notes && report.notes.trim() !== ""
           ? report.notes.trim()
           : "No notes";
       doc.text(notesText, currentX + 2, y, {
-        maxWidth: colWidths[7] - 4,
+        maxWidth: colWidths[8] - 4,
       });
-
       y += 8;
     });
 
