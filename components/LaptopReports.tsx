@@ -535,7 +535,8 @@ export default function LaptopReports({
   const [filterDealer, setFilterDealer] = useState("All");
   const [filterAction, setFilterAction] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
-
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
   // Reset internal view when switching main tabs
   useEffect(() => {
     if (activeTab === "data") {
@@ -630,7 +631,6 @@ export default function LaptopReports({
 
   // --- FILTERED REPORTS ---
   const filteredReports = useMemo(() => {
-    // Fix: Use zoneFilteredReports as base
     return zoneFilteredReports.filter((r) => {
       const matchesSearch = r.deviceInfo.laptopNo
         .toLowerCase()
@@ -643,12 +643,30 @@ export default function LaptopReports({
         filterAction === "All" || r.actionRequired === filterAction;
       const matchesStatus = filterStatus === "All" || r.status === filterStatus;
 
+      // Date range filter
+      let matchesDate = true;
+      if (filterDateFrom || filterDateTo) {
+        const reportDate = new Date(r.date);
+        reportDate.setHours(0, 0, 0, 0);
+        if (filterDateFrom) {
+          const from = new Date(filterDateFrom);
+          if (!isNaN(from.getTime()))
+            matchesDate = matchesDate && reportDate >= from;
+        }
+        if (filterDateTo) {
+          const to = new Date(filterDateTo);
+          to.setHours(23, 59, 59, 999);
+          if (!isNaN(to.getTime()))
+            matchesDate = matchesDate && reportDate <= to;
+        }
+      }
       return (
         matchesSearch &&
         matchesTech &&
         matchesDealer &&
         matchesAction &&
-        matchesStatus
+        matchesStatus &&
+        matchesDate
       );
     });
   }, [
@@ -658,6 +676,8 @@ export default function LaptopReports({
     filterDealer,
     filterAction,
     filterStatus,
+    filterDateFrom,
+    filterDateTo,
   ]);
 
   // --- EDITOR LOGIC ---
@@ -1030,7 +1050,7 @@ export default function LaptopReports({
     doc.setFont("helvetica", "normal");
     doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - 70, 10);
     doc.text(
-      `Filter View: Tech: ${filterTech}, Dealer: ${filterDealer}, Status: ${filterStatus}`,
+      `Tech: ${filterTech} | Dealer: ${filterDealer} | Status: ${filterStatus} | Date: ${filterDateFrom || "Any"} – ${filterDateTo || "Any"}`,
       15,
       21,
     );
@@ -1736,7 +1756,6 @@ export default function LaptopReports({
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
                   />
                 </div>
-
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                     <Activity size={14} />
@@ -1755,108 +1774,216 @@ export default function LaptopReports({
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
                   />
                 </div>
+
+                {/* ✅ ADD THESE TWO BLOCKS RIGHT HERE */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
+                    From Date
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={filterDateFrom}
+                      onChange={(e) => setFilterDateFrom(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none focus:ring-2 ring-indigo-50"
+                    />
+                    {filterDateFrom && (
+                      <button
+                        onClick={() => setFilterDateFrom("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-400"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
+                    To Date
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={filterDateTo}
+                      onChange={(e) => setFilterDateTo(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none focus:ring-2 ring-indigo-50"
+                    />
+                    {filterDateTo && (
+                      <button
+                        onClick={() => setFilterDateTo("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-400"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </details>
 
             {/* Desktop: Always visible filters */}
-            <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="relative group">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                  <User size={14} />
+            <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
+                  Technician
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                    <User size={14} />
+                  </div>
+                  <select
+                    value={filterTech}
+                    onChange={(e) => setFilterTech(e.target.value)}
+                    className="w-full pl-9 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                    disabled={isTechnician}
+                  >
+                    {isTechnician ? (
+                      <option value={technicianName}>
+                        {technicianName} (You)
+                      </option>
+                    ) : (
+                      <>
+                        <option value="All">All Technicians</option>
+                        {settings?.teamMembers
+                          ?.filter((member) => member.role === "TECHNICIAN")
+                          .map((member) => (
+                            <option key={member.id} value={member.name}>
+                              {member.name} ({member.role})
+                            </option>
+                          ))}
+                      </>
+                    )}
+                  </select>
+                  <ChevronDown
+                    size={14}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                  />
                 </div>
-                <select
-                  value={filterTech}
-                  onChange={(e) => setFilterTech(e.target.value)}
-                  className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                  disabled={isTechnician}
-                >
-                  {isTechnician ? (
-                    <option value={technicianName}>
-                      {technicianName} (You)
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
+                  Dealer
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                    <Package size={14} />
+                  </div>
+                  <select
+                    value={filterDealer}
+                    onChange={(e) => setFilterDealer(e.target.value)}
+                    className="w-full pl-9 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                  >
+                    <option value="All">All Dealers</option>
+                    {settings?.laptopDealers?.map((d) => (
+                      <option key={d.id} value={d.name}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={14}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
+                  Action
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                    <Zap size={14} />
+                  </div>
+                  <select
+                    value={filterAction}
+                    onChange={(e) => setFilterAction(e.target.value)}
+                    className="w-full pl-9 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                  >
+                    <option value="All">All Actions</option>
+                    <option value="Return to Dealers">Return to Dealers</option>
+                    <option value="Sent to Service Centre">
+                      Sent to Service Centre
                     </option>
-                  ) : (
-                    <>
-                      <option value="All">All Technicians</option>
-                      {settings?.teamMembers
-                        ?.filter((member) => member.role === "TECHNICIAN")
-                        .map((member) => (
-                          <option key={member.id} value={member.name}>
-                            {member.name} ({member.role})
-                          </option>
-                        ))}
-                    </>
+                    <option value="Parts Sent to Dealers">
+                      Parts Sent to Dealers
+                    </option>
+                    <option value="Own Services">Own Services</option>
+                  </select>
+                  <ChevronDown
+                    size={14}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
+                  Status
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                    <Activity size={14} />
+                  </div>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value as any)}
+                    className="w-full pl-9 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Draft">Draft</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                  <ChevronDown
+                    size={14}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
+                  From
+                </label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={filterDateFrom}
+                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                    className="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none focus:ring-2 ring-indigo-50"
+                  />
+                  {filterDateFrom && (
+                    <button
+                      onClick={() => setFilterDateFrom("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-400"
+                    >
+                      <X size={12} />
+                    </button>
                   )}
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-                />
+                </div>
               </div>
 
-              <div className="relative group">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                  <Package size={14} />
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
+                  To
+                </label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={filterDateTo}
+                    onChange={(e) => setFilterDateTo(e.target.value)}
+                    className="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none focus:ring-2 ring-indigo-50"
+                  />
+                  {filterDateTo && (
+                    <button
+                      onClick={() => setFilterDateTo("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-400"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
                 </div>
-                <select
-                  value={filterDealer}
-                  onChange={(e) => setFilterDealer(e.target.value)}
-                  className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                >
-                  <option value="All">All Dealers</option>
-                  {settings?.laptopDealers?.map((d) => (
-                    <option key={d.id} value={d.name}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-                />
-              </div>
-
-              <div className="relative group">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                  <Zap size={14} />
-                </div>
-                <select
-                  value={filterAction}
-                  onChange={(e) => setFilterAction(e.target.value)}
-                  className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                >
-                  <option value="All">All Actions</option>
-                  <option value="Return to Dealers">Return to Dealers</option>
-                  <option value="Sent to Service Centre">
-                    Sent to Service Centre
-                  </option>
-                  <option value="Parts Sent to Dealers">
-                    Parts Sent to Dealers
-                  </option>
-                  <option value="Own Services">Own Services</option>
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-                />
-              </div>
-
-              <div className="relative group">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                  <Activity size={14} />
-                </div>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value as any)}
-                  className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                >
-                  <option value="All">All Statuses</option>
-                  <option value="Draft">Draft</option>
-                  <option value="Completed">Completed</option>
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-                />
               </div>
             </div>
           </div>
@@ -1886,7 +2013,7 @@ export default function LaptopReports({
                         {report.deviceInfo.laptopNo}
                       </h3>
                       <p className="text-xs text-slate-500">
-                        {new Date(report.date).toLocaleDateString()}
+                        {new Date(report.date).toLocaleDateString("en-GB")}
                       </p>
                     </div>
                   </div>
@@ -1972,6 +2099,8 @@ export default function LaptopReports({
                       setFilterDealer("All");
                       setFilterAction("All");
                       setFilterStatus("All");
+                      setFilterDateFrom("");
+                      setFilterDateTo("");
                     }}
                     className="text-indigo-600 text-xs font-bold mt-2 hover:underline"
                   >
@@ -2004,7 +2133,7 @@ export default function LaptopReports({
                           {report.deviceInfo.laptopNo}
                         </td>
                         <td className="px-6 py-4 text-slate-500">
-                          {new Date(report.date).toLocaleDateString()}
+                          {new Date(report.date).toLocaleDateString("en-GB")}
                         </td>
                         <td className="px-6 py-4 text-slate-600">
                           {report.deviceInfo.customerName}
