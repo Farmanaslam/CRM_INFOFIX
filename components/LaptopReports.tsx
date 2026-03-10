@@ -1134,6 +1134,149 @@ export default function LaptopReports({
     doc.save(`QC_Summary_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
+  const handleExportExcel = () => {
+    // Import SheetJS - already available as a dependency
+    import("xlsx")
+      .then((XLSX) => {
+        const headers = [
+          "Device No",
+          "Model/Brand",
+          "Date",
+          "Dealer",
+          "Technician",
+          "Progress (%)",
+          "Status",
+          "Action Required",
+          "Battery Health",
+          "Battery Charge %",
+          "Battery Remaining %",
+          "Battery Duration",
+          "Tech Notes",
+        ];
+
+        const rows = filteredReports.map((r) => [
+          r.deviceInfo.laptopNo,
+          r.deviceInfo.deviceModel || "",
+          new Date(r.date).toLocaleDateString("en-IN"),
+          r.deviceInfo.customerName || "",
+          r.deviceInfo.technicianName || "",
+          r.progress,
+          r.status,
+          r.actionRequired || "None",
+          r.battery?.health || "",
+          r.battery?.chargePercent || "",
+          r.battery?.remainingPercent || "",
+          r.battery?.duration || "",
+          r.notes || "",
+        ]);
+
+        // Build worksheet data with headers as first row
+        const wsData = [headers, ...rows];
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+        // Set column widths for readability
+        ws["!cols"] = [
+          { wch: 14 }, // Device No
+          { wch: 22 }, // Model/Brand
+          { wch: 12 }, // Date
+          { wch: 20 }, // Dealer
+          { wch: 18 }, // Technician
+          { wch: 12 }, // Progress
+          { wch: 12 }, // Status
+          { wch: 22 }, // Action Required
+          { wch: 14 }, // Battery Health
+          { wch: 14 }, // Battery Charge %
+          { wch: 16 }, // Battery Remaining %
+          { wch: 14 }, // Battery Duration
+          { wch: 30 }, // Tech Notes
+        ];
+
+        // Style the header row (bold + background)
+        const headerRange = XLSX.utils.decode_range(ws["!ref"]);
+        for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: 0, c: C });
+          if (!ws[cellAddress]) continue;
+          ws[cellAddress].s = {
+            font: { bold: true, color: { rgb: "FFFFFF" } },
+            fill: { fgColor: { rgb: "4338CA" } }, // Indigo
+            alignment: { horizontal: "center", wrapText: true },
+            border: {
+              bottom: { style: "thin", color: { rgb: "CCCCCC" } },
+            },
+          };
+        }
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "QC Summary");
+
+        XLSX.writeFile(
+          wb,
+          `QC_Summary_${new Date().toISOString().slice(0, 10)}.xlsx`,
+        );
+      })
+      .catch(() => {
+        // Fallback: try require style if dynamic import fails
+        try {
+          const XLSX = require("xlsx");
+          const headers = [
+            "Device No",
+            "Model/Brand",
+            "Date",
+            "Dealer",
+            "Technician",
+            "Progress (%)",
+            "Status",
+            "Action Required",
+            "Battery Health",
+            "Battery Charge %",
+            "Battery Remaining %",
+            "Battery Duration",
+            "Tech Notes",
+          ];
+          const rows = filteredReports.map((r) => [
+            r.deviceInfo.laptopNo,
+            r.deviceInfo.deviceModel || "",
+            new Date(r.date).toLocaleDateString("en-IN"),
+            r.deviceInfo.customerName || "",
+            r.deviceInfo.technicianName || "",
+            r.progress,
+            r.status,
+            r.actionRequired || "None",
+            r.battery?.health || "",
+            r.battery?.chargePercent || "",
+            r.battery?.remainingPercent || "",
+            r.battery?.duration || "",
+            r.notes || "",
+          ]);
+          const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+          ws["!cols"] = [
+            { wch: 14 },
+            { wch: 22 },
+            { wch: 12 },
+            { wch: 20 },
+            { wch: 18 },
+            { wch: 12 },
+            { wch: 12 },
+            { wch: 22 },
+            { wch: 14 },
+            { wch: 14 },
+            { wch: 16 },
+            { wch: 14 },
+            { wch: 30 },
+          ];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "QC Summary");
+          XLSX.writeFile(
+            wb,
+            `QC_Summary_${new Date().toISOString().slice(0, 10)}.xlsx`,
+          );
+        } catch (e) {
+          alert(
+            "Excel export failed. Please ensure the 'xlsx' package is installed.",
+          );
+        }
+      });
+  };
   const loadReport = (report: Report) => {
     // For technicians, ensure they can only load their own reports
     if (isTechnician && report.deviceInfo.technicianName !== technicianName) {
@@ -1413,6 +1556,12 @@ export default function LaptopReports({
               </p>
             </div>
             <div className="flex gap-3">
+              <button
+                onClick={handleExportExcel}
+                className="px-6 py-3 bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold rounded-2xl border border-emerald-500/30 backdrop-blur-sm transition-all flex items-center gap-2"
+              >
+                <FileDown size={20} /> Export Excel
+              </button>
               <button
                 onClick={handleExportFilteredPDF}
                 className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl border border-white/10 backdrop-blur-sm transition-all flex items-center gap-2"
