@@ -83,9 +83,9 @@ export default function Reports({
   const [storeFilter, setStoreFilter] = useState<string>("All");
   const [roleFilter, setRoleFilter] = useState<string>("All");
   const [memberFilter, setMemberFilter] = useState<string>("All");
+  const [statusFilter, setStatusFilter] = useState<string>("All");
   const [isExporting, setIsExporting] = useState(false);
 
-  // --- DATE HELPERS ---
   // --- DATE HELPERS ---
   const safeDate = (value?: string) => {
     if (!value) return null;
@@ -202,8 +202,10 @@ export default function Reports({
 
       if (normalizedTicketDate < startDate || normalizedTicketDate > now)
         return false;
-
       if (storeFilter !== "All" && ticket.store !== storeFilter) return false;
+
+      if (statusFilter !== "All" && ticket.status !== statusFilter)
+        return false;
 
       if (roleFilter !== "All" || memberFilter !== "All") {
         const assignee = settings.teamMembers.find(
@@ -225,6 +227,7 @@ export default function Reports({
     tickets,
     timeFilter,
     storeFilter,
+    statusFilter,
     roleFilter,
     memberFilter,
     settings.teamMembers,
@@ -379,26 +382,397 @@ export default function Reports({
 
   // --- EXPORT PDF ---
   const handleExportPDF = async () => {
-    const element = document.getElementById("report-dashboard");
-    if (!element) return;
     setIsExporting(true);
     try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        backgroundColor: "#f8fafc",
-        useCORS: true,
-      });
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("l", "mm", "a4");
-      const pdfW = pdf.internal.pageSize.getWidth();
-      const pdfH = pdf.internal.pageSize.getHeight();
+      const doc = new jsPDF("l", "mm", "a4");
+      const pageWidth = doc.internal.pageSize.getWidth(); // 297mm landscape
+      const pageHeight = doc.internal.pageSize.getHeight(); // 210mm landscape
+      const marginL = 10;
+      const marginR = 10;
+      const usableWidth = pageWidth - marginL - marginR;
 
-      pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
-      pdf.save(
-        `InfoFix_Work_Report_${new Date().toISOString().split("T")[0]}.pdf`,
+      // ── HELPERS ─────────────────────────────────────────────
+      const hex2rgb = (hex: string) => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return [r, g, b] as [number, number, number];
+      };
+
+      const truncate = (str: string, max: number) =>
+        str && str.length > max ? str.slice(0, max - 1) + "…" : str || "—";
+
+      // ── COVER / HEADER PAGE ──────────────────────────────────
+      // Background gradient band
+      doc.setFillColor(...hex2rgb("#4f46e5"));
+      doc.rect(0, 0, pageWidth, 38, "F");
+
+      doc.setFillColor(...hex2rgb("#6366f1"));
+      doc.rect(0, 32, pageWidth, 8, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.setFont("helvetica", "bold");
+      doc.text("INFOFIX SERVICES", marginL, 16);
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(
+        "Ticket Work Status Report  •  Exported on " +
+          new Date().toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          }),
+        marginL,
+        24,
+      );
+
+      // Filter summary line
+      const periodLabels: Record<string, string> = {
+        "7d": "Last 7 Days",
+        "30d": "Last 30 Days",
+        "90d": "Last 90 Days",
+        all: "All Time",
+      };
+      const filterSummary = [
+        `Period: ${periodLabels[timeFilter] ?? timeFilter}`,
+        storeFilter !== "All" ? `Store: ${storeFilter}` : "Store: All",
+        statusFilter !== "All" ? `Status: ${statusFilter}` : null,
+        roleFilter !== "All" ? `Role: ${roleFilter}` : null,
+        memberFilter !== "All"
+          ? `Staff: ${(() => {
+              const m = filteredData.find ? undefined : undefined;
+              const member = (() => {
+                try {
+                  // access settings from closure
+                  return (
+                    (settings as any).teamMembers?.find(
+                      (tm: any) => tm.id === memberFilter,
+                    )?.name ?? memberFilter
+                  );
+                } catch {
+                  return memberFilter;
+                }
+              })();
+              return member;
+            })()}`
+          : null,
+        `Total Tickets: ${filteredData.length}`,
+      ]
+        .filter(Boolean)
+        .join("   |   ");
+
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(199, 210, 254);
+      doc.text(filterSummary, marginL, 34);
+
+      // ── KPI SUMMARY BOXES ────────────────────────────────────
+      const kpiBoxes = [
+        {
+          label: "Total Tickets",
+          value: String(analytics.totalTickets),
+          color: "#6366f1",
+        },
+        {
+          label: "Resolved",
+          value: String(analytics.resolvedTickets),
+          color: "#10b981",
+        },
+        {
+          label: "Open / Active",
+          value: String(analytics.openTickets),
+          color: "#3b82f6",
+        },
+        {
+          label: "Resolution Rate",
+          value: analytics.resolutionRate + "%",
+          color: "#f59e0b",
+        },
+        {
+          label: "Avg Turnaround",
+          value: analytics.avgTat + " Days",
+          color: "#8b5cf6",
+        },
+      ];
+      const kpiY = 44;
+      const kpiW = usableWidth / kpiBoxes.length - 2;
+      kpiBoxes.forEach((kpi, i) => {
+        const x = marginL + i * (kpiW + 2);
+        const [r, g, b] = hex2rgb(kpi.color);
+        doc.setFillColor(r, g, b);
+        doc.roundedRect(x, kpiY, kpiW, 16, 2, 2, "F");
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(13);
+        doc.setFont("helvetica", "bold");
+        doc.text(kpi.value, x + kpiW / 2, kpiY + 7.5, { align: "center" });
+        doc.setFontSize(6.5);
+        doc.setFont("helvetica", "normal");
+        doc.text(kpi.label.toUpperCase(), x + kpiW / 2, kpiY + 13, {
+          align: "center",
+        });
+      });
+
+      // ── TABLE SETUP ──────────────────────────────────────────
+      // Columns: #, Ticket ID, Date, Customer, Phone, Device, Brand/Model, Issue, Store, Assignee, Status, Priority, Amount
+      const cols: Array<{ header: string; key: string; w: number }> = [
+        { header: "#", key: "idx", w: 7 },
+        { header: "Ticket ID", key: "ticketId", w: 22 },
+        { header: "Date", key: "date", w: 18 },
+        { header: "Customer", key: "name", w: 26 },
+        { header: "Phone", key: "number", w: 22 },
+        { header: "Device", key: "device", w: 20 },
+        { header: "Brand/Model", key: "brandModel", w: 26 },
+        { header: "Issue", key: "issue", w: 44 },
+        { header: "Store", key: "store", w: 24 },
+        { header: "Assignee", key: "assignee", w: 22 },
+        { header: "Status", key: "status", w: 22 },
+        { header: "Priority", key: "priority", w: 16 },
+      ];
+      // Scale columns to fit usableWidth exactly
+      const totalColW = cols.reduce((s, c) => s + c.w, 0);
+      const scale = usableWidth / totalColW;
+      cols.forEach((c) => {
+        c.w = c.w * scale;
+      });
+
+      const baseRowH = 7;
+      const headerH = 9;
+      let curY = kpiY + 20;
+
+      // ── STATUS COLORS ────────────────────────────────────────
+      const statusColorMap: Record<string, [number, number, number]> = {
+        new: [59, 130, 246],
+        resolved: [16, 185, 129],
+        rejected: [239, 68, 68],
+        "in progress": [99, 102, 241],
+        "on hold": [249, 115, 22],
+        "service done": [236, 72, 153],
+        delivery: [245, 158, 11],
+        "pending approval": [250, 204, 21],
+        hold: [249, 115, 22],
+      };
+
+      const priorityColorMap: Record<string, [number, number, number]> = {
+        high: [239, 68, 68],
+        medium: [245, 158, 11],
+        low: [16, 185, 129],
+      };
+
+      // ── DRAW TABLE HEADER ────────────────────────────────────
+      const drawTableHeader = () => {
+        doc.setFillColor(...hex2rgb("#1e293b"));
+        doc.rect(marginL, curY, usableWidth, headerH, "F");
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(6.5);
+        doc.setFont("helvetica", "bold");
+        let x = marginL;
+        cols.forEach((col) => {
+          doc.text(col.header, x + 1.5, curY + 6);
+          x += col.w;
+        });
+        curY += headerH;
+      };
+
+      drawTableHeader();
+
+      // ── DRAW ROWS ────────────────────────────────────────────
+      filteredData.forEach((ticket, idx) => {
+        // Resolve assignee name
+        const assignee = (() => {
+          try {
+            const m = (settings as any).teamMembers?.find(
+              (tm: any) => tm.id === ticket.assignedToId,
+            );
+            return m?.name ?? "Unassigned";
+          } catch {
+            return "—";
+          }
+        })();
+
+        // Resolve ticket date
+        const parseD = (t: typeof ticket) => {
+          if (t.history?.length) {
+            const ce = t.history.find(
+              (h: any) => h.action === "Ticket Created",
+            );
+            if (ce?.date) {
+              const dp = ce.date.split(",")[0].trim().split("/");
+              if (dp.length === 3) {
+                const d = new Date(+dp[2], +dp[1] - 1, +dp[0]);
+                if (!isNaN(d.getTime())) return `${dp[0]}/${dp[1]}/${dp[2]}`;
+              }
+            }
+          }
+          return ticket.date ?? "—";
+        };
+
+        const rowData: Record<string, string> = {
+          idx: String(idx + 1),
+          ticketId: ticket.ticketId ?? ticket.id ?? "—",
+          date: parseD(ticket),
+          name: ticket.name ?? "—",
+          number: ticket.number ?? "—",
+          device: ticket.deviceType ?? "—",
+          brandModel:
+            `${ticket.brand ?? ""} ${ticket.model ?? ""}`.trim() || "—",
+          issue: ticket.issueDescription ?? "—",
+          store: ticket.store ?? "—",
+          assignee,
+          status: ticket.status ?? "—",
+          priority: ticket.priority ?? "—",
+        };
+
+        // ── Pre-calculate wrapped lines per cell to determine dynamic row height ──
+        doc.setFontSize(6.2);
+        doc.setFont("helvetica", "normal");
+
+        const cellLines: Record<string, string[]> = {};
+        cols.forEach((col) => {
+          const maxChars =
+            col.key === "issue" ? 55 : col.key === "store" ? 999 : 28;
+          const rawVal = rowData[col.key] ?? "—";
+          // For store and issue columns, use jsPDF text wrapping
+          if (
+            col.key === "store" ||
+            col.key === "issue" ||
+            col.key === "name"
+          ) {
+            cellLines[col.key] = doc.splitTextToSize(rawVal, col.w - 3);
+            // Cap at 3 lines max to prevent runaway rows
+            if (cellLines[col.key].length > 3) {
+              cellLines[col.key] = cellLines[col.key].slice(0, 3);
+              const last = cellLines[col.key][2];
+              cellLines[col.key][2] =
+                last.length > 3 ? last.slice(0, last.length - 2) + "…" : last;
+            }
+          } else {
+            cellLines[col.key] = [truncate(rawVal, maxChars)];
+          }
+        });
+
+        // Row height = max lines across all cells × line height
+        const lineH = 3.8;
+        const maxLines = Math.max(
+          ...Object.values(cellLines).map((l) => l.length),
+        );
+        const rowH = Math.max(baseRowH, maxLines * lineH + 3.5);
+
+        // ── Page break check ────────────────────────────────────
+        if (curY + rowH > pageHeight - 12) {
+          doc.addPage("a4", "l");
+          curY = 10;
+          drawTableHeader();
+        }
+
+        // ── Row background (alternating) ────────────────────────
+        if (idx % 2 === 0) {
+          doc.setFillColor(248, 250, 252);
+        } else {
+          doc.setFillColor(255, 255, 255);
+        }
+        doc.rect(marginL, curY, usableWidth, rowH, "F");
+
+        // ── Row border line ─────────────────────────────────────
+        doc.setDrawColor(226, 232, 240);
+        doc.line(marginL, curY + rowH, marginL + usableWidth, curY + rowH);
+
+        // ── Draw each cell ──────────────────────────────────────
+        doc.setFontSize(6.2);
+        doc.setFont("helvetica", "normal");
+        let x = marginL;
+
+        cols.forEach((col) => {
+          const lines = cellLines[col.key] ?? ["—"];
+          // Vertical center offset: center the text block in the row
+          const textBlockH = lines.length * lineH;
+          const textStartY = curY + (rowH - textBlockH) / 2 + lineH - 0.5;
+
+          if (col.key === "status") {
+            const statusKey = (rowData.status ?? "").toLowerCase();
+            const [sr, sg, sb] = statusColorMap[statusKey] ?? [100, 116, 139];
+            doc.setFillColor(sr, sg, sb);
+            doc.roundedRect(
+              x + 0.5,
+              curY + (rowH - 4.5) / 2,
+              col.w - 1,
+              4.5,
+              1.2,
+              1.2,
+              "F",
+            );
+            doc.setTextColor(255, 255, 255);
+            doc.setFont("helvetica", "bold");
+            doc.text(
+              truncate(rowData.status, 14),
+              x + col.w / 2,
+              curY + rowH / 2 + 1.2,
+              { align: "center" },
+            );
+            doc.setFont("helvetica", "normal");
+          } else if (col.key === "priority") {
+            const priKey = (rowData.priority ?? "").toLowerCase();
+            const [pr, pg, pb] = priorityColorMap[priKey] ?? [100, 116, 139];
+            doc.setTextColor(pr, pg, pb);
+            doc.setFont("helvetica", "bold");
+            doc.text(lines[0], x + 1.5, curY + rowH / 2 + 1.2);
+            doc.setFont("helvetica", "normal");
+          } else if (col.key === "ticketId") {
+            doc.setTextColor(...hex2rgb("#4f46e5"));
+            doc.setFont("helvetica", "bold");
+            doc.text(lines[0], x + 1.5, textStartY);
+            doc.setFont("helvetica", "normal");
+          } else if (col.key === "idx") {
+            doc.setTextColor(148, 163, 184);
+            doc.text(lines[0], x + 1.5, curY + rowH / 2 + 1.2);
+          } else {
+            doc.setTextColor(30, 41, 59);
+            // Multi-line support for store, issue, name
+            lines.forEach((line, li) => {
+              doc.text(line, x + 1.5, textStartY + li * lineH);
+            });
+          }
+          x += col.w;
+        });
+
+        curY += rowH;
+      });
+
+      // ── FOOTER ON EVERY PAGE ─────────────────────────────────
+      const totalPages = (doc as any).internal.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setFillColor(241, 245, 249);
+        doc.rect(0, pageHeight - 8, pageWidth, 8, "F");
+        doc.setFontSize(6.5);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(100, 116, 139);
+        doc.text(
+          `Infofix Services  •  Confidential Work Report  •  Generated ${new Date().toLocaleString("en-IN")}`,
+          marginL,
+          pageHeight - 2.5,
+        );
+        doc.text(
+          `Page ${p} of ${totalPages}`,
+          pageWidth - marginR,
+          pageHeight - 2.5,
+          { align: "right" },
+        );
+      }
+
+      // ── SAVE ─────────────────────────────────────────────────
+      const dateStr = new Date().toISOString().split("T")[0];
+      const storeStr =
+        storeFilter !== "All" ? `_${storeFilter.replace(/\s+/g, "-")}` : "";
+      const statusStr =
+        statusFilter !== "All" ? `_${statusFilter.replace(/\s+/g, "-")}` : "";
+      doc.save(
+        `Infofix_Tickets_${periodLabels[timeFilter] ?? timeFilter}${storeStr}${statusStr}_${dateStr}.pdf`,
       );
     } catch (e) {
-      console.error(e);
+      console.error("PDF export error:", e);
+      alert("Failed to export PDF. Please try again.");
     } finally {
       setIsExporting(false);
     }
@@ -516,6 +890,25 @@ export default function Reports({
                         {m.name}
                       </option>
                     ))}
+                </select>
+              </div>
+              {/* Status Filter */}
+              <div className="relative shrink-0">
+                <Activity
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="pl-8 pr-8 py-2 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer min-w-[130px]"
+                >
+                  <option value="All">All Statuses</option>
+                  {settings.ticketStatuses.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.name}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
