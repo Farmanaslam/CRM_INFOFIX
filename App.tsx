@@ -899,7 +899,15 @@ function App() {
         </div>
       );
     }
-
+    if (currentUser.role === "TECHNICIAN" && currentView === "reports") {
+      return (
+        <Reports
+          currentUser={currentUser}
+          tickets={tickets}
+          settings={appSettings}
+        />
+      );
+    }
     if (currentUser.role === "CUSTOMER") {
       switch (currentView) {
         case "customer_dashboard":

@@ -80,7 +80,15 @@ export default function Reports({
   const [timeFilter, setTimeFilter] = useState<"7d" | "30d" | "90d" | "all">(
     "30d",
   );
-  const [storeFilter, setStoreFilter] = useState<string>("All");
+  const technicianStore = useMemo(() => {
+    if (currentUser.role === "TECHNICIAN" && currentUser.storeId) {
+      const store = settings.stores.find((s) => s.id === currentUser.storeId);
+      return store?.name || "All";
+    }
+    return "All";
+  }, [currentUser, settings.stores]);
+
+  const [storeFilter, setStoreFilter] = useState<string>(technicianStore);
   const [roleFilter, setRoleFilter] = useState<string>("All");
   const [memberFilter, setMemberFilter] = useState<string>("All");
   const [statusFilter, setStatusFilter] = useState<string>("All");
@@ -829,69 +837,86 @@ export default function Reports({
 
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
               {/* Store Filter */}
-              <div className="relative shrink-0">
-                <MapPin
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-                <select
-                  value={storeFilter}
-                  onChange={(e) => setStoreFilter(e.target.value)}
-                  className="pl-8 pr-8 py-2 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer min-w-[120px]"
-                >
-                  <option value="All">All Stores</option>
-                  {settings.stores.map((s) => (
-                    <option key={s.id} value={s.name}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Role Filter */}
-              <div className="relative shrink-0">
-                <Shield
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-                <select
-                  value={roleFilter}
-                  onChange={(e) => {
-                    setRoleFilter(e.target.value);
-                    setMemberFilter("All");
-                  }}
-                  className="pl-8 pr-8 py-2 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer min-w-[120px]"
-                >
-                  <option value="All">All Roles</option>
-                  <option value="TECHNICIAN">Technician</option>
-                  <option value="MANAGER">Manager</option>
-                  <option value="ADMIN">Admin</option>
-                </select>
-              </div>
-
-              {/* Member Filter */}
-              <div className="relative shrink-0">
-                <UserIcon
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-                <select
-                  value={memberFilter}
-                  onChange={(e) => setMemberFilter(e.target.value)}
-                  className="pl-8 pr-8 py-2 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer min-w-[120px]"
-                >
-                  <option value="All">All Staff</option>
-                  {accessibleStaff
-                    .filter(
-                      (m) => roleFilter === "All" || m.role === roleFilter,
-                    )
-                    .map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
+              {/* Store Filter */}
+              {currentUser.role === "TECHNICIAN" ? (
+                <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl shrink-0">
+                  <MapPin size={14} className="text-indigo-500" />
+                  <span className="text-xs font-bold text-indigo-700">
+                    {storeFilter !== "All" ? storeFilter : "No Store Assigned"}
+                  </span>
+                  <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">
+                    (Locked)
+                  </span>
+                </div>
+              ) : (
+                <div className="relative shrink-0">
+                  <MapPin
+                    size={14}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                  <select
+                    value={storeFilter}
+                    onChange={(e) => setStoreFilter(e.target.value)}
+                    className="pl-8 pr-8 py-2 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer min-w-[120px]"
+                  >
+                    <option value="All">All Stores</option>
+                    {settings.stores.map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name}
                       </option>
                     ))}
-                </select>
-              </div>
+                  </select>
+                </div>
+              )}
+
+              {/* Role Filter */}
+              {currentUser.role !== "TECHNICIAN" && (
+                <>
+                  <div className="relative shrink-0">
+                    <Shield
+                      size={14}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <select
+                      value={roleFilter}
+                      onChange={(e) => {
+                        setRoleFilter(e.target.value);
+                        setMemberFilter("All");
+                      }}
+                      className="pl-8 pr-8 py-2 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer min-w-[120px]"
+                    >
+                      <option value="All">All Roles</option>
+                      <option value="TECHNICIAN">Technician</option>
+                      <option value="MANAGER">Manager</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                  </div>
+
+                  {/* Member Filter */}
+                  <div className="relative shrink-0">
+                    <UserIcon
+                      size={14}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <select
+                      value={memberFilter}
+                      onChange={(e) => setMemberFilter(e.target.value)}
+                      className="pl-8 pr-8 py-2 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none appearance-none cursor-pointer min-w-[120px]"
+                    >
+                      <option value="All">All Staff</option>
+                      {accessibleStaff
+                        .filter(
+                          (m) => roleFilter === "All" || m.role === roleFilter,
+                        )
+                        .map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </>
+              )}
               {/* Status Filter */}
               <div className="relative shrink-0">
                 <Activity

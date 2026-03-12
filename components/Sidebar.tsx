@@ -197,7 +197,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         id: "reports",
         label: "Reports",
         icon: BarChart3,
-        allowedRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
+        allowedRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "TECHNICIAN"],
       },
       {
         id: "supports",
@@ -230,7 +230,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         allowedRoles: ["CUSTOMER"],
       },
     ],
-    []
+    [],
   );
 
   // Sync expanded menu with current view initially and on view changes
@@ -238,7 +238,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (isCollapsed) return; // Don't mess with expansion state if collapsed
 
     const activeParent = allNavItems.find((item) =>
-      item.children?.some((child) => child.id === currentView)
+      item.children?.some((child) => child.id === currentView),
     );
 
     if (activeParent) {
@@ -431,12 +431,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 
             const visibleChildren =
               item.children?.filter((child) =>
-                child.allowedRoles.includes(currentUser.role)
+                child.allowedRoles.includes(currentUser.role),
               ) || [];
             if (item.children && visibleChildren.length === 0) return null;
 
             const isChildActive = visibleChildren.some(
-              (child) => currentView === child.id
+              (child) => currentView === child.id,
             );
             const isActive = currentView === item.id || isChildActive;
 
