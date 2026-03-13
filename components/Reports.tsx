@@ -102,18 +102,27 @@ export default function Reports({
   };
 
   // Parse DD/MM/YYYY format to proper Date object
-  // Parse DD/MM/YYYY format to proper Date object
   const parseTicketDate = (dateStr?: string, ticketHistory?: any[]) => {
     if (!dateStr) return null;
 
-    // 🔥 NEW: Try to extract date from ticket history first (most accurate)
+    let resolvedHistory = ticketHistory;
+    if (typeof ticketHistory === "string") {
+      try {
+        resolvedHistory = JSON.parse(ticketHistory);
+        if (typeof resolvedHistory === "string") {
+          resolvedHistory = JSON.parse(resolvedHistory);
+        }
+      } catch {
+        resolvedHistory = [];
+      }
+    }
     if (
-      ticketHistory &&
-      Array.isArray(ticketHistory) &&
-      ticketHistory.length > 0
+      resolvedHistory &&
+      Array.isArray(resolvedHistory) &&
+      resolvedHistory.length > 0
     ) {
       try {
-        const creationEntry = ticketHistory.find(
+        const creationEntry = resolvedHistory.find(
           (h: any) => h.action === "Ticket Created",
         );
 
@@ -123,14 +132,23 @@ export default function Reports({
           const parts = datePart.split("/");
 
           if (parts.length === 3) {
-            const day = parseInt(parts[0], 10);
-            const month = parseInt(parts[1], 10) - 1;
-            const year = parseInt(parts[2], 10);
+            const p0 = parseInt(parts[0], 10);
+            const p1 = parseInt(parts[1], 10);
+            const p2 = parseInt(parts[2], 10);
 
-            if (day <= 31 && month <= 11) {
-              const d = new Date(year, month, day);
-              if (!isNaN(d.getTime())) return d;
+            // If p0 > 12, it MUST be day → DD/MM/YYYY
+            // If p1 > 12, it MUST be day → M/D/YYYY
+            // If both ≤ 12, prefer M/D/YYYY (US locale, which JS toLocaleString uses)
+            let day: number, month: number;
+            if (p0 > 12) {
+              day = p0;
+              month = p1 - 1; // DD/MM/YYYY
+            } else {
+              day = p1;
+              month = p0 - 1; // M/D/YYYY (default for en-US locale strings)
             }
+            const d = new Date(p2, month, day);
+            if (!isNaN(d.getTime()) && month >= 0 && month <= 11) return d;
           }
         }
       } catch (e) {
@@ -202,7 +220,10 @@ export default function Reports({
 
     return tickets.filter((ticket) => {
       // 🔥 PASS HISTORY TO parseTicketDate
-      const ticketDate = parseTicketDate(ticket.date, ticket.history);
+      const ticketDate = parseTicketDate(
+        ticket.date ?? (ticket as any).created_at,
+        ticket.history,
+      );
       if (!ticketDate) return false;
 
       const normalizedTicketDate = new Date(ticketDate);
@@ -211,8 +232,11 @@ export default function Reports({
       if (normalizedTicketDate < startDate || normalizedTicketDate > now)
         return false;
       if (storeFilter !== "All" && ticket.store !== storeFilter) return false;
-
-      if (statusFilter !== "All" && ticket.status !== statusFilter)
+      if (
+        statusFilter !== "All" &&
+        ticket.status?.trim().toLowerCase() !==
+          statusFilter?.trim().toLowerCase()
+      )
         return false;
 
       if (roleFilter !== "All" || memberFilter !== "All") {
@@ -310,7 +334,7 @@ export default function Reports({
 
     filteredData.forEach((t) => {
       // 🔥 PASS HISTORY TO parseTicketDate
-      const d = parseTicketDate(t.date, t.history);
+      const d = parseTicketDate(t.date ?? (t as any).created_at, t.history);
 
       // Skip invalid dates
       if (!d) {
@@ -337,7 +361,7 @@ export default function Reports({
     // 5. Status Distribution
     const statusCounts: Record<string, number> = {};
     filteredData.forEach((t) => {
-      const statusKey = t.status.trim().toLowerCase(); // normalize
+      const statusKey = t.status?.trim() ?? "Unknown";
       statusCounts[statusKey] = (statusCounts[statusKey] || 0) + 1;
     });
     const statusData = Object.keys(statusCounts).map((key) => ({
@@ -1150,7 +1174,7 @@ export default function Reports({
                           dataKey="value"
                         >
                           {analytics.statusData.map((entry, index) => {
-                            const statusKey = entry.name.toLowerCase();
+                            const statusKey = entry.name.trim().toLowerCase();
                             const STATUS_COLORS: Record<string, string> = {
                               new: "#3B82F6",
                               delivery: "#F59E0B",
