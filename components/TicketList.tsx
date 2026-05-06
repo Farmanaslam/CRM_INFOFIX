@@ -262,69 +262,21 @@ const DeleteConfirmationModal: React.FC<{
   );
 };
 
-// Add this helper function to parse DD/MM/YYYY dates from ticket history
+// NEW
 const parseTicketDateFromHistory = (ticket: Ticket): Date | null => {
-  // Try to get date from history first (most accurate)
-  if (
-    ticket.history &&
-    Array.isArray(ticket.history) &&
-    ticket.history.length > 0
-  ) {
-    try {
-      const creationEntry = ticket.history.find(
-        (h: any) => h.action === "Ticket Created",
-      );
-
-      if (creationEntry && creationEntry.date) {
-        // Extract date from format "01/02/2026, 19:27:44"
-        const datePart = creationEntry.date.split(",")[0].trim();
-        const parts = datePart.split("/");
-
-        if (parts.length === 3) {
-          const day = parseInt(parts[0], 10);
-          const month = parseInt(parts[1], 10) - 1;
-          const year = parseInt(parts[2], 10);
-
-          if (day <= 31 && month <= 11) {
-            const d = new Date(year, month, day);
-            if (!isNaN(d.getTime())) return d;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to parse history date");
-    }
-  }
-
-  // Fallback to parsing ticket.date
-  if (!ticket.date) return null;
-
-  // Try DD/MM/YYYY format
-  let parts = ticket.date.split("/");
-  if (parts.length === 3) {
-    const day = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1;
-    const year = parseInt(parts[2], 10);
-
-    if (day <= 31 && month <= 11) {
-      const d = new Date(year, month, day);
+  // Use timestamp — locale-independent, always correct
+  if (ticket.history && Array.isArray(ticket.history) && ticket.history.length > 0) {
+    const creationEntry = ticket.history.find((h: any) => h.action === "Ticket Created");
+    if (creationEntry?.timestamp) {
+      const d = new Date(creationEntry.timestamp);
       if (!isNaN(d.getTime())) return d;
     }
   }
-
-  // Try M/D/YYYY format
-  parts = ticket.date.split("/");
-  if (parts.length === 3) {
-    const month = parseInt(parts[0], 10) - 1;
-    const day = parseInt(parts[1], 10);
-    const year = parseInt(parts[2], 10);
-
-    if (day <= 31 && month <= 11) {
-      const d = new Date(year, month, day);
-      if (!isNaN(d.getTime())) return d;
-    }
+  // Fallback: supabase created_at (ISO string, always unambiguous)
+  if ((ticket as any).createdAt) {
+    const d = new Date((ticket as any).createdAt);
+    if (!isNaN(d.getTime())) return d;
   }
-
   return null;
 };
 // --- MAIN COMPONENT ---
