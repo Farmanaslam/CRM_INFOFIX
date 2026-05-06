@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from "react";
 import {
   ClipboardCheck,
   FileText,
@@ -48,6 +48,7 @@ import {
   ThumbsUp,
   Filter,
   FileDown,
+  Eye,
 } from "lucide-react";
 import {
   BarChart,
@@ -77,8 +78,8 @@ import {
   Store,
 } from "../types";
 import { supabase } from "@/supabaseClient";
-// --- DATA ---
 
+// --- DATA -------------------------------------------------------------
 const CHECKLIST_DATA: ChecklistCategory[] = [
   {
     id: "service_install",
@@ -209,29 +210,21 @@ const CHECKLIST_DATA: ChecklistCategory[] = [
   },
 ];
 
-// --- UTILS ---
-
+// --- UTILS ------------------------------------------------------------
 const getSmartIcon = (label: string) => {
   const l = label.toLowerCase();
-
-  // Service
   if (l.includes("windows") || l.includes("os")) return <Disc size={16} />;
   if (l.includes("driver") || l.includes("bios") || l.includes("tpm"))
     return <Cpu size={16} />;
   if (l.includes("antivirus") || l.includes("bloatware"))
     return <ShieldCheck size={16} />;
-
-  // Functionality
   if (l.includes("wifi")) return <Wifi size={16} />;
   if (l.includes("bluetooth")) return <Wifi size={16} />;
-  if (l.includes("speaker") || l.includes("audio"))
-    return <Speaker size={16} />;
+  if (l.includes("speaker") || l.includes("audio")) return <Speaker size={16} />;
   if (l.includes("mic")) return <Mic size={16} />;
   if (l.includes("webcam") || l.includes("camera")) return <Camera size={16} />;
   if (l.includes("lid") || l.includes("sleep") || l.includes("sensor"))
     return <Layout size={16} />;
-
-  // Input & Display
   if (l.includes("keyboard")) return <Keyboard size={16} />;
   if (l.includes("touchpad") || l.includes("gesture"))
     return <MousePointer size={16} />;
@@ -243,8 +236,6 @@ const getSmartIcon = (label: string) => {
   )
     return <Monitor size={16} />;
   if (l.includes("touch")) return <MousePointer size={16} />;
-
-  // Ports
   if (
     l.includes("usb") ||
     l.includes("hdmi") ||
@@ -255,17 +246,12 @@ const getSmartIcon = (label: string) => {
   )
     return <Plug size={16} />;
   if (l.includes("charging") || l.includes("power")) return <Zap size={16} />;
-
-  // Stress
   if (l.includes("battery")) return <Battery size={16} />;
   if (l.includes("stress") || l.includes("ram") || l.includes("gpu"))
     return <Activity size={16} />;
-  if (l.includes("fan") || l.includes("thermal"))
-    return <Thermometer size={16} />;
+  if (l.includes("fan") || l.includes("thermal")) return <Thermometer size={16} />;
   if (l.includes("hdd") || l.includes("ssd") || l.includes("storage"))
     return <HardDrive size={16} />;
-
-  // Physical
   if (
     l.includes("hinge") ||
     l.includes("screw") ||
@@ -276,8 +262,6 @@ const getSmartIcon = (label: string) => {
     l.includes("fitting")
   )
     return <Wrench size={16} />;
-
-  // Cosmetic
   if (
     l.includes("clean") ||
     l.includes("wipe") ||
@@ -285,8 +269,6 @@ const getSmartIcon = (label: string) => {
     l.includes("lamination")
   )
     return <Sparkles size={16} />;
-
-  // Packaging
   if (l.includes("date") || l.includes("time")) return <Clock size={16} />;
   if (
     l.includes("pack") ||
@@ -295,7 +277,6 @@ const getSmartIcon = (label: string) => {
     l.includes("id pasting")
   )
     return <Package size={16} />;
-
   return <ClipboardCheck size={16} />;
 };
 
@@ -306,28 +287,18 @@ const getProgressColor = (progress: number) => {
   return "text-red-600 bg-red-500";
 };
 
-const INITIAL_REPORT: Report = {
+const createInitialReport = (): Report => ({
   id: "",
   date: new Date().toISOString(),
-  deviceInfo: {
-    laptopNo: "",
-    customerName: "",
-    technicianName: "",
-    deviceModel: "",
-  },
+  deviceInfo: { laptopNo: "", customerName: "", technicianName: "", deviceModel: "" },
   checklist: {},
-  battery: {
-    chargePercent: "",
-    remainingPercent: "",
-    duration: "",
-    health: "Good",
-  },
+  battery: { chargePercent: "", remainingPercent: "", duration: "", health: "Good" },
   actionRequired: null,
   notes: "",
   status: "Draft",
   progress: 0,
   history: [],
-};
+});
 
 interface LaptopReportsProps {
   activeTab: "dashboard" | "data";
@@ -335,84 +306,56 @@ interface LaptopReportsProps {
   currentUser?: AppUser;
   reports?: Report[];
   setReports?: (reports: Report[]) => void;
-  // Fix: Added missing selectedZoneId property to interface
   selectedZoneId: string;
   stores?: Store[];
 }
 
-// --- COMPONENTS ---
-
-// History Modal Component
+// --- HISTORY MODAL (unchanged) -----------------------------------------
 const HistoryModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   history: ReportHistory[];
 }> = ({ isOpen, onClose, history }) => {
   if (!isOpen) return null;
-
   const sortedHistory = [...history].sort((a, b) => b.timestamp - a.timestamp);
-
   const downloadHistoryPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
-    doc.setTextColor(67, 56, 202); // Indigo-700
+    doc.setTextColor(67, 56, 202);
     doc.text("Laptop Report Audit Log", 14, 20);
-
     doc.setFontSize(10);
     doc.setTextColor(100);
     doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
     doc.setDrawColor(200);
     doc.line(14, 32, 196, 32);
-
     let y = 40;
-
     sortedHistory.forEach((item, index) => {
       if (y > 270) {
         doc.addPage();
         y = 20;
       }
-
       const dateParts = item.date.split(", ");
       doc.setFontSize(9);
       doc.setTextColor(150);
       doc.text(dateParts[0], 14, y);
       doc.text(dateParts[1] || "", 14, y + 5);
-
       doc.setFontSize(11);
       doc.setTextColor(0);
       doc.setFont("helvetica", "bold");
       doc.text(item.action, 45, y);
-
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(50);
-      // Simple word wrap
       const splitDetails = doc.splitTextToSize(item.details, 140);
       doc.text(splitDetails, 45, y + 6);
-
       const detailsHeight = splitDetails.length * 5;
-
       doc.setFontSize(8);
       doc.setTextColor(100);
-      doc.text(
-        `User: ${item.actor.toUpperCase()}`,
-        45,
-        y + 6 + detailsHeight + 2,
-      );
-
-      // Draw line connecting items
-      if (index < sortedHistory.length - 1) {
-        doc.setDrawColor(220);
-        doc.setLineWidth(0.5);
-        // doc.line(38, y + 2, 38, y + 15 + detailsHeight); // Optional visual line
-      }
-
+      doc.text(`User: ${item.actor.toUpperCase()}`, 45, y + 6 + detailsHeight + 2);
       y += 15 + detailsHeight;
     });
-
     doc.save("laptop_report_history.pdf");
   };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-in fade-in zoom-in-95 overflow-hidden flex flex-col max-h-[85vh]">
@@ -438,32 +381,23 @@ const HistoryModal: React.FC<{
             </button>
           </div>
         </div>
-
         <div className="p-6 overflow-y-auto bg-slate-50/50 custom-scrollbar flex-1">
           {sortedHistory.length > 0 ? (
             <div className="space-y-6 relative pl-4">
-              {/* Vertical line */}
               <div className="absolute left-[34px] top-4 bottom-4 w-0.5 bg-slate-200"></div>
-
-              {sortedHistory.map((item, index) => {
+              {sortedHistory.map((item) => {
                 const isCreated = item.action.includes("Created");
-                const dateParts = item.date.split(", "); // Assuming 'MM/DD/YYYY, HH:MM:SS PM' format roughly
-
                 return (
                   <div key={item.id} className="relative pl-10 group">
-                    {/* Dot */}
                     <div
-                      className={`absolute left-[14px] top-4 w-4 h-4 rounded-full border-2 border-white shadow-sm flex items-center justify-center z-10 ${
-                        isCreated ? "bg-emerald-500" : "bg-indigo-500"
-                      }`}
+                      className={`absolute left-[14px] top-4 w-4 h-4 rounded-full border-2 border-white shadow-sm flex items-center justify-center z-10 ${isCreated ? "bg-emerald-500" : "bg-indigo-500"
+                        }`}
                     ></div>
-
                     <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                       <div className="flex justify-between items-start mb-2">
                         <span
-                          className={`font-bold text-sm ${
-                            isCreated ? "text-emerald-700" : "text-slate-800"
-                          }`}
+                          className={`font-bold text-sm ${isCreated ? "text-emerald-700" : "text-slate-800"
+                            }`}
                         >
                           {item.action}
                         </span>
@@ -471,11 +405,9 @@ const HistoryModal: React.FC<{
                           {item.date}
                         </span>
                       </div>
-
                       <p className="text-sm text-slate-600 mb-3 leading-relaxed whitespace-pre-wrap">
                         {item.details}
                       </p>
-
                       <div className="flex items-center gap-2 pt-2 border-t border-slate-50">
                         <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
                           <User size={10} />
@@ -501,7 +433,7 @@ const HistoryModal: React.FC<{
   );
 };
 
-// Fix: Added selectedZoneId to destructuring
+// --- MAIN COMPONENT ---------------------------------------------------
 export default function LaptopReports({
   activeTab,
   settings,
@@ -511,209 +443,159 @@ export default function LaptopReports({
   selectedZoneId,
   stores = [],
 }: LaptopReportsProps) {
-  // internalView controls List vs Editor inside the Data tab
   const isTechnician = currentUser?.role === "TECHNICIAN";
   const technicianName = currentUser?.name || "";
-
   const [internalView, setInternalView] = useState<"list" | "editor">("list");
-
   const [currentReport, setCurrentReport] = useState<Report>({
-    ...INITIAL_REPORT,
+    ...createInitialReport(),
     deviceInfo: {
-      ...INITIAL_REPORT.deviceInfo,
+      ...createInitialReport().deviceInfo,
       technicianName: isTechnician ? technicianName : "",
     },
   });
   const [showHistory, setShowHistory] = useState(false);
-
-  // UI State
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchTerm, setSearchTerm] = useState("");
-
-  // Filter States
-  const [filterTech, setFilterTech] = useState("All");
+  const [filterTech, setFilterTech] = useState(isTechnician ? technicianName : "All");
   const [filterDealer, setFilterDealer] = useState("All");
   const [filterAction, setFilterAction] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
-  // Reset internal view when switching main tabs
+  const scrollPositionRef = useRef(0);
+  const isReturningToListRef = useRef(false);
+  const lastEditedReportIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (activeTab === "data") {
-      setInternalView("list");
-    }
+    if (activeTab === "data") setInternalView("list");
   }, [activeTab]);
 
-  const visibleReports = useMemo(() => {
-    if (isTechnician) {
-      return reports.filter(
-        (report) => report.deviceInfo.technicianName === technicianName,
-      );
+  useLayoutEffect(() => {
+    if (internalView === "list" && isReturningToListRef.current) {
+      const reportId = lastEditedReportIdRef.current;
+      requestAnimationFrame(() => {
+        if (reportId) {
+          const el = document.getElementById(`report-card-${reportId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "auto", block: "center" });
+          } else {
+            window.scrollTo({ top: scrollPositionRef.current, behavior: "auto" });
+          }
+        }
+        isReturningToListRef.current = false;
+      });
     }
-    return reports;
-  }, [reports, isTechnician, technicianName]);
-  // Inside the component, after useState declarations:
+  }, [internalView]);
+  const visibleReports = useMemo(() => {
+    if (!isTechnician) return reports;
+    let currentStoreId: string | undefined = currentUser?.storeId;
+    if (!currentStoreId && settings?.teamMembers) {
+      const techMember = settings.teamMembers.find(m => m.name === technicianName && m.role === "TECHNICIAN");
+      currentStoreId = techMember?.storeId;
+    }
+
+    if (!currentStoreId) {
+      return reports.filter((report) => report.deviceInfo.technicianName === technicianName);
+    }
+    const sameStoreTechNames = settings?.teamMembers
+      ?.filter(m => m.role === "TECHNICIAN" && m.storeId === currentStoreId)
+      .map(m => m.name) ?? [];
+
+    if (sameStoreTechNames.length === 0) {
+      return reports.filter((report) => report.deviceInfo.technicianName === technicianName);
+    }
+    return reports.filter((report) => sameStoreTechNames.includes(report.deviceInfo.technicianName));
+  }, [reports, isTechnician, technicianName, currentUser?.storeId, settings?.teamMembers]);
+
   const zoneFilteredReports = useMemo(() => {
     if (selectedZoneId === "all") return visibleReports;
     return visibleReports.filter((r) => r.zoneId === selectedZoneId);
   }, [visibleReports, selectedZoneId]);
 
-  // --- ANALYTICS DATA ---
   const dashboardData = useMemo(() => {
-    // 1. Dealer Stats
-    const dealerStats: Record<
-      string,
-      { total: number; issues: number; passRate: number }
-    > = {};
-    // 2. Tech Stats
-    const techStats: Record<string, { total: number; avgProgress: number }> =
-      {};
-
+    const dealerStats: Record<string, { total: number; issues: number; passRate: number }> = {};
+    const techStats: Record<string, { total: number; avgProgress: number }> = {};
     let totalIssues = 0;
-
-    // Fix: Use zoneFilteredReports for dashboard data
     zoneFilteredReports.forEach((r) => {
       const dealer = r.deviceInfo.customerName || "Unknown Dealer";
       const tech = r.deviceInfo.technicianName || "Unassigned";
       const hasIssue = !!r.actionRequired;
-
-      // Dealer Aggregation
-      if (!dealerStats[dealer])
-        dealerStats[dealer] = { total: 0, issues: 0, passRate: 0 };
+      if (!dealerStats[dealer]) dealerStats[dealer] = { total: 0, issues: 0, passRate: 0 };
       dealerStats[dealer].total += 1;
       if (hasIssue) {
         dealerStats[dealer].issues += 1;
         totalIssues += 1;
       }
-
-      // Tech Aggregation
       if (!techStats[tech]) techStats[tech] = { total: 0, avgProgress: 0 };
       techStats[tech].total += 1;
-      techStats[tech].avgProgress += r.progress; // Sum for now
+      techStats[tech].avgProgress += r.progress;
     });
-
-    // Finalize Dealer Stats
     const dealerList = Object.keys(dealerStats)
       .map((name) => ({
         name,
         total: dealerStats[name].total,
         issues: dealerStats[name].issues,
-        passed: dealerStats[name].total - dealerStats[name].issues, // Explicit Passed Count
-        defectRate: Math.round(
-          (dealerStats[name].issues / dealerStats[name].total) * 100,
-        ),
-        passRate: Math.round(
-          ((dealerStats[name].total - dealerStats[name].issues) /
-            dealerStats[name].total) *
-            100,
-        ),
+        passed: dealerStats[name].total - dealerStats[name].issues,
+        defectRate: Math.round((dealerStats[name].issues / dealerStats[name].total) * 100),
+        passRate: Math.round(((dealerStats[name].total - dealerStats[name].issues) / dealerStats[name].total) * 100),
       }))
-      .sort((a, b) => b.issues - a.issues); // Sort by issues descending for "Issues facing"
-
-    // Finalize Tech Stats
+      .sort((a, b) => b.issues - a.issues);
     const techList = Object.keys(techStats)
       .map((name) => ({
         name,
         total: techStats[name].total,
-        efficiency: Math.round(
-          techStats[name].avgProgress / techStats[name].total,
-        ),
+        efficiency: Math.round(techStats[name].avgProgress / techStats[name].total),
       }))
       .sort((a, b) => b.total - a.total);
-
-    return {
-      dealerList,
-      techList,
-      totalReports: zoneFilteredReports.length,
-      totalIssues,
-    };
+    return { dealerList, techList, totalReports: zoneFilteredReports.length, totalIssues };
   }, [zoneFilteredReports]);
 
-  // --- FILTERED REPORTS ---
   const filteredReports = useMemo(() => {
     return zoneFilteredReports.filter((r) => {
-      const matchesSearch = r.deviceInfo.laptopNo
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
-      const matchesTech =
-        filterTech === "All" || r.deviceInfo.technicianName === filterTech;
-      const matchesDealer =
-        filterDealer === "All" || r.deviceInfo.customerName === filterDealer;
-      const matchesAction =
-        filterAction === "All" || r.actionRequired === filterAction;
+      const matchesSearch = r.deviceInfo.laptopNo.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesTech = filterTech === "All" || r.deviceInfo.technicianName === filterTech;
+      const matchesDealer = filterDealer === "All" || r.deviceInfo.customerName === filterDealer;
+      const matchesAction = filterAction === "All" || r.actionRequired === filterAction;
       const matchesStatus = filterStatus === "All" || r.status === filterStatus;
-
-      // Date range filter
       let matchesDate = true;
       if (filterDateFrom || filterDateTo) {
-        const reportDate = new Date(r.date);
-        reportDate.setHours(0, 0, 0, 0);
-        if (filterDateFrom) {
-          const from = new Date(filterDateFrom);
-          if (!isNaN(from.getTime()))
-            matchesDate = matchesDate && reportDate >= from;
+        const reportDateOnly = new Date(r.date).toLocaleDateString('en-CA');
+        if (filterDateFrom && reportDateOnly < filterDateFrom) {
+          matchesDate = false;
         }
-        if (filterDateTo) {
-          const to = new Date(filterDateTo);
-          to.setHours(23, 59, 59, 999);
-          if (!isNaN(to.getTime()))
-            matchesDate = matchesDate && reportDate <= to;
+        if (matchesDate && filterDateTo && reportDateOnly > filterDateTo) {
+          matchesDate = false;
         }
       }
-      return (
-        matchesSearch &&
-        matchesTech &&
-        matchesDealer &&
-        matchesAction &&
-        matchesStatus &&
-        matchesDate
-      );
+      return matchesSearch && matchesTech && matchesDealer && matchesAction && matchesStatus && matchesDate;
     });
-  }, [
-    zoneFilteredReports,
-    searchTerm,
-    filterTech,
-    filterDealer,
-    filterAction,
-    filterStatus,
-    filterDateFrom,
-    filterDateTo,
-  ]);
-
-  // --- EDITOR LOGIC ---
+  }, [zoneFilteredReports, searchTerm, filterTech, filterDealer, filterAction, filterStatus, filterDateFrom, filterDateTo]);
 
   const handleChecklistToggle = (itemId: string, status: "pass" | "fail") => {
     setCurrentReport((prev) => {
       const newVal = prev.checklist[itemId] === status ? null : status;
       const newChecklist = { ...prev.checklist, [itemId]: newVal };
-
-      // Calculate Progress
-      const totalItems = CHECKLIST_DATA.reduce(
-        (acc, cat) => acc + cat.items.length,
-        0,
-      );
-      const checkedItems = Object.values(newChecklist).filter(
-        (v) => v !== null,
-      ).length;
+      const totalItems = CHECKLIST_DATA.reduce((acc, cat) => acc + cat.items.length, 0);
+      const checkedItems = Object.values(newChecklist).filter((v) => v !== null).length;
       const progress = Math.round((checkedItems / totalItems) * 100);
-
-      // Confetti check
       if (progress === 100 && prev.progress < 100) {
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
       }
-
-      // Check Failures
       const hasFailures = Object.values(newChecklist).includes("fail");
-      const actionRequired = hasFailures
-        ? prev.actionRequired || "Return to Dealers"
-        : null;
-
+      const actionRequired = hasFailures ? prev.actionRequired || "Return to Dealers" : null;
       return { ...prev, checklist: newChecklist, progress, actionRequired };
     });
   };
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 21;
+
+  // Reset page on filter change - add to existing useEffects area:
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, filterTech, filterDealer, filterAction, filterStatus, filterDateFrom, filterDateTo]);
+
+  const totalPages = Math.ceil(filteredReports.length / PAGE_SIZE);
+  const pagedReports = filteredReports.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const saveReportToSupabase = async (report: Report) => {
     if (!supabase) return null;
-
     try {
       const { data, error } = await supabase
         .from("laptop_reports")
@@ -733,7 +615,6 @@ export default function LaptopReports({
         })
         .select()
         .single();
-
       if (error) throw error;
       return data;
     } catch (err) {
@@ -742,23 +623,13 @@ export default function LaptopReports({
     }
   };
 
-  // Fetch reports from Supabase
   const fetchReportsFromSupabase = async (zoneId?: string) => {
     if (!supabase) return [];
-
     try {
-      let query = supabase
-        .from("laptop_reports")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (zoneId && zoneId !== "all") {
-        query = query.eq("zone_id", zoneId);
-      }
-
+      let query = supabase.from("laptop_reports").select("*").order("created_at", { ascending: false });
+      if (zoneId && zoneId !== "all") query = query.eq("zone_id", zoneId);
       const { data, error } = await query;
       if (error) throw error;
-
       return (data || []).map((r: any) => ({
         id: r.id,
         date: r.date,
@@ -778,159 +649,66 @@ export default function LaptopReports({
     }
   };
 
-  // Delete report from Supabase
   const deleteReportFromSupabase = async (id: string) => {
     if (!supabase) return false;
-
     try {
-      const { error } = await supabase
-        .from("laptop_reports")
-        .delete()
-        .eq("id", id);
-
+      const { error } = await supabase.from("laptop_reports").delete().eq("id", id);
       return !error;
     } catch {
       return false;
     }
   };
+
   const handleSaveReport = async () => {
-    if (!currentReport.deviceInfo.laptopNo)
-      return alert("Laptop No is required");
-
-    // Generate a unique ID for new reports
+    if (!currentReport.deviceInfo.laptopNo) return alert("Laptop No is required");
     const reportId = currentReport.id || `report-${Date.now()}`;
-
     const original = reports.find((r) => r.id === reportId);
     let reportToSave: Report;
-
     const getTechnicianZoneId = (): string | undefined => {
-      if (!currentReport.deviceInfo.technicianName) {
-        console.log("⚠️ No technician name in report");
-        return undefined;
-      }
-      // Find the technician in team members
-      const technician = settings?.teamMembers?.find(
-        (m) => m.name === currentReport.deviceInfo.technicianName,
-      );
-
-      if (!technician) {
-        console.log("❌ Technician not found in team members");
-        return undefined;
-      }
-
-      console.log("👤 Found technician:", {
-        name: technician.name,
-        zoneId: technician.zoneId,
-        storeId: technician.storeId,
-      });
-
-      if (technician.zoneId) {
-        return technician.zoneId;
-      }
+      if (!currentReport.deviceInfo.technicianName) return undefined;
+      const technician = settings?.teamMembers?.find((m) => m.name === currentReport.deviceInfo.technicianName);
+      if (!technician) return undefined;
+      if (technician.zoneId) return technician.zoneId;
       if (technician.storeId && stores && stores.length > 0) {
-        console.log("🔍 Looking for store with id:", technician.storeId);
         const techStore = stores.find((s) => s.id === technician.storeId);
-
-        if (techStore) {
-          if (techStore.zoneId) {
-            return techStore.zoneId;
-          }
-        } else {
-          console.log("❌ Store not found with id:", technician.storeId);
-        }
+        if (techStore?.zoneId) return techStore.zoneId;
       }
       if (currentUser?.name === technician.name) {
-        console.log("🔍 Trying current user data:", {
-          zoneId: currentUser.zoneId,
-          storeId: currentUser.storeId,
-        });
-
-        if (currentUser.zoneId) {
-          return currentUser.zoneId;
-        }
-
+        if (currentUser.zoneId) return currentUser.zoneId;
         if (currentUser.storeId && stores && stores.length > 0) {
           const userStore = stores.find((s) => s.id === currentUser.storeId);
-          if (userStore?.zoneId) {
-            return userStore.zoneId;
-          }
+          if (userStore?.zoneId) return userStore.zoneId;
         }
       }
       return undefined;
     };
-
     if (original) {
       const changes: string[] = [];
-
-      if (original.progress !== currentReport.progress) {
-        changes.push(
-          `Progress: ${original.progress}% → ${currentReport.progress}%`,
-        );
-      }
-      if (original.status !== currentReport.status) {
-        changes.push(`Status: ${original.status} → ${currentReport.status}`);
-      }
-      if (original.actionRequired !== currentReport.actionRequired) {
-        changes.push(
-          `Action: ${original.actionRequired || "None"} → ${currentReport.actionRequired || "None"}`,
-        );
-      }
-      // Add technician notes comparison
+      if (original.progress !== currentReport.progress) changes.push(`Progress: ${original.progress}% → ${currentReport.progress}%`);
+      if (original.status !== currentReport.status) changes.push(`Status: ${original.status} → ${currentReport.status}`);
+      if (original.actionRequired !== currentReport.actionRequired) changes.push(`Action: ${original.actionRequired || "None"} → ${currentReport.actionRequired || "None"}`);
       if (original.notes !== currentReport.notes) {
         const originalNote = original.notes || "No notes";
         const newNote = currentReport.notes || "No notes";
-
-        // Truncate long notes for display
-        const truncateNote = (note: string) => {
-          if (note.length > 50) {
-            return note.substring(0, 47) + "...";
-          }
-          return note;
-        };
-
-        if (originalNote === "No notes" && newNote !== "No notes") {
-          changes.push(`Notes added: "${truncateNote(newNote)}"`);
-        } else if (originalNote !== "No notes" && newNote === "No notes") {
-          changes.push(`Notes removed`);
-        } else {
-          changes.push(
-            `Notes updated: "${truncateNote(originalNote)}" → "${truncateNote(newNote)}"`,
-          );
-        }
+        const truncateNote = (note: string) => (note.length > 50 ? note.substring(0, 47) + "..." : note);
+        if (originalNote === "No notes" && newNote !== "No notes") changes.push(`Notes added: "${truncateNote(newNote)}"`);
+        else if (originalNote !== "No notes" && newNote === "No notes") changes.push(`Notes removed`);
+        else changes.push(`Notes updated: "${truncateNote(originalNote)}" → "${truncateNote(newNote)}"`);
       }
-
-      // Add dealer comparison
-      if (
-        original.deviceInfo.customerName !==
-        currentReport.deviceInfo.customerName
-      ) {
+      if (original.deviceInfo.customerName !== currentReport.deviceInfo.customerName) {
         const originalDealer = original.deviceInfo.customerName || "Unassigned";
         const newDealer = currentReport.deviceInfo.customerName || "Unassigned";
         changes.push(`Dealer: ${originalDealer} → ${newDealer}`);
       }
-
-      // Add technician comparison
-      if (
-        original.deviceInfo.technicianName !==
-        currentReport.deviceInfo.technicianName
-      ) {
+      if (original.deviceInfo.technicianName !== currentReport.deviceInfo.technicianName) {
         const originalTech = original.deviceInfo.technicianName || "Unassigned";
         const newTech = currentReport.deviceInfo.technicianName || "Unassigned";
         changes.push(`Technician: ${originalTech} → ${newTech}`);
       }
-
-      // Add battery health comparison
       if (original.battery.health !== currentReport.battery.health) {
-        changes.push(
-          `Battery Health: ${original.battery.health} → ${currentReport.battery.health}`,
-        );
+        changes.push(`Battery Health: ${original.battery.health} → ${currentReport.battery.health}`);
       }
-
-      const details =
-        changes.length > 0
-          ? changes.join(", ")
-          : "Report updated with no visible changes";
-
+      const details = changes.length > 0 ? changes.join(", ") : "Report updated with no visible changes";
       const historyEntry: ReportHistory = {
         id: Date.now().toString(),
         timestamp: Date.now(),
@@ -939,21 +717,17 @@ export default function LaptopReports({
         action: changes.length > 0 ? "Report Updated" : "Report Saved",
         details: details,
       };
-
       const technicianZoneId = getTechnicianZoneId();
-
       reportToSave = {
         ...currentReport,
         id: reportId,
+        date: original.date,  // ← LOCK to original creation date
         history: [...(currentReport.history || []), historyEntry],
-        status:
-          currentReport.progress === 100 ? "Completed" : currentReport.status,
+        status: currentReport.progress === 100 ? "Completed" : currentReport.status,
         zoneId: technicianZoneId || currentReport.zoneId,
       };
     } else {
-      // For new reports
       const details = `New report created. Progress: ${currentReport.progress}%. Status: ${currentReport.status || "Draft"}. Dealer: ${currentReport.deviceInfo.customerName || "Unassigned"}, Technician: ${currentReport.deviceInfo.technicianName || "Unassigned"}`;
-
       const historyEntry: ReportHistory = {
         id: Date.now().toString(),
         timestamp: Date.now(),
@@ -962,66 +736,40 @@ export default function LaptopReports({
         action: "Report Created",
         details: details,
       };
-
       const technicianZoneId = getTechnicianZoneId();
-
       reportToSave = {
         ...currentReport,
         id: reportId,
         history: [historyEntry],
         status: currentReport.progress === 100 ? "Completed" : "Draft",
-        zoneId:
-          technicianZoneId ||
-          currentReport.zoneId ||
-          (selectedZoneId !== "all" ? selectedZoneId : undefined),
+        zoneId: technicianZoneId || currentReport.zoneId || (selectedZoneId !== "all" ? selectedZoneId : undefined),
       };
-
-      console.log("🔍 New report zone assignment:", {
-        technicianZoneId,
-        currentReportZoneId: currentReport.zoneId,
-        selectedZoneId,
-        finalZoneId: reportToSave.zoneId,
-      });
     }
-
-    // SAVE TO SUPABASE
     const savedReport = await saveReportToSupabase(reportToSave);
-
     if (savedReport) {
-      console.log("✅ Report saved with zone_id:", savedReport.zone_id);
-
       if (setReports) {
-        const existingIndex = reports.findIndex(
-          (r) => r.id === reportToSave.id,
-        );
+        const existingIndex = reports.findIndex((r) => r.id === reportToSave.id);
         let updatedReports: Report[];
-
         if (existingIndex >= 0) {
           updatedReports = [...reports];
           updatedReports[existingIndex] = reportToSave;
         } else {
           updatedReports = [reportToSave, ...reports];
         }
-
         setReports(updatedReports);
       }
-
-      // Reset and close editor
       setCurrentReport({
-        ...INITIAL_REPORT,
-        deviceInfo: {
-          ...INITIAL_REPORT.deviceInfo,
-          technicianName: isTechnician ? technicianName : "",
-        },
+        ...createInitialReport(),
+        deviceInfo: { ...createInitialReport().deviceInfo, technicianName: isTechnician ? technicianName : "" },
       });
+      isReturningToListRef.current = true;
       setInternalView("list");
-
-      // Show success message
       alert("Report saved successfully!");
     } else {
       alert("Failed to save report. Please try again.");
     }
   };
+
   const handleDownloadPDF = () => {
     const element = document.getElementById("report-container");
     const opt = {
@@ -1037,143 +785,83 @@ export default function LaptopReports({
   const handleExportFilteredPDF = () => {
     const doc = new jsPDF("l", "mm", "a4");
     const pageWidth = doc.internal.pageSize.getWidth();
-
-    // Header
-    doc.setFillColor(67, 56, 202); // Indigo-700
+    doc.setFillColor(67, 56, 202);
     doc.rect(0, 0, pageWidth, 25, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
     doc.text("Laptop QC Summary Report", 15, 15);
-
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - 70, 10);
     doc.text(
       `Tech: ${filterTech} | Dealer: ${filterDealer} | Status: ${filterStatus} | Date: ${filterDateFrom || "Any"} – ${filterDateTo || "Any"}`,
-      15,
-      21,
+      15, 21
     );
-
-    // Table Setup
     let y = 35;
-    const headers = [
-      "Device No",
-      "Model/Brand",
-      "Date",
-      "Dealer",
-      "Technician",
-      "Progress",
-      "Status",
-      "Action Req.",
-      "Tech Notes",
-    ];
+    const headers = ["Device No", "Model/Brand", "Date", "Dealer", "Technician", "Progress", "Status", "Action Req.", "Tech Notes"];
     const colWidths = [26, 26, 24, 35, 35, 18, 18, 40, 45];
     const totalWidth = colWidths.reduce((a, b) => a + b, 0);
     const startX = (pageWidth - totalWidth) / 2;
-
-    // Header Row
-    doc.setFillColor(241, 245, 249); // slate-100
+    doc.setFillColor(241, 245, 249);
     doc.rect(startX, y - 5, totalWidth, 8, "F");
     doc.setTextColor(50);
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-
     let currentX = startX;
     headers.forEach((header, i) => {
       doc.text(header, currentX + 2, y);
       currentX += colWidths[i];
     });
-
     y += 8;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(70);
-
-    // Data Rows
     filteredReports.forEach((report, index) => {
-      if (y > 185) {
-        doc.addPage("l");
-        y = 25;
-      } // Page break
-
-      // Row Stripe
+      if (y > 185) { doc.addPage("l"); y = 25; }
       if (index % 2 === 0) {
         doc.setFillColor(248, 250, 252);
         doc.rect(startX, y - 5, totalWidth, 8, "F");
       }
-
       currentX = startX;
       doc.text(report.deviceInfo.laptopNo, currentX + 2, y);
       currentX += colWidths[0];
-      doc.text(report.deviceInfo.deviceModel || "N/A", currentX + 2, y, {
-        maxWidth: colWidths[1] - 4,
-      });
+      doc.text(report.deviceInfo.deviceModel || "N/A", currentX + 2, y, { maxWidth: colWidths[1] - 4 });
       currentX += colWidths[1];
       doc.text(new Date(report.date).toLocaleDateString(), currentX + 2, y);
       currentX += colWidths[2];
-      doc.text(report.deviceInfo.customerName || "N/A", currentX + 2, y, {
-        maxWidth: colWidths[3] - 4,
-      });
+      doc.text(report.deviceInfo.customerName || "N/A", currentX + 2, y, { maxWidth: colWidths[3] - 4 });
       currentX += colWidths[3];
-      doc.text(report.deviceInfo.technicianName || "N/A", currentX + 2, y, {
-        maxWidth: colWidths[4] - 4,
-      });
+      doc.text(report.deviceInfo.technicianName || "N/A", currentX + 2, y, { maxWidth: colWidths[4] - 4 });
       currentX += colWidths[4];
       doc.text(`${report.progress}%`, currentX + 2, y);
       currentX += colWidths[5];
       doc.text(report.status, currentX + 2, y);
       currentX += colWidths[6];
-      doc.text(report.actionRequired || "None", currentX + 2, y, {
-        maxWidth: colWidths[7] - 4,
-      });
+      doc.text(report.actionRequired || "None", currentX + 2, y, { maxWidth: colWidths[7] - 4 });
       currentX += colWidths[7];
-      const notesText =
-        report.notes && report.notes.trim() !== ""
-          ? report.notes.trim()
-          : "No notes";
-      doc.text(notesText, currentX + 2, y, {
-        maxWidth: colWidths[8] - 4,
-      });
+      const notesText = report.notes && report.notes.trim() !== "" ? report.notes.trim() : "No notes";
+      doc.text(notesText, currentX + 2, y, { maxWidth: colWidths[8] - 4 });
       y += 8;
     });
-
-    // Summary Footer
     if (y > 180) doc.addPage("l");
     y += 10;
     doc.setDrawColor(200);
     doc.line(startX, y, startX + totalWidth, y);
     y += 10;
     doc.setFont("helvetica", "bold");
-    doc.text(
-      `Total Records in this view: ${filteredReports.length}`,
-      startX,
-      y,
-    );
-
+    doc.text(`Total Records in this view: ${filteredReports.length}`, startX, y);
     doc.save(`QC_Summary_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   const handleExportExcel = () => {
-    // Import SheetJS - already available as a dependency
     import("xlsx")
       .then((XLSX) => {
         const headers = [
-          "Device No",
-          "Model/Brand",
-          "Date",
-          "Dealer",
-          "Technician",
-          "Progress (%)",
-          "Status",
-          "Action Required",
-          "Battery Health",
-          "Battery Charge %",
-          "Battery Remaining %",
-          "Battery Duration",
-          "Tech Notes",
+          "Device No", "Model/Brand", "Date", "Dealer", "Technician",
+          "Progress (%)", "Status", "Action Required", "Battery Health",
+          "Battery Charge %", "Battery Remaining %", "Battery Duration", "Tech Notes"
         ];
-
         const rows = filteredReports.map((r) => [
           r.deviceInfo.laptopNo,
           r.deviceInfo.deviceModel || "",
@@ -1189,183 +877,77 @@ export default function LaptopReports({
           r.battery?.duration || "",
           r.notes || "",
         ]);
-
-        // Build worksheet data with headers as first row
         const wsData = [headers, ...rows];
         const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-        // Set column widths for readability
         ws["!cols"] = [
-          { wch: 14 }, // Device No
-          { wch: 22 }, // Model/Brand
-          { wch: 12 }, // Date
-          { wch: 20 }, // Dealer
-          { wch: 18 }, // Technician
-          { wch: 12 }, // Progress
-          { wch: 12 }, // Status
-          { wch: 22 }, // Action Required
-          { wch: 14 }, // Battery Health
-          { wch: 14 }, // Battery Charge %
-          { wch: 16 }, // Battery Remaining %
-          { wch: 14 }, // Battery Duration
-          { wch: 30 }, // Tech Notes
+          { wch: 14 }, { wch: 22 }, { wch: 12 }, { wch: 20 }, { wch: 18 },
+          { wch: 12 }, { wch: 12 }, { wch: 22 }, { wch: 14 }, { wch: 14 },
+          { wch: 16 }, { wch: 14 }, { wch: 30 }
         ];
-
-        // Style the header row (bold + background)
-        const headerRange = XLSX.utils.decode_range(ws["!ref"]);
-        for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
-          const cellAddress = XLSX.utils.encode_cell({ r: 0, c: C });
-          if (!ws[cellAddress]) continue;
-          ws[cellAddress].s = {
-            font: { bold: true, color: { rgb: "FFFFFF" } },
-            fill: { fgColor: { rgb: "4338CA" } }, // Indigo
-            alignment: { horizontal: "center", wrapText: true },
-            border: {
-              bottom: { style: "thin", color: { rgb: "CCCCCC" } },
-            },
-          };
-        }
-
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "QC Summary");
-
-        XLSX.writeFile(
-          wb,
-          `QC_Summary_${new Date().toISOString().slice(0, 10)}.xlsx`,
-        );
+        XLSX.writeFile(wb, `QC_Summary_${new Date().toISOString().slice(0, 10)}.xlsx`);
       })
-      .catch(() => {
-        // Fallback: try require style if dynamic import fails
-        try {
-          const XLSX = require("xlsx");
-          const headers = [
-            "Device No",
-            "Model/Brand",
-            "Date",
-            "Dealer",
-            "Technician",
-            "Progress (%)",
-            "Status",
-            "Action Required",
-            "Battery Health",
-            "Battery Charge %",
-            "Battery Remaining %",
-            "Battery Duration",
-            "Tech Notes",
-          ];
-          const rows = filteredReports.map((r) => [
-            r.deviceInfo.laptopNo,
-            r.deviceInfo.deviceModel || "",
-            new Date(r.date).toLocaleDateString("en-IN"),
-            r.deviceInfo.customerName || "",
-            r.deviceInfo.technicianName || "",
-            r.progress,
-            r.status,
-            r.actionRequired || "None",
-            r.battery?.health || "",
-            r.battery?.chargePercent || "",
-            r.battery?.remainingPercent || "",
-            r.battery?.duration || "",
-            r.notes || "",
-          ]);
-          const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-          ws["!cols"] = [
-            { wch: 14 },
-            { wch: 22 },
-            { wch: 12 },
-            { wch: 20 },
-            { wch: 18 },
-            { wch: 12 },
-            { wch: 12 },
-            { wch: 22 },
-            { wch: 14 },
-            { wch: 14 },
-            { wch: 16 },
-            { wch: 14 },
-            { wch: 30 },
-          ];
-          const wb = XLSX.utils.book_new();
-          XLSX.utils.book_append_sheet(wb, ws, "QC Summary");
-          XLSX.writeFile(
-            wb,
-            `QC_Summary_${new Date().toISOString().slice(0, 10)}.xlsx`,
-          );
-        } catch (e) {
-          alert(
-            "Excel export failed. Please ensure the 'xlsx' package is installed.",
-          );
-        }
-      });
+      .catch(() => alert("Excel export failed. Ensure 'xlsx' package is installed."));
   };
+
   const loadReport = (report: Report) => {
-    // For technicians, ensure they can only load their own reports
+    lastEditedReportIdRef.current = report.id;
     if (isTechnician && report.deviceInfo.technicianName !== technicianName) {
       alert("You can only view your own reports");
       return;
     }
-
-    setCurrentReport({
-      ...report,
-      history: report.history || [],
-    });
+    // Save current scroll position before switching
+    scrollPositionRef.current = window.scrollY;
+    isReturningToListRef.current = true;
+    setCurrentReport({ ...report, history: report.history || [] });
     setInternalView("editor");
   };
+
   const deleteReport = async (id: string) => {
-    // Check if technician is trying to delete someone else's report
     const reportToDelete = reports.find((r) => r.id === id);
-    if (
-      isTechnician &&
-      reportToDelete?.deviceInfo.technicianName !== technicianName
-    ) {
+    if (isTechnician && reportToDelete?.deviceInfo.technicianName !== technicianName) {
       alert("You can only delete your own reports");
       return;
     }
-
     if (!confirm("Delete this report?")) return;
-
     const success = await deleteReportFromSupabase(id);
-
-    if (success && setReports) {
-      setReports(reports.filter((r) => r.id !== id));
-    } else if (!success) {
-      alert("Failed to delete report. Please try again.");
-    }
+    if (success && setReports) setReports(reports.filter((r) => r.id !== id));
+    else if (!success) alert("Failed to delete report. Please try again.");
   };
-  // --- RENDERERS ---
 
-  // 1. DASHBOARD VIEW (ANALYTICS)
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setFilterTech("All");
+    setFilterDealer("All");
+    setFilterAction("All");
+    setFilterStatus("All");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+  };
+
+  // ========================= DASHBOARD VIEW =============================
   if (activeTab === "dashboard") {
     return (
       <div className="h-full overflow-y-auto p-6 md:p-8 bg-slate-50 space-y-12 custom-scrollbar">
-        {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
               <BarChart3 size={24} className="text-indigo-600" />
               Performance Analytics
             </h1>
-            <p className="text-slate-500 text-sm">
-              Quality control metrics and efficiency tracking.
-            </p>
+            <p className="text-slate-500 text-sm">Quality control metrics and efficiency tracking.</p>
           </div>
           <div className="bg-white border border-slate-200 rounded-lg px-4 py-2 text-xs font-bold text-slate-500 shadow-sm">
             Total Records: {dashboardData.totalReports}
           </div>
         </div>
-
-        {/* KPI CARDS (TOTAL, FAILED, PASSED) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between group hover:border-indigo-300 transition-colors">
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                Total Reports
-              </p>
-              <h3 className="text-3xl font-black text-slate-800">
-                {dashboardData.totalReports}
-              </h3>
-              <p className="text-[10px] text-slate-400 mt-1">
-                Processed Laptops
-              </p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Reports</p>
+              <h3 className="text-3xl font-black text-slate-800">{dashboardData.totalReports}</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Processed Laptops</p>
             </div>
             <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
               <ClipboardCheck size={24} />
@@ -1373,15 +955,9 @@ export default function LaptopReports({
           </div>
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between group hover:border-red-300 transition-colors">
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                Failed Reports
-              </p>
-              <h3 className="text-3xl font-black text-slate-800">
-                {dashboardData.totalIssues}
-              </h3>
-              <p className="text-[10px] text-red-400 mt-1 font-bold">
-                Issues Found
-              </p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Failed Reports</p>
+              <h3 className="text-3xl font-black text-slate-800">{dashboardData.totalIssues}</h3>
+              <p className="text-[10px] text-red-400 mt-1 font-bold">Issues Found</p>
             </div>
             <div className="w-12 h-12 bg-red-50 text-red-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
               <AlertTriangle size={24} />
@@ -1389,90 +965,47 @@ export default function LaptopReports({
           </div>
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between group hover:border-emerald-300 transition-colors">
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                Passed Reports
-              </p>
-              <h3 className="text-3xl font-black text-emerald-600">
-                {dashboardData.totalReports - dashboardData.totalIssues}
-              </h3>
-              <p className="text-[10px] text-emerald-500 mt-1 font-bold">
-                Quality Assured
-              </p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Passed Reports</p>
+              <h3 className="text-3xl font-black text-emerald-600">{dashboardData.totalReports - dashboardData.totalIssues}</h3>
+              <p className="text-[10px] text-emerald-500 mt-1 font-bold">Quality Assured</p>
             </div>
             <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
               <CheckCircle2 size={24} />
             </div>
           </div>
         </div>
-
-        {/* DEALER QUALITY CONTROL GRID */}
         <div className="border-2 border-indigo-200/60 rounded-3xl p-6 bg-white shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-            <AlertOctagon size={20} className="text-red-500" /> Dealer Quality
-            Control
+            <AlertOctagon size={20} className="text-red-500" /> Dealer Quality Control
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {dashboardData.dealerList.map((dealer, idx) => (
-              <div
-                key={idx}
-                className="bg-slate-50 p-5 rounded-2xl border border-slate-200 hover:shadow-md transition-all"
-              >
+              <div key={idx} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 hover:shadow-md transition-all">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h4
-                      className="font-bold text-slate-800 text-lg truncate max-w-[150px]"
-                      title={dealer.name}
-                    >
-                      {dealer.name}
-                    </h4>
-                    <span className="text-xs text-slate-400 font-medium">
-                      Dealer Partner
-                    </span>
+                    <h4 className="font-bold text-slate-800 text-lg truncate max-w-[150px]" title={dealer.name}>{dealer.name}</h4>
+                    <span className="text-xs text-slate-400 font-medium">Dealer Partner</span>
                   </div>
-                  <div
-                    className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
-                      dealer.defectRate > 20
-                        ? "bg-red-100 text-red-700"
-                        : "bg-emerald-100 text-emerald-700"
-                    }`}
-                  >
+                  <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${dealer.defectRate > 20 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>
                     {dealer.defectRate > 20 ? "High Defects" : "Good Quality"}
                   </div>
                 </div>
-
                 <div className="grid grid-cols-3 gap-2 text-center mb-4">
                   <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100">
-                    <span className="block text-xs font-bold text-slate-400 uppercase">
-                      Total
-                    </span>
-                    <span className="block text-lg font-black text-slate-700">
-                      {dealer.total}
-                    </span>
+                    <span className="block text-xs font-bold text-slate-400 uppercase">Total</span>
+                    <span className="block text-lg font-black text-slate-700">{dealer.total}</span>
                   </div>
                   <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100">
-                    <span className="block text-xs font-bold text-emerald-600 uppercase">
-                      Pass
-                    </span>
-                    <span className="block text-lg font-black text-emerald-700">
-                      {dealer.passed}
-                    </span>
+                    <span className="block text-xs font-bold text-emerald-600 uppercase">Pass</span>
+                    <span className="block text-lg font-black text-emerald-700">{dealer.passed}</span>
                   </div>
                   <div className="bg-red-50 p-2 rounded-lg border border-red-100">
-                    <span className="block text-xs font-bold text-red-600 uppercase">
-                      Fail
-                    </span>
-                    <span className="block text-lg font-black text-red-700">
-                      {dealer.issues}
-                    </span>
+                    <span className="block text-xs font-bold text-red-600 uppercase">Fail</span>
+                    <span className="block text-lg font-black text-red-700">{dealer.issues}</span>
                   </div>
                 </div>
-
-                {/* Visual Bar */}
                 <div className="w-full bg-red-100 h-2 rounded-full overflow-hidden flex">
-                  <div
-                    className="bg-emerald-500 h-full"
-                    style={{ width: `${dealer.passRate}%` }}
-                  ></div>
+                  <div className="bg-emerald-500 h-full" style={{ width: `${dealer.passRate}%` }}></div>
                 </div>
                 <div className="flex justify-between text-[10px] font-bold mt-1 text-slate-400">
                   <span>{dealer.passRate}% Pass</span>
@@ -1487,62 +1020,36 @@ export default function LaptopReports({
             )}
           </div>
         </div>
-
-        {/* TECHNICIAN EFFICIENCY GRID */}
         <div>
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
             <Wrench size={20} className="text-blue-500" /> Technician Efficiency
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {dashboardData.techList.map((tech, idx) => (
-              <div
-                key={idx}
-                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
-              >
+              <div key={idx} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 font-bold text-lg border border-blue-100">
                     {tech.name.charAt(0)}
                   </div>
                   <div>
-                    <h4 className="font-bold text-slate-700 text-lg">
-                      {tech.name}
-                    </h4>
+                    <h4 className="font-bold text-slate-700 text-lg">{tech.name}</h4>
                     <p className="text-xs text-slate-400">QC Specialist</p>
                   </div>
                 </div>
-
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-400 uppercase">
-                      Reports Done
-                    </span>
-                    <span className="text-2xl font-black text-slate-800">
-                      {tech.total}
-                    </span>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Reports Done</span>
+                    <span className="text-2xl font-black text-slate-800">{tech.total}</span>
                   </div>
                   <div className="flex flex-col text-right">
-                    <span className="text-xs font-bold text-slate-400 uppercase">
-                      Avg Efficiency
-                    </span>
-                    <span
-                      className={`text-2xl font-black ${
-                        tech.efficiency >= 90
-                          ? "text-emerald-600"
-                          : "text-blue-600"
-                      }`}
-                    >
+                    <span className="text-xs font-bold text-slate-400 uppercase">Avg Efficiency</span>
+                    <span className={`text-2xl font-black ${tech.efficiency >= 90 ? "text-emerald-600" : "text-blue-600"}`}>
                       {tech.efficiency}%
                     </span>
                   </div>
                 </div>
-
                 <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mt-2">
-                  <div
-                    className={`h-full rounded-full ${
-                      tech.efficiency >= 90 ? "bg-emerald-500" : "bg-blue-500"
-                    }`}
-                    style={{ width: `${Math.min(tech.efficiency, 100)}%` }}
-                  ></div>
+                  <div className={`h-full rounded-full ${tech.efficiency >= 90 ? "bg-emerald-500" : "bg-blue-500"}`} style={{ width: `${Math.min(tech.efficiency, 100)}%` }}></div>
                 </div>
               </div>
             ))}
@@ -1557,560 +1064,265 @@ export default function LaptopReports({
     );
   }
 
-  // 2. DATA MANAGEMENT TAB -> LIST VIEW
+  // ========================= DATA LIST VIEW (REDESIGNED - COMPACT & FULL PAGE SCROLL) =========================
   if (internalView === "list") {
     return (
-      <div className="space-y-6 h-full flex flex-col bg-slate-50 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px]">
-        {/* HERO SECTION */}
-        <div className="bg-slate-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl md:shrink-0">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
-
-          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div>
-              <h1 className="text-3xl font-black mb-2 tracking-tight text-white">
-                Laptop QC Management
-              </h1>
-              <p className="text-slate-400">
-                Create, edit, and organize quality check reports.
-              </p>
+      <div className="min-h-screen bg-slate-50 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+          {/* Header Card - Compact */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-indigo-50 p-2.5 rounded-xl">
+                <ClipboardCheck className="text-indigo-600" size={24} />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-slate-800">Laptop QC Management</h1>
+                <p className="text-xs text-slate-500">Create, edit and organize quality check reports</p>
+              </div>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleExportExcel}
-                className="px-6 py-3 bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold rounded-2xl border border-emerald-500/30 backdrop-blur-sm transition-all flex items-center gap-2"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2"
               >
-                <FileDown size={20} /> Export Excel
+                <FileDown size={16} /> Excel
               </button>
               <button
                 onClick={handleExportFilteredPDF}
-                className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl border border-white/10 backdrop-blur-sm transition-all flex items-center gap-2"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2"
               >
-                <FileDown size={20} /> Export List
+                <FileDown size={16} /> PDF
               </button>
               <button
                 onClick={() => {
+                  scrollPositionRef.current = window.scrollY;
+                  isReturningToListRef.current = true;
                   setCurrentReport({
-                    ...INITIAL_REPORT,
-                    deviceInfo: {
-                      ...INITIAL_REPORT.deviceInfo,
-                      technicianName: isTechnician ? technicianName : "",
-                    },
+                    ...createInitialReport(),
+                    deviceInfo: { ...createInitialReport().deviceInfo, technicianName: isTechnician ? technicianName : "" },
                   });
                   setInternalView("editor");
                 }}
-                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-50 text-white font-bold rounded-2xl shadow-lg hover:shadow-indigo-500/30 transition-all flex items-center gap-2"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2"
               >
-                <Plus size={20} /> Add New Laptop
+                <Plus size={16} /> Add New
               </button>
             </div>
           </div>
-        </div>
 
-        {/* TOOLBAR & FILTERS */}
-        {/* TOOLBAR & FILTERS */}
-        <div className="bg-white/80 backdrop-blur p-4 rounded-3xl border border-slate-200 shadow-sm md:shrink-0">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="relative w-full sm:w-72">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                size={18}
-              />
+          {/* Search + View Toggle Row */}
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-700 placeholder-slate-400 focus:ring-2 ring-indigo-100"
-                placeholder="Search laptop ID..."
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none text-sm text-slate-700 placeholder-slate-400 focus:ring-2 ring-indigo-100"
+                placeholder="Search by laptop ID..."
               />
             </div>
-
-            <div className="flex bg-slate-100 p-1 rounded-xl self-end sm:self-auto">
+            <div className="flex bg-slate-100 p-1 rounded-xl self-start sm:self-auto">
               <button
                 onClick={() => setViewMode("grid")}
-                className={`p-2 rounded-lg transition-all ${
-                  viewMode === "grid"
-                    ? "bg-white shadow text-indigo-600"
-                    : "text-slate-400 hover:text-slate-600"
-                }`}
+                className={`p-2 rounded-lg transition-all ${viewMode === "grid" ? "bg-white shadow text-indigo-600" : "text-slate-400 hover:text-slate-600"}`}
               >
                 <Grid size={18} />
               </button>
               <button
                 onClick={() => setViewMode("list")}
-                className={`p-2 rounded-lg transition-all ${
-                  viewMode === "list"
-                    ? "bg-white shadow text-indigo-600"
-                    : "text-slate-400 hover:text-slate-600"
-                }`}
+                className={`p-2 rounded-lg transition-all ${viewMode === "list" ? "bg-white shadow text-indigo-600" : "text-slate-400 hover:text-slate-600"}`}
               >
                 <ListIcon size={18} />
               </button>
             </div>
           </div>
 
-          {/* Mobile: Collapsible Filters, Desktop: Always visible */}
-          <div className="mt-4">
-            {/* Mobile Filter Toggle */}
-            <details className="sm:hidden group">
-              <summary className="flex items-center justify-between p-3 bg-slate-50 rounded-xl cursor-pointer list-none border border-slate-200">
-                <div className="flex items-center gap-2">
-                  <Filter size={16} className="text-slate-600" />
-                  <span className="text-sm font-bold text-slate-700">
-                    Filters
-                  </span>
-                  <span className="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full">
-                    {
-                      [
-                        filterTech !== "All",
-                        filterDealer !== "All",
-                        filterAction !== "All",
-                        filterStatus !== "All",
-                      ].filter(Boolean).length
-                    }{" "}
-                    active
-                  </span>
+          {/* Filters Row - Compact Grid */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <Filter size={14} className="text-slate-400" />
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Filters</span>
+                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                  {[filterTech !== "All", filterDealer !== "All", filterAction !== "All", filterStatus !== "All", filterDateFrom, filterDateTo].filter(Boolean).length} active
+                </span>
+              </div>
+              <button onClick={clearAllFilters} className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1">
+                <RotateCcw size={12} /> Clear all
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Technician</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"><User size={14} /></div>
+                  <select
+                    value={filterTech}
+                    onChange={(e) => setFilterTech(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 appearance-none outline-none focus:ring-2 ring-indigo-100"
+                  >
+                    {isTechnician ? (
+                      <>
+                        <option value={technicianName}>{technicianName} (You)</option>
+                        {(() => {
+                          let currentStoreId: string | undefined = currentUser?.storeId;
+                          if (!currentStoreId && settings?.teamMembers) {
+                            const techMember = settings.teamMembers.find(m => m.name === technicianName && m.role === "TECHNICIAN");
+                            currentStoreId = techMember?.storeId;
+                          }
+                          if (!currentStoreId) return null;
+                          const sameStoreTechs = settings?.teamMembers?.filter(
+                            m => m.role === "TECHNICIAN" && m.storeId === currentStoreId && m.name !== technicianName
+                          ) ?? [];
+                          return sameStoreTechs.map(m => (
+                            <option key={m.id} value={m.name}>{m.name}</option>
+                          ));
+                        })()}
+                      </>
+                    ) : (
+                      <>
+                        <option value="All">All Technicians</option>
+                        {settings?.teamMembers?.filter((m) => m.role === "TECHNICIAN").map((m) => (
+                          <option key={m.id} value={m.name}>{m.name}</option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
                 </div>
-                <ChevronDown
-                  size={16}
-                  className="text-slate-400 group-open:rotate-180 transition-transform"
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Dealer</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"><Package size={14} /></div>
+                  <select
+                    value={filterDealer}
+                    onChange={(e) => setFilterDealer(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 appearance-none outline-none focus:ring-2 ring-indigo-100"
+                  >
+                    <option value="All">All Dealers</option>
+                    {settings?.laptopDealers?.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Action</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"><Zap size={14} /></div>
+                  <select
+                    value={filterAction}
+                    onChange={(e) => setFilterAction(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 appearance-none outline-none focus:ring-2 ring-indigo-100"
+                  >
+                    <option value="All">All Actions</option>
+                    <option value="Return to Dealers">Return to Dealers</option>
+                    <option value="Sent to Service Centre">Sent to Service Centre</option>
+                    <option value="Parts Sent to Dealers">Parts Sent to Dealers</option>
+                    <option value="Own Services">Own Services</option>
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Status</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"><Activity size={14} /></div>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value as any)}
+                    className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 appearance-none outline-none focus:ring-2 ring-indigo-100"
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Draft">Draft</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">From Date</label>
+                <input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={(e) => setFilterDateFrom(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:ring-2 ring-indigo-100"
                 />
-              </summary>
-
-              <div className="mt-3 grid grid-cols-1 gap-3 animate-in fade-in-50">
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <User size={14} />
-                  </div>
-                  <select
-                    value={filterTech}
-                    onChange={(e) => setFilterTech(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                    disabled={isTechnician}
-                  >
-                    {isTechnician ? (
-                      <option value={technicianName}>
-                        {technicianName} (You)
-                      </option>
-                    ) : (
-                      <>
-                        <option value="All">All Technicians</option>
-                        {settings?.teamMembers
-                          ?.filter((member) => member.role === "TECHNICIAN")
-                          .map((member) => (
-                            <option key={member.id} value={member.name}>
-                              {member.name} ({member.role})
-                            </option>
-                          ))}
-                      </>
-                    )}
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-                  />
-                </div>
-
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <Package size={14} />
-                  </div>
-                  <select
-                    value={filterDealer}
-                    onChange={(e) => setFilterDealer(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                  >
-                    <option value="All">All Dealers</option>
-                    {settings?.laptopDealers?.map((d) => (
-                      <option key={d.id} value={d.name}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-                  />
-                </div>
-
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <Zap size={14} />
-                  </div>
-                  <select
-                    value={filterAction}
-                    onChange={(e) => setFilterAction(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                  >
-                    <option value="All">All Actions</option>
-                    <option value="Return to Dealers">Return to Dealers</option>
-                    <option value="Sent to Service Centre">
-                      Sent to Service Centre
-                    </option>
-                    <option value="Parts Sent to Dealers">
-                      Parts Sent to Dealers
-                    </option>
-                    <option value="Own Services">Own Services</option>
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-                  />
-                </div>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <Activity size={14} />
-                  </div>
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value as any)}
-                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                  >
-                    <option value="All">All Statuses</option>
-                    <option value="Draft">Draft</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-                  />
-                </div>
-
-                {/* ✅ ADD THESE TWO BLOCKS RIGHT HERE */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
-                    From Date
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="date"
-                      value={filterDateFrom}
-                      onChange={(e) => setFilterDateFrom(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none focus:ring-2 ring-indigo-50"
-                    />
-                    {filterDateFrom && (
-                      <button
-                        onClick={() => setFilterDateFrom("")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-400"
-                      >
-                        <X size={12} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
-                    To Date
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="date"
-                      value={filterDateTo}
-                      onChange={(e) => setFilterDateTo(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none focus:ring-2 ring-indigo-50"
-                    />
-                    {filterDateTo && (
-                      <button
-                        onClick={() => setFilterDateTo("")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-400"
-                      >
-                        <X size={12} />
-                      </button>
-                    )}
-                  </div>
-                </div>
               </div>
-            </details>
-
-            {/* Desktop: Always visible filters */}
-            <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
-                  Technician
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <User size={14} />
-                  </div>
-                  <select
-                    value={filterTech}
-                    onChange={(e) => setFilterTech(e.target.value)}
-                    className="w-full pl-9 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                    disabled={isTechnician}
-                  >
-                    {isTechnician ? (
-                      <option value={technicianName}>
-                        {technicianName} (You)
-                      </option>
-                    ) : (
-                      <>
-                        <option value="All">All Technicians</option>
-                        {settings?.teamMembers
-                          ?.filter((member) => member.role === "TECHNICIAN")
-                          .map((member) => (
-                            <option key={member.id} value={member.name}>
-                              {member.name} ({member.role})
-                            </option>
-                          ))}
-                      </>
-                    )}
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
-                  Dealer
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <Package size={14} />
-                  </div>
-                  <select
-                    value={filterDealer}
-                    onChange={(e) => setFilterDealer(e.target.value)}
-                    className="w-full pl-9 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                  >
-                    <option value="All">All Dealers</option>
-                    {settings?.laptopDealers?.map((d) => (
-                      <option key={d.id} value={d.name}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
-                  Action
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <Zap size={14} />
-                  </div>
-                  <select
-                    value={filterAction}
-                    onChange={(e) => setFilterAction(e.target.value)}
-                    className="w-full pl-9 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                  >
-                    <option value="All">All Actions</option>
-                    <option value="Return to Dealers">Return to Dealers</option>
-                    <option value="Sent to Service Centre">
-                      Sent to Service Centre
-                    </option>
-                    <option value="Parts Sent to Dealers">
-                      Parts Sent to Dealers
-                    </option>
-                    <option value="Own Services">Own Services</option>
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
-                  Status
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <Activity size={14} />
-                  </div>
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value as any)}
-                    className="w-full pl-9 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 ring-indigo-50"
-                  >
-                    <option value="All">All Statuses</option>
-                    <option value="Draft">Draft</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
-                  From
-                </label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    value={filterDateFrom}
-                    onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none focus:ring-2 ring-indigo-50"
-                  />
-                  {filterDateFrom && (
-                    <button
-                      onClick={() => setFilterDateFrom("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-400"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
-                  To
-                </label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    value={filterDateTo}
-                    onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none focus:ring-2 ring-indigo-50"
-                  />
-                  {filterDateTo && (
-                    <button
-                      onClick={() => setFilterDateTo("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-400"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">To Date</label>
+                <input
+                  type="date"
+                  value={filterDateTo}
+                  onChange={(e) => setFilterDateTo(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:ring-2 ring-indigo-100"
+                />
               </div>
             </div>
           </div>
-        </div>
 
-        {/* REPORTS LIST */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar pb-10 min-h-0">
+          {/* Reports List - Grid/Table */}
           {viewMode === "grid" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredReports.map((report) => (
-                <div
-                  key={report.id}
-                  className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-all group relative overflow-hidden flex flex-col"
-                >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {pagedReports.map((report) => (
+                <div key={report.id} id={`report-card-${report.id}`} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group relative overflow-hidden flex flex-col">
                   {report.actionRequired && (
                     <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl z-10 shadow-sm">
                       ACTION
                     </div>
                   )}
-
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500 font-bold text-lg">
                       {report.deviceInfo.laptopNo.slice(0, 2).toUpperCase()}
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-800">
-                        {report.deviceInfo.laptopNo}
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        {new Date(report.date).toLocaleDateString("en-GB")}
-                      </p>
+                      <h3 className="font-bold text-slate-800">{report.deviceInfo.laptopNo}</h3>
+                      <p className="text-xs text-slate-500">{new Date(report.date).toLocaleDateString("en-GB")}</p>
                     </div>
                   </div>
-
                   <div className="space-y-2 mb-4 flex-1">
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-400 font-medium">
-                        Technician
-                      </span>
-                      <span className="font-bold text-slate-700">
-                        {report.deviceInfo.technicianName || "N/A"}
-                      </span>
+                      <span className="text-slate-400 font-medium">Technician</span>
+                      <span className="font-bold text-slate-700">{report.deviceInfo.technicianName || "N/A"}</span>
                     </div>
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-400 font-medium">Dealer</span>
-                      <span className="font-bold text-slate-700">
-                        {report.deviceInfo.customerName || "N/A"}
-                      </span>
+                      <span className="font-bold text-slate-700">{report.deviceInfo.customerName || "N/A"}</span>
                     </div>
                     {report.actionRequired && (
                       <div className="mt-3 pt-2 border-t border-slate-50">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                          Action Required
-                        </span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Action Required</span>
                         <div className="mt-1 text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-1.5 rounded-lg flex items-start gap-1">
-                          <AlertTriangle
-                            size={12}
-                            className="mt-0.5 shrink-0"
-                          />
+                          <AlertTriangle size={12} className="mt-0.5 shrink-0" />
                           {report.actionRequired}
                         </div>
                       </div>
                     )}
                   </div>
-
-                  {/* Progress Section */}
                   <div className="mt-2 mb-4 pt-3 border-t border-slate-100">
                     <div className="flex justify-between items-center mb-1.5">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Completion
-                      </span>
-                      <span
-                        className={`text-xs font-bold ${
-                          getProgressColor(report.progress).split(" ")[0]
-                        }`}
-                      >
-                        {report.progress}%
-                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Completion</span>
+                      <span className={`text-xs font-bold ${getProgressColor(report.progress).split(" ")[0]}`}>{report.progress}%</span>
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          getProgressColor(report.progress).split(" ")[1]
-                        }`}
-                        style={{ width: `${report.progress}%` }}
-                      ></div>
+                      <div className={`h-full rounded-full transition-all duration-500 ${getProgressColor(report.progress).split(" ")[1]}`} style={{ width: `${report.progress}%` }}></div>
                     </div>
                   </div>
-
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => loadReport(report)}
-                      className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-600 transition-colors"
-                    >
-                      Edit Report
-                    </button>
-                    <button
-                      onClick={() => deleteReport(report.id)}
-                      className="px-3 py-2 bg-red-50 hover:bg-red-100 rounded-xl text-red-600 transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <button onClick={() => loadReport(report)} className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-600 transition-colors">Edit Report</button>
+                    <button onClick={() => deleteReport(report.id)} className="px-3 py-2 bg-red-50 hover:bg-red-100 rounded-xl text-red-600 transition-colors"><Trash2 size={16} /></button>
                   </div>
                 </div>
               ))}
               {filteredReports.length === 0 && (
                 <div className="col-span-full py-12 text-center text-slate-400">
                   <p>No reports match your filters.</p>
-                  <button
-                    onClick={() => {
-                      setSearchTerm("");
-                      setFilterTech("All");
-                      setFilterDealer("All");
-                      setFilterAction("All");
-                      setFilterStatus("All");
-                      setFilterDateFrom("");
-                      setFilterDateTo("");
-                    }}
-                    className="text-indigo-600 text-xs font-bold mt-2 hover:underline"
-                  >
-                    Clear all filters
-                  </button>
+                  <button onClick={clearAllFilters} className="text-indigo-600 text-xs font-bold mt-2 hover:underline">Clear all filters</button>
                 </div>
               )}
             </div>
           ) : (
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                   <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
@@ -2121,78 +1333,96 @@ export default function LaptopReports({
                       <th className="px-6 py-4 font-bold">Technician</th>
                       <th className="px-6 py-4 font-bold">Progress</th>
                       <th className="px-6 py-4 font-bold">Status</th>
-                      <th className="px-6 py-4 font-bold text-right">
-                        Actions
-                      </th>
+                      <th className="px-6 py-4 font-bold text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredReports.map((report) => (
-                      <tr key={report.id} className="hover:bg-slate-50">
-                        <td className="px-6 py-4 font-bold text-slate-800">
-                          {report.deviceInfo.laptopNo}
-                        </td>
-                        <td className="px-6 py-4 text-slate-500">
-                          {new Date(report.date).toLocaleDateString("en-GB")}
-                        </td>
-                        <td className="px-6 py-4 text-slate-600">
-                          {report.deviceInfo.customerName}
-                        </td>
-                        <td className="px-6 py-4 text-slate-600">
-                          {report.deviceInfo.technicianName}
-                        </td>
+                    {pagedReports.map((report) => (
+                      <tr key={report.id} id={`report-card-${report.id}`} className="hover:bg-slate-50">
+                        <td className="px-6 py-4 font-bold text-slate-800">{report.deviceInfo.laptopNo}</td>
+                        <td className="px-6 py-4 text-slate-500">{new Date(report.date).toLocaleDateString("en-GB")}</td>
+                        <td className="px-6 py-4 text-slate-600">{report.deviceInfo.customerName}</td>
+                        <td className="px-6 py-4 text-slate-600">{report.deviceInfo.technicianName}</td>
                         <td className="px-6 py-4 w-32">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${
-                                  getProgressColor(report.progress).split(
-                                    " ",
-                                  )[1]
-                                }`}
-                                style={{ width: `${report.progress}%` }}
-                              ></div>
+                              <div className={`h-full rounded-full ${getProgressColor(report.progress).split(" ")[1]}`} style={{ width: `${report.progress}%` }}></div>
                             </div>
-                            <span
-                              className={`text-xs font-bold ${
-                                getProgressColor(report.progress).split(" ")[0]
-                              }`}
-                            >
-                              {report.progress}%
-                            </span>
+                            <span className={`text-xs font-bold ${getProgressColor(report.progress).split(" ")[0]}`}>{report.progress}%</span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
                           {report.actionRequired ? (
                             <span className="bg-red-100 text-red-700 px-2 py-1 rounded-md text-[10px] font-bold whitespace-nowrap border border-red-200 flex items-center gap-1 w-fit uppercase">
-                              <AlertTriangle size={10} />{" "}
-                              {report.actionRequired}
+                              <AlertTriangle size={10} /> {report.actionRequired}
                             </span>
                           ) : (
-                            <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md text-[10px] font-bold whitespace-nowrap border border-emerald-200 uppercase">
-                              Pass
-                            </span>
+                            <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md text-[10px] font-bold whitespace-nowrap border border-emerald-200 uppercase">Pass</span>
                           )}
                         </td>
                         <td className="px-6 py-4 text-right flex justify-end gap-2">
-                          <button
-                            onClick={() => loadReport(report)}
-                            className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"
-                          >
-                            <FileText size={16} />
-                          </button>
-                          <button
-                            onClick={() => deleteReport(report.id)}
-                            className="p-2 hover:bg-red-50 text-red-600 rounded-lg"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          <button onClick={() => loadReport(report)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg"><FileText size={16} /></button>
+                          <button onClick={() => deleteReport(report.id)} className="p-2 hover:bg-red-50 text-red-600 rounded-lg"><Trash2 size={16} /></button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+
               </div>
+
+            </div>
+          )}
+          {/* Pagination - shared for both views */}
+          {totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 py-4 bg-white rounded-2xl border border-slate-200 shadow-sm px-4">
+              <span className="text-xs text-slate-400 font-medium mr-2">
+                Page {currentPage} of {totalPages} ({filteredReports.length} reports)
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+              >
+                ← Prev
+              </button>
+              {(() => {
+                const pages: (number | string)[] = [];
+                if (totalPages <= 7) {
+                  for (let i = 1; i <= totalPages; i++) pages.push(i);
+                } else {
+                  pages.push(1);
+                  if (currentPage > 3) pages.push("...");
+                  for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+                    pages.push(i);
+                  }
+                  if (currentPage < totalPages - 2) pages.push("...");
+                  pages.push(totalPages);
+                }
+                return pages.map((page, idx) =>
+                  page === "..." ? (
+                    <span key={`ellipsis-${idx}`} className="w-9 h-9 flex items-center justify-center text-slate-400 font-bold text-sm">…</span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page as number)}
+                      className={`w-9 h-9 rounded-xl text-sm font-bold transition-all ${currentPage === page
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
+                        : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                        }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                );
+              })()}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+              >
+                Next →
+              </button>
             </div>
           )}
         </div>
@@ -2200,236 +1430,85 @@ export default function LaptopReports({
     );
   }
 
-  // 3. DATA MANAGEMENT TAB -> EDITOR VIEW
+  // ========================= EDITOR VIEW =============================
   return (
     <div className="h-full flex flex-col bg-slate-50 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] overflow-hidden">
-      {/* HEADER */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => setInternalView("list")}
-            className="p-2 hover:bg-slate-100 rounded-full text-slate-500 flex items-center gap-2 transition-colors"
-          >
-            <RotateCcw size={20} />{" "}
-            <span className="text-sm font-bold hidden sm:inline">
-              Back to List
-            </span>
+          <button onClick={() => setInternalView("list")} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 flex items-center gap-2 transition-colors">
+            <RotateCcw size={20} /> <span className="text-sm font-bold hidden sm:inline">Back to List</span>
           </button>
           <div className="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
           <div>
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              Checking Sheet{" "}
-              <span className="px-2 py-0.5 bg-slate-100 rounded text-xs text-slate-500 font-mono">
-                {currentReport.deviceInfo.laptopNo || "New Device"}
-              </span>
+              Checking Sheet <span className="px-2 py-0.5 bg-slate-100 rounded text-xs text-slate-500 font-mono">{currentReport.deviceInfo.laptopNo || "New Device"}</span>
             </h2>
             <div className="flex items-center gap-2 mt-1">
               <div className="w-48 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-500 ${
-                    currentReport.progress < 50
-                      ? "bg-red-500"
-                      : currentReport.progress < 80
-                        ? "bg-amber-500"
-                        : currentReport.progress < 100
-                          ? "bg-blue-500"
-                          : "bg-emerald-500"
-                  }`}
-                  style={{ width: `${currentReport.progress}%` }}
-                ></div>
+                <div className={`h-full transition-all duration-500 ${currentReport.progress < 50 ? "bg-red-500" : currentReport.progress < 80 ? "bg-amber-500" : currentReport.progress < 100 ? "bg-blue-500" : "bg-emerald-500"}`} style={{ width: `${currentReport.progress}%` }}></div>
               </div>
-              <span
-                className={`text-xs font-bold ${
-                  currentReport.progress === 100
-                    ? "text-emerald-600"
-                    : "text-slate-500"
-                }`}
-              >
-                {currentReport.progress}%
-              </span>
+              <span className={`text-xs font-bold ${currentReport.progress === 100 ? "text-emerald-600" : "text-slate-500"}`}>{currentReport.progress}%</span>
             </div>
           </div>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={() => setShowHistory(true)}
-            disabled={
-              !currentReport.history || currentReport.history.length === 0
-            }
-            className="px-4 py-2 text-slate-500 hover:text-indigo-600 text-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <History size={16} />{" "}
-            <span className="hidden sm:inline">History</span>
+          <button onClick={() => setShowHistory(true)} disabled={!currentReport.history || currentReport.history.length === 0} className="px-4 py-2 text-slate-500 hover:text-indigo-600 text-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+            <History size={16} /> <span className="hidden sm:inline">History</span>
           </button>
-          <button
-            onClick={() => setCurrentReport({ ...INITIAL_REPORT, id: "" })}
-            className="px-4 py-2 text-slate-500 hover:text-slate-700 text-sm font-bold"
-          >
-            Reset
-          </button>
-          <button
-            onClick={handleDownloadPDF}
-            className="px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-900 shadow-lg"
-          >
+          <button onClick={() => setCurrentReport({ ...createInitialReport(), id: "" })} className="px-4 py-2 text-slate-500 hover:text-slate-700 text-sm font-bold">Reset</button>
+          <button onClick={handleDownloadPDF} className="px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-900 shadow-lg">
             <Download size={16} /> PDF
           </button>
         </div>
       </header>
-
-      {/* SCROLLABLE CONTENT */}
       <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 custom-scrollbar">
-        <div
-          id="report-container"
-          className="max-w-4xl mx-auto space-y-8 bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100"
-        >
-          {/* SECTION A: DEVICE INFO */}
+        <div id="report-container" className="max-w-4xl mx-auto space-y-8 bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100">
           <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 focus-within:ring-2 ring-indigo-100 transition-all">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
-                Laptop No / Serial
-              </label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Laptop No / Serial</label>
               <div className="flex items-center gap-3">
                 <Layout className="text-indigo-400" size={20} />
-                <input
-                  value={currentReport.deviceInfo.laptopNo}
-                  onChange={(e) =>
-                    setCurrentReport({
-                      ...currentReport,
-                      deviceInfo: {
-                        ...currentReport.deviceInfo,
-                        laptopNo: e.target.value,
-                      },
-                    })
-                  }
-                  className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg"
-                  placeholder="Enter ID..."
-                />
+                <input value={currentReport.deviceInfo.laptopNo} onChange={(e) => setCurrentReport({ ...currentReport, deviceInfo: { ...currentReport.deviceInfo, laptopNo: e.target.value } })} className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg" placeholder="Enter ID..." />
               </div>
             </div>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 focus-within:ring-2 ring-indigo-100 transition-all">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
-                Device Model / Brand
-              </label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Device Model / Brand</label>
               <div className="flex items-center gap-3">
                 <Box className="text-blue-400" size={20} />
-                <input
-                  value={currentReport.deviceInfo.deviceModel || ""}
-                  onChange={(e) =>
-                    setCurrentReport({
-                      ...currentReport,
-                      deviceInfo: {
-                        ...currentReport.deviceInfo,
-                        deviceModel: e.target.value,
-                      },
-                    })
-                  }
-                  className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg"
-                  placeholder="e.g. HP, Dell, Lenovo..."
-                />
+                <input value={currentReport.deviceInfo.deviceModel || ""} onChange={(e) => setCurrentReport({ ...currentReport, deviceInfo: { ...currentReport.deviceInfo, deviceModel: e.target.value } })} className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg" placeholder="e.g. HP, Dell, Lenovo..." />
               </div>
             </div>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 focus-within:ring-2 ring-indigo-100 transition-all">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
-                Dealer
-              </label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Dealer</label>
               <div className="flex items-center gap-3">
                 <User className="text-purple-400" size={20} />
                 <div className="relative w-full">
-                  <select
-                    value={currentReport.deviceInfo.customerName}
-                    onChange={(e) =>
-                      setCurrentReport({
-                        ...currentReport,
-                        deviceInfo: {
-                          ...currentReport.deviceInfo,
-                          customerName: e.target.value,
-                        },
-                      })
-                    }
-                    className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg appearance-none cursor-pointer pr-4"
-                  >
+                  <select value={currentReport.deviceInfo.customerName} onChange={(e) => setCurrentReport({ ...currentReport, deviceInfo: { ...currentReport.deviceInfo, customerName: e.target.value } })} className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg appearance-none cursor-pointer pr-4">
                     <option value="">Select Dealer...</option>
-                    {settings?.laptopDealers?.map((dealer) => (
-                      <option key={dealer.id} value={dealer.name}>
-                        {dealer.name}
-                      </option>
-                    ))}
+                    {settings?.laptopDealers?.map((dealer) => <option key={dealer.id} value={dealer.name}>{dealer.name}</option>)}
                   </select>
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <ChevronDown size={14} className="text-slate-400" />
-                  </div>
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none"><ChevronDown size={14} className="text-slate-400" /></div>
                 </div>
               </div>
             </div>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 focus-within:ring-2 ring-indigo-100 transition-all">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
-                Technician
-              </label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Technician</label>
               <div className="flex items-center gap-3">
                 <User className="text-emerald-400" size={20} />
                 {isTechnician ? (
-                  // Display technician name if current user is technician
-                  <div className="w-full font-bold text-slate-700 text-lg">
-                    {technicianName} (You)
-                    <input
-                      type="hidden"
-                      value={technicianName}
-                      onChange={(e) =>
-                        setCurrentReport({
-                          ...currentReport,
-                          deviceInfo: {
-                            ...currentReport.deviceInfo,
-                            technicianName: technicianName,
-                          },
-                        })
-                      }
-                    />
-                  </div>
+                  <div className="w-full font-bold text-slate-700 text-lg">{technicianName} (You)</div>
                 ) : (
-                  // Show dropdown only for non-technicians
                   <div className="relative w-full">
-                    <select
-                      value={currentReport.deviceInfo.technicianName}
-                      onChange={(e) => {
-                        const oldTech = currentReport.deviceInfo.technicianName;
-                        const newTech = e.target.value;
-
-                        // Create history entry for technician change
-                        const historyEntry: ReportHistory = {
-                          id: Date.now().toString(),
-                          timestamp: Date.now(),
-                          date: new Date().toLocaleString(),
-                          actor: currentUser?.name || "Unknown User",
-                          action: "Technician Assigned",
-                          details: `Technician changed from ${oldTech || "Unassigned"} to ${newTech || "Unassigned"}`,
-                        };
-
-                        setCurrentReport({
-                          ...currentReport,
-                          deviceInfo: {
-                            ...currentReport.deviceInfo,
-                            technicianName: newTech,
-                          },
-                          history: [
-                            ...(currentReport.history || []),
-                            historyEntry,
-                          ],
-                        });
-                      }}
-                      className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg appearance-none cursor-pointer pr-4"
-                    >
+                    <select value={currentReport.deviceInfo.technicianName} onChange={(e) => {
+                      const oldTech = currentReport.deviceInfo.technicianName;
+                      const newTech = e.target.value;
+                      const historyEntry: ReportHistory = { id: Date.now().toString(), timestamp: Date.now(), date: new Date().toLocaleString(), actor: currentUser?.name || "Unknown User", action: "Technician Assigned", details: `Technician changed from ${oldTech || "Unassigned"} to ${newTech || "Unassigned"}` };
+                      setCurrentReport({ ...currentReport, deviceInfo: { ...currentReport.deviceInfo, technicianName: newTech }, history: [...(currentReport.history || []), historyEntry] });
+                    }} className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg appearance-none cursor-pointer pr-4">
                       <option value="">Select Tech...</option>
-                      {settings?.teamMembers
-                        ?.filter((member) => member.role === "TECHNICIAN")
-                        .map((member) => (
-                          <option key={member.id} value={member.name}>
-                            {member.name} ({member.role})
-                          </option>
-                        ))}
+                      {settings?.teamMembers?.filter((m) => m.role === "TECHNICIAN").map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
                     </select>
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <ChevronDown size={14} className="text-slate-400" />
-                    </div>
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none"><ChevronDown size={14} className="text-slate-400" /></div>
                   </div>
                 )}
               </div>
@@ -2438,61 +1517,25 @@ export default function LaptopReports({
 
           <hr className="border-slate-100" />
 
-          {/* SECTION B: CHECKLIST */}
           <section className="space-y-8">
             {CHECKLIST_DATA.map((category) => (
               <div key={category.id}>
                 <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>{" "}
-                  {category.title}
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full"></div> {category.title}
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {category.items.map((item) => {
                     const status = currentReport.checklist[item.id];
                     return (
                       <div key={item.id} className="flex gap-2">
-                        {/* Main Pass Button */}
-                        <button
-                          onClick={() => handleChecklistToggle(item.id, "pass")}
-                          className={`flex-1 p-4 rounded-2xl border transition-all flex items-center justify-between group ${
-                            status === "pass"
-                              ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200"
-                              : status === "fail"
-                                ? "bg-slate-50 border-slate-200 text-slate-400 opacity-50"
-                                : "bg-slate-50 border-slate-100 text-slate-600 hover:border-blue-200 hover:bg-white"
-                          }`}
-                        >
+                        <button onClick={() => handleChecklistToggle(item.id, "pass")} className={`flex-1 p-4 rounded-2xl border transition-all flex items-center justify-between group ${status === "pass" ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200" : status === "fail" ? "bg-slate-50 border-slate-200 text-slate-400 opacity-50" : "bg-slate-50 border-slate-100 text-slate-600 hover:border-blue-200 hover:bg-white"}`}>
                           <div className="flex items-center gap-3">
-                            <div
-                              className={`p-2 rounded-xl ${
-                                status === "pass"
-                                  ? "bg-white/20"
-                                  : "bg-white border border-slate-100"
-                              }`}
-                            >
-                              {getSmartIcon(item.label)}
-                            </div>
-                            <span className="font-bold text-sm">
-                              {item.label}
-                            </span>
+                            <div className={`p-2 rounded-xl ${status === "pass" ? "bg-white/20" : "bg-white border border-slate-100"}`}>{getSmartIcon(item.label)}</div>
+                            <span className="font-bold text-sm">{item.label}</span>
                           </div>
-                          {status === "pass" && (
-                            <Check
-                              size={20}
-                              className="animate-in zoom-in spin-in-90"
-                            />
-                          )}
+                          {status === "pass" && <Check size={20} className="animate-in zoom-in spin-in-90" />}
                         </button>
-
-                        {/* Fail Button */}
-                        <button
-                          onClick={() => handleChecklistToggle(item.id, "fail")}
-                          className={`w-14 rounded-2xl flex items-center justify-center border transition-all ${
-                            status === "fail"
-                              ? "bg-red-50 border-red-500 text-white shadow-lg shadow-red-200"
-                              : "bg-slate-50 border-slate-100 text-slate-300 hover:border-red-200 hover:text-red-400"
-                          }`}
-                        >
+                        <button onClick={() => handleChecklistToggle(item.id, "fail")} className={`w-14 rounded-2xl flex items-center justify-center border transition-all ${status === "fail" ? "bg-red-50 border-red-500 text-white shadow-lg shadow-red-200" : "bg-slate-50 border-slate-100 text-slate-300 hover:border-red-200 hover:text-red-400"}`}>
                           <AlertTriangle size={20} />
                         </button>
                       </div>
@@ -2503,138 +1546,42 @@ export default function LaptopReports({
             ))}
           </section>
 
-          {/* SECTION C: BATTERY ANALYSIS */}
           <section className="bg-slate-900 rounded-3xl p-6 text-white relative overflow-hidden">
             <div className="relative z-10 flex flex-col md:flex-row gap-8 items-center">
               <div className="text-center md:text-left">
-                <h3 className="text-xl font-bold flex items-center gap-2">
-                  <Zap className="text-yellow-400 fill-current" /> Battery
-                  Diagnostics
-                </h3>
+                <h3 className="text-xl font-bold flex items-center gap-2"><Zap className="text-yellow-400 fill-current" /> Battery Diagnostics</h3>
                 <p className="text-slate-400 text-xs mt-1">Instrument Panel</p>
               </div>
-
               <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
                 <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
-                  <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
-                    Charge %
-                  </label>
-                  <input
-                    value={currentReport.battery.chargePercent}
-                    onChange={(e) =>
-                      setCurrentReport({
-                        ...currentReport,
-                        battery: {
-                          ...currentReport.battery,
-                          chargePercent: e.target.value,
-                        },
-                      })
-                    }
-                    className="bg-transparent w-full font-mono text-xl font-bold outline-none text-center text-cyan-300"
-                    placeholder="--"
-                  />
+                  <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Charge %</label>
+                  <input value={currentReport.battery.chargePercent} onChange={(e) => setCurrentReport({ ...currentReport, battery: { ...currentReport.battery, chargePercent: e.target.value } })} className="bg-transparent w-full font-mono text-xl font-bold outline-none text-center text-cyan-300" placeholder="--" />
                 </div>
                 <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
-                  <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
-                    Remaining
-                  </label>
-                  <input
-                    value={currentReport.battery.remainingPercent}
-                    onChange={(e) =>
-                      setCurrentReport({
-                        ...currentReport,
-                        battery: {
-                          ...currentReport.battery,
-                          remainingPercent: e.target.value,
-                        },
-                      })
-                    }
-                    className="bg-transparent w-full font-mono text-xl font-bold outline-none text-center text-purple-300"
-                    placeholder="--"
-                  />
+                  <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Remaining</label>
+                  <input value={currentReport.battery.remainingPercent} onChange={(e) => setCurrentReport({ ...currentReport, battery: { ...currentReport.battery, remainingPercent: e.target.value } })} className="bg-transparent w-full font-mono text-xl font-bold outline-none text-center text-purple-300" placeholder="--" />
                 </div>
                 <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
-                  <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
-                    Duration
-                  </label>
-                  <input
-                    value={currentReport.battery.duration}
-                    onChange={(e) =>
-                      setCurrentReport({
-                        ...currentReport,
-                        battery: {
-                          ...currentReport.battery,
-                          duration: e.target.value,
-                        },
-                      })
-                    }
-                    className="bg-transparent w-full font-mono text-xl font-bold outline-none text-center text-emerald-300"
-                    placeholder="00:00"
-                  />
+                  <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Duration</label>
+                  <input value={currentReport.battery.duration} onChange={(e) => setCurrentReport({ ...currentReport, battery: { ...currentReport.battery, duration: e.target.value } })} className="bg-transparent w-full font-mono text-xl font-bold outline-none text-center text-emerald-300" placeholder="00:00" />
                 </div>
                 <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm relative">
-                  <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
-                    Health
-                  </label>
-                  <select
-                    value={currentReport.battery.health}
-                    onChange={(e) =>
-                      setCurrentReport({
-                        ...currentReport,
-                        battery: {
-                          ...currentReport.battery,
-                          health: e.target.value as any,
-                        },
-                      })
-                    }
-                    className="bg-transparent w-full font-bold outline-none text-center appearance-none text-white text-sm"
-                  >
-                    <option className="text-black">Excellent</option>
-                    <option className="text-black">Good</option>
-                    <option className="text-black">Fair</option>
-                    <option className="text-black">Poor</option>
-                    <option className="text-black">Replace</option>
+                  <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Health</label>
+                  <select value={currentReport.battery.health} onChange={(e) => setCurrentReport({ ...currentReport, battery: { ...currentReport.battery, health: e.target.value as any } })} className="bg-transparent w-full font-bold outline-none text-center appearance-none text-white text-sm">
+                    <option className="text-black">Excellent</option><option className="text-black">Good</option><option className="text-black">Fair</option><option className="text-black">Poor</option><option className="text-black">Replace</option>
                   </select>
-                  <div
-                    className={`absolute top-2 right-2 w-2 h-2 rounded-full ${
-                      currentReport.battery.health === "Replace" ||
-                      currentReport.battery.health === "Poor"
-                        ? "bg-red-500"
-                        : "bg-green-500"
-                    }`}
-                  ></div>
+                  <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${currentReport.battery.health === "Replace" || currentReport.battery.health === "Poor" ? "bg-red-500" : "bg-green-500"}`}></div>
                 </div>
               </div>
             </div>
           </section>
 
-          {/* SECTION D: ACTION REQUIRED */}
           {Object.values(currentReport.checklist).includes("fail") && (
             <section className="bg-red-50 rounded-3xl p-6 border-2 border-red-100 animate-in slide-in-from-bottom-4">
-              <h3 className="text-red-700 font-bold flex items-center gap-2 mb-4">
-                <AlertTriangle size={20} /> Action Required
-              </h3>
+              <h3 className="text-red-700 font-bold flex items-center gap-2 mb-4"><AlertTriangle size={20} /> Action Required</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  "Return to Dealers",
-                  "Sent to Service Centre",
-                  "Parts Sent to Dealers",
-                  "Own Services",
-                ].map((action) => (
-                  <button
-                    key={action}
-                    onClick={() =>
-                      setCurrentReport({
-                        ...currentReport,
-                        actionRequired: action,
-                      })
-                    }
-                    className={`p-4 rounded-xl font-bold text-sm transition-all ${
-                      currentReport.actionRequired === action
-                        ? "bg-red-600 text-white shadow-lg shadow-red-200 scale-105"
-                        : "bg-white text-red-400 hover:bg-red-100 border border-red-100"
-                    }`}
-                  >
+                {["Return to Dealers", "Sent to Service Centre", "Parts Sent to Dealers", "Own Services"].map((action) => (
+                  <button key={action} onClick={() => setCurrentReport({ ...currentReport, actionRequired: action })} className={`p-4 rounded-xl font-bold text-sm transition-all ${currentReport.actionRequired === action ? "bg-red-600 text-white shadow-lg shadow-red-200 scale-105" : "bg-white text-red-400 hover:bg-red-100 border border-red-100"}`}>
                     {action}
                   </button>
                 ))}
@@ -2642,58 +1589,29 @@ export default function LaptopReports({
             </section>
           )}
 
-          {/* SECTION E: FOOTER */}
           <div className="space-y-4">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-              Technician Notes
-            </label>
-            <textarea
-              value={currentReport.notes}
-              onChange={(e) => {
-                // Simply update the state without creating history
-                setCurrentReport({
-                  ...currentReport,
-                  notes: e.target.value,
-                });
-              }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-indigo-100 outline-none resize-none"
-              rows={4}
-              placeholder="Additional observations..."
-            />
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Technician Notes</label>
+            <textarea value={currentReport.notes} onChange={(e) => setCurrentReport({ ...currentReport, notes: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-indigo-100 outline-none resize-none" rows={4} placeholder="Additional observations..." />
           </div>
 
-          {/* Signatures (Hidden usually, visible on print via CSS media query logic handles by html2pdf mostly but we structure it) */}
           <div className="hidden print-visible pt-8 flex justify-between">
-            <div className="border-t border-slate-300 w-48 pt-2 text-center text-xs font-bold uppercase">
-              Technician Signature
-            </div>
-            <div className="border-t border-slate-300 w-48 pt-2 text-center text-xs font-bold uppercase">
-              QC Manager Signature
-            </div>
+            <div className="border-t border-slate-300 w-48 pt-2 text-center text-xs font-bold uppercase">Technician Signature</div>
+            <div className="border-t border-slate-300 w-48 pt-2 text-center text-xs font-bold uppercase">QC Manager Signature</div>
           </div>
         </div>
       </div>
 
-      {/* FLOATING SAVE BUTTON FOOTER */}
       <div className="absolute bottom-6 left-0 right-0 px-4 md:px-8 z-40 pointer-events-none">
         <div className="max-w-4xl mx-auto pointer-events-auto">
           <div className="bg-white/90 backdrop-blur-md p-2 rounded-2xl border-2 border-indigo-200 shadow-2xl">
-            <button
-              onClick={handleSaveReport}
-              className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-xl shadow-lg hover:shadow-emerald-500/30 hover:scale-[1.01] transition-all transform flex items-center justify-center gap-3 text-lg"
-            >
+            <button onClick={handleSaveReport} className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-xl shadow-lg hover:shadow-emerald-500/30 hover:scale-[1.01] transition-all transform flex items-center justify-center gap-3 text-lg">
               <Save size={24} /> Save Report & Finish
             </button>
           </div>
         </div>
       </div>
 
-      {/* History Modal */}
-      <HistoryModal
-        isOpen={showHistory}
-        onClose={() => setShowHistory(false)}
-        history={currentReport.history || []}
-      />
+      <HistoryModal isOpen={showHistory} onClose={() => setShowHistory(false)} history={currentReport.history || []} />
     </div>
   );
 }

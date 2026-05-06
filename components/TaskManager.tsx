@@ -521,11 +521,10 @@ export default function TaskManager({
                         )}
                       </div>
                       <div
-                        className={`absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2 border-slate-900 shadow-lg ${
-                          idx === 0
+                        className={`absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2 border-slate-900 shadow-lg ${idx === 0
                             ? "bg-yellow-400 text-slate-900"
                             : "bg-slate-700 text-white"
-                        }`}
+                          }`}
                       >
                         {idx + 1}
                       </div>
@@ -572,7 +571,7 @@ export default function TaskManager({
                 <Zap size={18} className="text-amber-500" /> Recent Activity
               </h3>
               <button
-                onClick={() => {}}
+                onClick={() => { }}
                 className="text-[10px] font-bold text-indigo-600 hover:underline uppercase tracking-widest"
               >
                 View All
@@ -586,11 +585,10 @@ export default function TaskManager({
                   className="flex items-start gap-4 p-4 rounded-3xl border border-slate-50 hover:bg-slate-50 transition-all group"
                 >
                   <div
-                    className={`mt-1 w-2 h-2 rounded-full shrink-0 ${
-                      task.status === "completed"
+                    className={`mt-1 w-2 h-2 rounded-full shrink-0 ${task.status === "completed"
                         ? "bg-emerald-500"
                         : "bg-amber-400"
-                    }`}
+                      }`}
                   ></div>
                   <div className="flex-1 overflow-hidden">
                     <h4 className="text-sm font-bold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">
@@ -614,11 +612,10 @@ export default function TaskManager({
                     </p>
                   </div>
                   <span
-                    className={`text-[8px] px-2 py-1 rounded-lg font-black uppercase border ${
-                      task.status === "completed"
+                    className={`text-[8px] px-2 py-1 rounded-lg font-black uppercase border ${task.status === "completed"
                         ? "bg-emerald-50 text-emerald-600 border-emerald-100"
                         : "bg-slate-50 text-slate-400 border-slate-100"
-                    }`}
+                      }`}
                   >
                     {task.status}
                   </span>
@@ -799,11 +796,10 @@ export default function TaskManager({
                       </td>
                       <td className="px-6 py-5 text-right">
                         <span
-                          className={`inline-flex items-center px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm ${
-                            task.status === "completed"
+                          className={`inline-flex items-center px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm ${task.status === "completed"
                               ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
                               : "bg-amber-50 text-amber-700 border border-amber-100"
-                          }`}
+                            }`}
                         >
                           {task.status === "completed" ? (
                             <Check size={12} className="mr-1" />

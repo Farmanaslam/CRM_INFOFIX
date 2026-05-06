@@ -482,11 +482,10 @@ export default function StaffRatingsView({
               <button
                 key={type}
                 onClick={() => setViewType(type)}
-                className={`px-5 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all ${
-                  viewType === type
+                className={`px-5 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all ${viewType === type
                     ? "bg-white text-indigo-600 shadow-sm scale-105"
                     : "text-slate-500 hover:text-slate-700"
-                }`}
+                  }`}
               >
                 {type}
               </button>
@@ -766,8 +765,8 @@ export default function StaffRatingsView({
                                 date: `${r.year}-${(r.month + 1)
                                   .toString()
                                   .padStart(2, "0")}-${(r.day || 1)
-                                  .toString()
-                                  .padStart(2, "0")}`,
+                                    .toString()
+                                    .padStart(2, "0")}`,
                                 status:
                                   r.attendanceDays === 1
                                     ? "full"
@@ -933,11 +932,10 @@ export default function StaffRatingsView({
                         <div className="space-y-3 flex-1 relative z-10">
                           <div className="flex items-center gap-2">
                             <div
-                              className={`px-3 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest shadow-sm ${
-                                (b.adminBonus || 0) < 0
+                              className={`px-3 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest shadow-sm ${(b.adminBonus || 0) < 0
                                   ? "bg-rose-50 text-rose-600 border-rose-100"
                                   : "bg-amber-50 text-amber-600 border-amber-100"
-                              }`}
+                                }`}
                             >
                               {(b.adminBonus || 0) < 0 ? "Deducted" : "Awarded"}
                             </div>
@@ -952,11 +950,10 @@ export default function StaffRatingsView({
 
                         <div className="shrink-0 text-center bg-indigo-50/50 p-4 rounded-xl border border-indigo-100/50 min-w-[120px] shadow-inner relative z-10 flex flex-col items-center justify-center">
                           <span
-                            className={`text-4xl font-black tabular-nums tracking-tighter leading-none ${
-                              (b.adminBonus || 0) < 0
+                            className={`text-4xl font-black tabular-nums tracking-tighter leading-none ${(b.adminBonus || 0) < 0
                                 ? "text-rose-600"
                                 : "text-indigo-600"
-                            }`}
+                              }`}
                           >
                             {(b.adminBonus || 0) > 0 ? "+" : ""}
                             {b.adminBonus}
@@ -1128,21 +1125,19 @@ export default function StaffRatingsView({
                         status: item.id as any,
                       })
                     }
-                    className={`flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-500 ${
-                      attendanceForm.status === item.id
+                    className={`flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-500 ${attendanceForm.status === item.id
                         ? item.active + " border-transparent scale-105"
                         : item.color +
-                          " border-transparent opacity-40 hover:opacity-100 scale-100"
-                    }`}
+                        " border-transparent opacity-40 hover:opacity-100 scale-100"
+                      }`}
                   >
                     <item.icon size={28} className="mb-2" />
                     <span className="text-[10px] font-black uppercase tracking-widest leading-none text-center mb-1">
                       {item.label}
                     </span>
                     <span
-                      className={`text-[8px] font-black opacity-60 uppercase tracking-widest ${
-                        attendanceForm.status === item.id ? "text-white" : ""
-                      }`}
+                      className={`text-[8px] font-black opacity-60 uppercase tracking-widest ${attendanceForm.status === item.id ? "text-white" : ""
+                        }`}
                     >
                       {item.val} yield
                     </span>
@@ -1175,11 +1170,10 @@ export default function StaffRatingsView({
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in fade-in zoom-in-95 duration-500 overflow-hidden border border-white/20">
             <div className="p-10 border-b border-slate-100 bg-slate-50/50 text-center relative overflow-hidden">
               <div
-                className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner group border transition-all ${
-                  adminBonusInput < 0
+                className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner group border transition-all ${adminBonusInput < 0
                     ? "bg-rose-50 text-rose-500 border-rose-100"
                     : "bg-amber-50 text-amber-500 border-amber-100"
-                }`}
+                  }`}
               >
                 {adminBonusInput < 0 ? (
                   <AlertTriangle
@@ -1217,9 +1211,8 @@ export default function StaffRatingsView({
                     onChange={(e) =>
                       setAdminBonusInput(parseInt(e.target.value) || 0)
                     }
-                    className={`w-full text-center font-black text-7xl lg:text-8xl bg-transparent outline-none tabular-nums tracking-tighter focus:ring-0 ${
-                      adminBonusInput < 0 ? "text-rose-600" : "text-indigo-600"
-                    }`}
+                    className={`w-full text-center font-black text-7xl lg:text-8xl bg-transparent outline-none tabular-nums tracking-tighter focus:ring-0 ${adminBonusInput < 0 ? "text-rose-600" : "text-indigo-600"
+                      }`}
                   />
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">
                     {adminBonusInput < 0 ? "Deduction" : "Multiplier"}
@@ -1257,11 +1250,10 @@ export default function StaffRatingsView({
                 <button
                   onClick={handleSaveMerit}
                   disabled={!adminBonusReasonInput.trim()}
-                  className={`flex-[2] py-4 text-white font-black rounded-xl shadow-xl transition-all text-[10px] uppercase tracking-widest flex items-center justify-center gap-4 active:scale-[0.98] disabled:opacity-50 border border-white/20 ${
-                    adminBonusInput < 0
+                  className={`flex-[2] py-4 text-white font-black rounded-xl shadow-xl transition-all text-[10px] uppercase tracking-widest flex items-center justify-center gap-4 active:scale-[0.98] disabled:opacity-50 border border-white/20 ${adminBonusInput < 0
                       ? "bg-rose-600 hover:bg-rose-700"
                       : "bg-indigo-600 hover:bg-indigo-700"
-                  }`}
+                    }`}
                 >
                   {adminBonusInput < 0 ? (
                     <>

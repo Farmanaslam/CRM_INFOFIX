@@ -204,19 +204,19 @@ export default function TasksView({
     const reportsForKPI =
       memberFilter === "all"
         ? accessibleReports.filter((r) => {
-            const techName = r.deviceInfo.technicianName?.trim().toLowerCase();
-            const accessibleNames = accessibleMembers
-              .filter((m) => m.role === "TECHNICIAN")
-              .map((m) => m.name.trim().toLowerCase());
-            return techName && accessibleNames.includes(techName);
-          })
+          const techName = r.deviceInfo.technicianName?.trim().toLowerCase();
+          const accessibleNames = accessibleMembers
+            .filter((m) => m.role === "TECHNICIAN")
+            .map((m) => m.name.trim().toLowerCase());
+          return techName && accessibleNames.includes(techName);
+        })
         : accessibleReports.filter((r) => {
-            const member = teamMembers.find((m) => m.id === memberFilter);
-            return member
-              ? r.deviceInfo.technicianName?.trim().toLowerCase() ===
-                  member.name.trim().toLowerCase()
-              : false;
-          });
+          const member = teamMembers.find((m) => m.id === memberFilter);
+          return member
+            ? r.deviceInfo.technicianName?.trim().toLowerCase() ===
+            member.name.trim().toLowerCase()
+            : false;
+        });
     const qcPassedReports = reportsForKPI.filter(
       (r) => r.progress >= 50 && !r.actionRequired,
     );
@@ -282,12 +282,12 @@ export default function TasksView({
       memberFilter === "all"
         ? accessibleReports
         : accessibleReports.filter((r) => {
-            const member = teamMembers.find((m) => m.id === memberFilter);
-            return member
-              ? r.deviceInfo.technicianName?.trim().toLowerCase() ===
-                  member.name.trim().toLowerCase()
-              : false;
-          });
+          const member = teamMembers.find((m) => m.id === memberFilter);
+          return member
+            ? r.deviceInfo.technicianName?.trim().toLowerCase() ===
+            member.name.trim().toLowerCase()
+            : false;
+        });
 
     if (chartView === "monthly") {
       const daysInMonth = new Date(
@@ -717,21 +717,19 @@ export default function TasksView({
           <div className="flex bg-slate-100 p-1 rounded-xl">
             <button
               onClick={() => setChartView("monthly")}
-              className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
-                chartView === "monthly"
+              className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${chartView === "monthly"
                   ? "bg-white shadow-md text-indigo-600"
                   : "text-slate-500 hover:text-slate-800"
-              }`}
+                }`}
             >
               Monthly
             </button>
             <button
               onClick={() => setChartView("yearly")}
-              className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
-                chartView === "yearly"
+              className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${chartView === "yearly"
                   ? "bg-white shadow-md text-indigo-600"
                   : "text-slate-500 hover:text-slate-800"
-              }`}
+                }`}
             >
               Yearly
             </button>
@@ -783,11 +781,10 @@ export default function TasksView({
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}
-                className={`flex-1 md:flex-none px-5 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all whitespace-nowrap ${
-                  statusFilter === f
+                className={`flex-1 md:flex-none px-5 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all whitespace-nowrap ${statusFilter === f
                     ? "bg-white text-indigo-600 shadow-sm"
                     : "text-slate-500 hover:text-slate-700"
-                }`}
+                  }`}
               >
                 {f}
               </button>
@@ -802,9 +799,8 @@ export default function TasksView({
                 placeholder={
                   memberFilter === "all"
                     ? "Quick-add task for yourself..."
-                    : `Quick add task for ${
-                        getUserDetails(memberFilter).name
-                      }...`
+                    : `Quick add task for ${getUserDetails(memberFilter).name
+                    }...`
                 }
                 className="w-full pl-5 pr-12 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 outline-none transition-all shadow-inner"
               />
@@ -830,35 +826,32 @@ export default function TasksView({
               return (
                 <div
                   key={task.id}
-                  className={`group flex flex-col p-4 rounded-2xl transition-all border ${
-                    task.status === "completed"
+                  className={`group flex flex-col p-4 rounded-2xl transition-all border ${task.status === "completed"
                       ? "bg-slate-50 border-transparent opacity-60"
                       : task.priority === "urgent"
                         ? "bg-white border-red-100 shadow-md ring-1 ring-red-50"
                         : "bg-white border-slate-100 hover:border-indigo-300 hover:shadow-lg hover:-translate-y-0.5"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4 overflow-hidden flex-1">
                       <button
                         onClick={() => toggleTask(task.id)}
-                        className={`w-7 h-7 rounded-xl flex-shrink-0 flex items-center justify-center border-2 transition-all ${
-                          task.status === "completed"
+                        className={`w-7 h-7 rounded-xl flex-shrink-0 flex items-center justify-center border-2 transition-all ${task.status === "completed"
                             ? "bg-emerald-500 border-emerald-500 text-white"
                             : task.priority === "urgent"
                               ? "border-red-400 text-transparent hover:bg-red-50"
                               : "border-slate-200 text-transparent hover:border-indigo-500 hover:bg-indigo-50"
-                        }`}
+                          }`}
                       >
                         <Check size={16} strokeWidth={4} />
                       </button>
                       <div className="flex flex-col overflow-hidden">
                         <span
-                          className={`text-sm font-bold truncate tracking-tight ${
-                            task.status === "completed"
+                          className={`text-sm font-bold truncate tracking-tight ${task.status === "completed"
                               ? "line-through text-slate-400"
                               : "text-slate-800"
-                          }`}
+                            }`}
                         >
                           {task.title}
                         </span>

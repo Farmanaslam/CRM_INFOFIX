@@ -275,20 +275,16 @@ export default function Supports({
       - Frequent Customers: ${systemKnowledge.vipCustomers
         .map((c) => `${c.name}`)
         .join(", ")}.
-      - Quality Control: ${
-        systemKnowledge.qcFailures.count
-      } devices failed recent QC (${
-      systemKnowledge.qcFailures.rate
-    }% failure rate).
+      - Quality Control: ${systemKnowledge.qcFailures.count
+      } devices failed recent QC (${systemKnowledge.qcFailures.rate
+      }% failure rate).
     `;
 
     let contextString = activeTicket
       ? `[SESSION FOCUS: TICKET ${activeTicket.ticketId}] DEVICE: ${activeTicket.brand} ${activeTicket.model}, FAULT: ${activeTicket.issueDescription}, STATUS: ${activeTicket.status}, PRIORITY: ${activeTicket.priority}`
-      : `[GLOBAL SCOPE] ACTIVE TICKETS: ${
-          tickets.filter((t) => t.status !== "Resolved").length
-        }. TOTAL CUSTOMERS: ${customers.length}. PENDING TASKS: ${
-          tasks.filter((t) => t.status === "pending").length
-        }.`;
+      : `[GLOBAL SCOPE] ACTIVE TICKETS: ${tickets.filter((t) => t.status !== "Resolved").length
+      }. TOTAL CUSTOMERS: ${customers.length}. PENDING TASKS: ${tasks.filter((t) => t.status === "pending").length
+      }.`;
 
     const systemPrompt = `
       ROLE: INFOFIX COGNITIVE AGENT (V3.5-PRO).
@@ -374,60 +370,60 @@ export default function Supports({
 
   const quickActions = activeTicket
     ? [
-        {
-          label: "Technical Diagnosis",
-          icon: Stethoscope,
-          type: "diagnostic",
-          prompt: `Execute deep diagnostic isolation for "${activeTicket.issueDescription}" on ${activeTicket.brand} ${activeTicket.model}.`,
-        },
-        {
-          label: "Customer Update Draft",
-          icon: Mail,
-          type: "draft",
-          prompt: `Compose a high-end service update draft for the client. Current Status: ${activeTicket.status}.`,
-        },
-        {
-          label: "BOM Parts List",
-          icon: ListChecks,
-          type: "text",
-          prompt: `Estimate required Bill of Materials (BOM) for "${activeTicket.issueDescription}".`,
-        },
-        {
-          label: "Protocol Match",
-          icon: ShieldCheck,
-          type: "text",
-          prompt: "Scan internal SOP repository for matching fault patterns.",
-        },
-      ]
+      {
+        label: "Technical Diagnosis",
+        icon: Stethoscope,
+        type: "diagnostic",
+        prompt: `Execute deep diagnostic isolation for "${activeTicket.issueDescription}" on ${activeTicket.brand} ${activeTicket.model}.`,
+      },
+      {
+        label: "Customer Update Draft",
+        icon: Mail,
+        type: "draft",
+        prompt: `Compose a high-end service update draft for the client. Current Status: ${activeTicket.status}.`,
+      },
+      {
+        label: "BOM Parts List",
+        icon: ListChecks,
+        type: "text",
+        prompt: `Estimate required Bill of Materials (BOM) for "${activeTicket.issueDescription}".`,
+      },
+      {
+        label: "Protocol Match",
+        icon: ShieldCheck,
+        type: "text",
+        prompt: "Scan internal SOP repository for matching fault patterns.",
+      },
+    ]
     : [
-        {
-          label: "Enterprise Pulse",
-          icon: Activity,
-          type: "text",
-          prompt:
-            "Generate real-time workload efficiency report and shop status based on auto-learned data.",
-        },
-        {
-          label: "Failure Analysis",
-          icon: TrendingUp,
-          type: "text",
-          prompt:
-            "Identify common failure points based on historical service logs and QC reports.",
-        },
-        {
-          label: "Staff Load",
-          icon: Users,
-          type: "text",
-          prompt:
-            "Who are the busiest technicians currently? Summarize task distribution.",
-        },
-        {
-          label: "VIP Check",
-          icon: Crown,
-          type: "text",
-          prompt: "Who are our top frequent customers?",
-        },
-      ];
+      {
+        label: "Enterprise Pulse",
+        icon: Activity,
+        type: "text",
+        prompt:
+          "Generate real-time workload efficiency report and shop status based on auto-learned data.",
+      },
+      {
+        label: "Failure Analysis",
+        icon: TrendingUp,
+        type: "text",
+        prompt:
+          "Identify common failure points based on historical service logs and QC reports.",
+      },
+      {
+        label: "Staff Load",
+        icon: Users,
+        type: "text",
+        prompt:
+          "Who are the busiest technicians currently? Summarize task distribution.",
+      },
+      {
+        label: "VIP Check",
+        icon: Crown,
+        type: "text",
+        prompt: "Who are our top frequent customers?",
+      },
+    ];
 
   const filteredTickets = tickets
     .filter((t) => t.status !== "Resolved" && t.status !== "Rejected")
@@ -503,42 +499,38 @@ export default function Supports({
                 setSelectedTicketId(ticket.id);
                 if (window.innerWidth < 768) setShowSidebar(false);
               }}
-              className={`w-full text-left p-4 rounded-[2rem] border transition-all duration-500 group relative overflow-hidden ${
-                selectedTicketId === ticket.id
+              className={`w-full text-left p-4 rounded-[2rem] border transition-all duration-500 group relative overflow-hidden ${selectedTicketId === ticket.id
                   ? "bg-indigo-600 border-indigo-400 shadow-xl scale-[1.02] z-10"
                   : "bg-white border-slate-100 hover:border-indigo-200 hover:shadow-lg"
-              }`}
+                }`}
             >
               <div className="flex justify-between items-start mb-2">
                 <span
-                  className={`text-[9px] font-black uppercase tracking-widest ${
-                    selectedTicketId === ticket.id
+                  className={`text-[9px] font-black uppercase tracking-widest ${selectedTicketId === ticket.id
                       ? "text-indigo-200"
                       : "text-slate-400"
-                  }`}
+                    }`}
                 >
                   {ticket.ticketId}
                 </span>
                 <div
-                  className={`px-2 py-0.5 rounded-lg text-[7px] font-black uppercase tracking-[0.15em] border ${
-                    ticket.priority === "High"
+                  className={`px-2 py-0.5 rounded-lg text-[7px] font-black uppercase tracking-[0.15em] border ${ticket.priority === "High"
                       ? selectedTicketId === ticket.id
                         ? "bg-white text-rose-600 border-white"
                         : "bg-rose-50 text-rose-600 border-rose-100"
                       : selectedTicketId === ticket.id
-                      ? "bg-indigo-500 text-white border-indigo-400"
-                      : "bg-slate-50 text-slate-500 border-slate-100"
-                  }`}
+                        ? "bg-indigo-500 text-white border-indigo-400"
+                        : "bg-slate-50 text-slate-500 border-slate-100"
+                    }`}
                 >
                   {ticket.priority === "High" ? "Critical" : "Routine"}
                 </div>
               </div>
               <div
-                className={`font-black text-sm mb-1 truncate flex items-center gap-2 tracking-tight ${
-                  selectedTicketId === ticket.id
+                className={`font-black text-sm mb-1 truncate flex items-center gap-2 tracking-tight ${selectedTicketId === ticket.id
                     ? "text-white"
                     : "text-slate-800"
-                }`}
+                  }`}
               >
                 {ticket.deviceType === "Laptop" ? (
                   <Laptop size={14} />
@@ -548,11 +540,10 @@ export default function Supports({
                 {ticket.brand} {ticket.model}
               </div>
               <div
-                className={`text-[10px] line-clamp-2 leading-relaxed font-medium ${
-                  selectedTicketId === ticket.id
+                className={`text-[10px] line-clamp-2 leading-relaxed font-medium ${selectedTicketId === ticket.id
                     ? "text-indigo-100/80"
                     : "text-slate-500"
-                }`}
+                  }`}
               >
                 {ticket.issueDescription}
               </div>
@@ -593,12 +584,11 @@ export default function Supports({
                 <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.2em]">
                   {activeTicket
                     ? `NODE: ${activeTicket.ticketId}`
-                    : `MONITORING: ${
-                        tickets.length +
-                        customers.length +
-                        tasks.length +
-                        reports.length
-                      } NODES`}
+                    : `MONITORING: ${tickets.length +
+                    customers.length +
+                    tasks.length +
+                    reports.length
+                    } NODES`}
                 </p>
                 <div className="h-2 w-px bg-slate-200 mx-1"></div>
                 <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.2em]">
@@ -610,11 +600,10 @@ export default function Supports({
           <div className="flex gap-2">
             <button
               onClick={() => setShowKnowledgeBase(!showKnowledgeBase)}
-              className={`px-4 py-2 lg:py-2.5 rounded-xl border-2 transition-all flex items-center gap-2.5 text-[9px] font-black uppercase tracking-[0.15em] ${
-                showKnowledgeBase
+              className={`px-4 py-2 lg:py-2.5 rounded-xl border-2 transition-all flex items-center gap-2.5 text-[9px] font-black uppercase tracking-[0.15em] ${showKnowledgeBase
                   ? "bg-slate-900 border-slate-900 text-white shadow-lg shadow-slate-300"
                   : "bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-indigo-200"
-              }`}
+                }`}
             >
               <Book size={16} />{" "}
               <span className="hidden lg:inline">
@@ -636,26 +625,22 @@ export default function Supports({
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex ${
-                msg.role === "user" ? "justify-end" : "justify-start"
-              } animate-in fade-in slide-in-from-bottom-4 duration-700 relative z-10`}
+              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"
+                } animate-in fade-in slide-in-from-bottom-4 duration-700 relative z-10`}
             >
               <div
-                className={`flex flex-col gap-2.5 max-w-[95%] lg:max-w-[85%] ${
-                  msg.role === "user" ? "items-end" : "items-start"
-                }`}
+                className={`flex flex-col gap-2.5 max-w-[95%] lg:max-w-[85%] ${msg.role === "user" ? "items-end" : "items-start"
+                  }`}
               >
                 <div
-                  className={`flex gap-3 lg:gap-5 ${
-                    msg.role === "user" ? "flex-row-reverse" : ""
-                  }`}
+                  className={`flex gap-3 lg:gap-5 ${msg.role === "user" ? "flex-row-reverse" : ""
+                    }`}
                 >
                   <div
-                    className={`w-9 h-9 lg:w-11 lg:h-11 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-lg transition-all duration-700 ${
-                      msg.role === "user"
+                    className={`w-9 h-9 lg:w-11 lg:h-11 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-lg transition-all duration-700 ${msg.role === "user"
                         ? "bg-white text-slate-400 border border-slate-100"
                         : "bg-indigo-600 text-white"
-                    }`}
+                      }`}
                   >
                     {msg.role === "user" ? (
                       <User size={20} />
@@ -664,11 +649,10 @@ export default function Supports({
                     )}
                   </div>
                   <div
-                    className={`relative p-5 lg:p-6 rounded-[2rem] text-sm lg:text-base leading-relaxed whitespace-pre-wrap shadow-xl transition-all ${
-                      msg.role === "user"
+                    className={`relative p-5 lg:p-6 rounded-[2rem] text-sm lg:text-base leading-relaxed whitespace-pre-wrap shadow-xl transition-all ${msg.role === "user"
                         ? "bg-white text-slate-800 border border-slate-100 rounded-tr-none"
                         : "bg-white text-slate-700 border border-slate-100 rounded-tl-none ring-1 ring-indigo-50"
-                    }`}
+                      }`}
                   >
                     {msg.type === "draft" && (
                       <div className="mb-3 px-3 py-1 bg-indigo-50 border border-indigo-100 rounded-lg inline-flex items-center gap-2 text-[9px] font-black uppercase text-indigo-600 tracking-widest">
@@ -819,11 +803,10 @@ export default function Supports({
                 <button
                   key={tab}
                   onClick={() => setKbTab(tab)}
-                  className={`flex-1 py-2 text-[9px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${
-                    kbTab === tab
+                  className={`flex-1 py-2 text-[9px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${kbTab === tab
                       ? "bg-white shadow-lg text-indigo-600 border border-slate-100"
                       : "text-slate-500 hover:text-slate-800"
-                  }`}
+                    }`}
                 >
                   {tab}
                 </button>

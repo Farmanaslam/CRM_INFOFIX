@@ -286,11 +286,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       <aside
         className={`
         fixed lg:relative inset-y-0 left-0 z-40 bg-[#020617] text-slate-300 transform transition-all duration-300 ease-out border-r border-white/[0.03] flex flex-col h-full
-        ${
-          isMobileOpen
+        ${isMobileOpen
             ? "translate-x-0 w-72"
             : "-translate-x-full lg:translate-x-0"
-        }
+          }
         ${isCollapsed ? "lg:w-[90px]" : "lg:w-72"}
       `}
       >
@@ -317,30 +316,26 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Brand Header */}
         <div
-          className={`flex items-center gap-4 px-7 py-10 shrink-0 ${
-            !showLabels ? "justify-center px-4" : ""
-          }`}
+          className={`flex items-center gap-4 px-7 py-10 shrink-0 ${!showLabels ? "justify-center px-4" : ""
+            }`}
         >
           <div
             className="relative group cursor-pointer"
             onClick={() => setIsCollapsed(false)}
           >
-            <div
-              className={`w-10 h-10 lg:w-12 lg:h-12 bg-gradient-to-tr ${
-                isSuperAdmin
-                  ? "from-purple-600 to-indigo-500"
-                  : "from-indigo-600 to-indigo-400"
-              } rounded-2xl flex items-center justify-center text-white shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-transform hover:scale-105 active:scale-95`}
-            >
-              {isSuperAdmin ? <Crown size={24} /> : <Cpu size={24} />}
+            <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-2xl overflow-hidden shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-transform hover:scale-105 active:scale-95">
+              <img
+                src="/icons/icon-192.png"
+                alt="Infofix"
+                className="w-full h-full object-cover"
+              />
             </div>
             <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-[#020617] animate-pulse"></div>
           </div>
 
           <div
-            className={`transition-opacity duration-300 ${
-              showLabels ? "opacity-100" : "opacity-0 hidden w-0"
-            }`}
+            className={`transition-opacity duration-300 ${showLabels ? "opacity-100" : "opacity-0 hidden w-0"
+              }`}
           >
             <h1 className="text-xl font-black text-white tracking-tighter leading-none">
               INFOFIX
@@ -357,18 +352,16 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div className={`px-6 mb-4 ${!showLabels ? "px-3" : ""}`}>
             {isSuperAdmin ? (
               <div
-                className={`bg-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur-md group hover:border-indigo-500/50 transition-all relative overflow-hidden ${
-                  !showLabels ? "flex justify-center cursor-pointer" : ""
-                }`}
+                className={`bg-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur-md group hover:border-indigo-500/50 transition-all relative overflow-hidden ${!showLabels ? "flex justify-center cursor-pointer" : ""
+                  }`}
                 onClick={() => !showLabels && setIsCollapsed(false)}
               >
                 <MapPin
                   size={16}
-                  className={`text-indigo-400 ${
-                    !showLabels
+                  className={`text-indigo-400 ${!showLabels
                       ? ""
                       : "absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                  }`}
+                    }`}
                 />
                 {showLabels && (
                   <>
@@ -400,9 +393,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             ) : (
               userZone && (
                 <div
-                  className={`bg-white/5 border border-white/10 rounded-2xl p-3 flex items-center gap-3 backdrop-blur-md ${
-                    !showLabels ? "justify-center" : ""
-                  }`}
+                  className={`bg-white/5 border border-white/10 rounded-2xl p-3 flex items-center gap-3 backdrop-blur-md ${!showLabels ? "justify-center" : ""
+                    }`}
                   title={userZone.name}
                 >
                   <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
@@ -448,9 +440,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               <div key={item.id} className="relative group/nav">
                 {isActive && (
                   <div
-                    className={`absolute top-1/2 -translate-y-1/2 w-1.5 h-6 bg-indigo-500 rounded-r-full shadow-[0_0_10px_rgba(99,102,241,0.5)] ${
-                      !showLabels ? "left-[-12px]" : "left-[-16px]"
-                    }`}
+                    className={`absolute top-1/2 -translate-y-1/2 w-1.5 h-6 bg-indigo-500 rounded-r-full shadow-[0_0_10px_rgba(99,102,241,0.5)] ${!showLabels ? "left-[-12px]" : "left-[-16px]"
+                      }`}
                   ></div>
                 )}
 
@@ -458,10 +449,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                   onClick={() => handleNavClick(item)}
                   className={`
                     w-full flex items-center px-4 py-3 rounded-xl text-[13px] font-bold transition-all duration-300
-                    ${
-                      isActive
-                        ? "bg-white/[0.06] text-white"
-                        : "hover:bg-white/[0.03] hover:text-slate-100 text-slate-500"
+                    ${isActive
+                      ? "bg-white/[0.06] text-white"
+                      : "hover:bg-white/[0.03] hover:text-slate-100 text-slate-500"
                     }
                     ${!showLabels ? "justify-center" : "justify-between"}
                   `}
@@ -483,9 +473,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 
                   {showLabels && item.children && (
                     <div
-                      className={`transition-transform duration-500 ${
-                        isOpen ? "rotate-180 text-indigo-400" : "text-slate-600"
-                      }`}
+                      className={`transition-transform duration-500 ${isOpen ? "rotate-180 text-indigo-400" : "text-slate-600"
+                        }`}
                     >
                       <ChevronDown size={14} strokeWidth={3} />
                     </div>
@@ -506,11 +495,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                             e.stopPropagation();
                             setCurrentView(child.id as View);
                           }}
-                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] font-bold transition-all ${
-                            currentView === child.id
+                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] font-bold transition-all ${currentView === child.id
                               ? "text-white bg-indigo-600"
                               : "text-slate-400 hover:text-white hover:bg-white/5"
-                          }`}
+                            }`}
                         >
                           <child.icon size={14} />
                           {child.label}
@@ -532,11 +520,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                           setCurrentView(child.id as View);
                           setIsMobileOpen(false);
                         }}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-[12px] font-bold transition-all ${
-                          currentView === child.id
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-[12px] font-bold transition-all ${currentView === child.id
                             ? "text-white bg-white/5 shadow-inner"
                             : "text-slate-500 hover:text-slate-300 hover:bg-white/[0.02]"
-                        }`}
+                          }`}
                       >
                         <child.icon
                           size={14}
@@ -572,22 +559,19 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           <div
-            className={`bg-white/[0.03] backdrop-blur-2xl rounded-2xl border border-white/[0.05] shadow-2xl transition-all ${
-              showLabels ? "p-4" : "p-2 flex justify-center"
-            }`}
+            className={`bg-white/[0.03] backdrop-blur-2xl rounded-2xl border border-white/[0.05] shadow-2xl transition-all ${showLabels ? "p-4" : "p-2 flex justify-center"
+              }`}
           >
             <div
-              className={`flex items-center ${
-                showLabels ? "justify-between" : "justify-center flex-col gap-3"
-              }`}
+              className={`flex items-center ${showLabels ? "justify-between" : "justify-center flex-col gap-3"
+                }`}
             >
               <div className="flex items-center gap-3 overflow-hidden">
                 <div
-                  className={`relative w-10 h-10 rounded-xl flex shrink-0 items-center justify-center text-white font-black text-sm shadow-xl ${
-                    currentUser.role === "CUSTOMER"
+                  className={`relative w-10 h-10 rounded-xl flex shrink-0 items-center justify-center text-white font-black text-sm shadow-xl ${currentUser.role === "CUSTOMER"
                       ? "bg-gradient-to-br from-emerald-500 to-teal-600"
                       : "bg-gradient-to-br from-indigo-500 to-purple-600"
-                  }`}
+                    }`}
                 >
                   {currentUser.photo ? (
                     <img
@@ -613,9 +597,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 
               <button
                 onClick={onLogout}
-                className={`text-slate-500 hover:text-rose-400 transition-all ${
-                  showLabels ? "p-2.5" : "p-2 hover:bg-white/5 rounded-lg"
-                }`}
+                className={`text-slate-500 hover:text-rose-400 transition-all ${showLabels ? "p-2.5" : "p-2 hover:bg-white/5 rounded-lg"
+                  }`}
                 title="Logout"
               >
                 <LogOut size={18} />
