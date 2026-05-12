@@ -235,7 +235,7 @@ export default function Reports({
       if (
         statusFilter !== "All" &&
         ticket.status?.trim().toLowerCase() !==
-          statusFilter?.trim().toLowerCase()
+        statusFilter?.trim().toLowerCase()
       )
         return false;
 
@@ -451,11 +451,11 @@ export default function Reports({
       doc.setFont("helvetica", "normal");
       doc.text(
         "Ticket Work Status Report  •  Exported on " +
-          new Date().toLocaleDateString("en-IN", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          }),
+        new Date().toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        }),
         marginL,
         24,
       );
@@ -474,21 +474,21 @@ export default function Reports({
         roleFilter !== "All" ? `Role: ${roleFilter}` : null,
         memberFilter !== "All"
           ? `Staff: ${(() => {
-              const m = filteredData.find ? undefined : undefined;
-              const member = (() => {
-                try {
-                  // access settings from closure
-                  return (
-                    (settings as any).teamMembers?.find(
-                      (tm: any) => tm.id === memberFilter,
-                    )?.name ?? memberFilter
-                  );
-                } catch {
-                  return memberFilter;
-                }
-              })();
-              return member;
-            })()}`
+            const m = filteredData.find ? undefined : undefined;
+            const member = (() => {
+              try {
+                // access settings from closure
+                return (
+                  (settings as any).teamMembers?.find(
+                    (tm: any) => tm.id === memberFilter,
+                  )?.name ?? memberFilter
+                );
+              } catch {
+                return memberFilter;
+              }
+            })();
+            return member;
+          })()}`
           : null,
         `Total Tickets: ${filteredData.length}`,
       ]
@@ -549,18 +549,18 @@ export default function Reports({
       // ── TABLE SETUP ──────────────────────────────────────────
       // Columns: #, Ticket ID, Date, Customer, Phone, Device, Brand/Model, Issue, Store, Assignee, Status, Priority, Amount
       const cols: Array<{ header: string; key: string; w: number }> = [
-        { header: "#", key: "idx", w: 7 },
-        { header: "Ticket ID", key: "ticketId", w: 22 },
-        { header: "Date", key: "date", w: 18 },
-        { header: "Customer", key: "name", w: 26 },
-        { header: "Phone", key: "number", w: 22 },
-        { header: "Device", key: "device", w: 20 },
-        { header: "Brand/Model", key: "brandModel", w: 26 },
-        { header: "Issue", key: "issue", w: 44 },
-        { header: "Store", key: "store", w: 24 },
-        { header: "Assignee", key: "assignee", w: 22 },
+        { header: "#", key: "idx", w: 6 },
+        { header: "Ticket ID", key: "ticketId", w: 18 },
+        { header: "Date", key: "date", w: 14 },
+        { header: "Customer", key: "name", w: 22 },
+        { header: "Phone", key: "number", w: 20 },
+        { header: "Device", key: "device", w: 16 },
+        { header: "Serial No", key: "serialNo", w: 22 },
+        { header: "Brand/Model", key: "brandModel", w: 28 },
+        { header: "Issue", key: "issue", w: 52 },
+        { header: "Store", key: "store", w: 22 },
+        { header: "Assignee", key: "assignee", w: 20 },
         { header: "Status", key: "status", w: 22 },
-        { header: "Priority", key: "priority", w: 16 },
       ];
       // Scale columns to fit usableWidth exactly
       const totalColW = cols.reduce((s, c) => s + c.w, 0);
@@ -591,7 +591,6 @@ export default function Reports({
         medium: [245, 158, 11],
         low: [16, 185, 129],
       };
-
       // ── DRAW TABLE HEADER ────────────────────────────────────
       const drawTableHeader = () => {
         doc.setFillColor(...hex2rgb("#1e293b"));
@@ -647,13 +646,13 @@ export default function Reports({
           name: ticket.name ?? "—",
           number: ticket.number ?? "—",
           device: ticket.deviceType ?? "—",
+          serialNo: (ticket as any).serialNumber ?? (ticket as any).serial ?? "—",
           brandModel:
             `${ticket.brand ?? ""} ${ticket.model ?? ""}`.trim() || "—",
           issue: ticket.issueDescription ?? "—",
           store: ticket.store ?? "—",
           assignee,
           status: ticket.status ?? "—",
-          priority: ticket.priority ?? "—",
         };
 
         // ── Pre-calculate wrapped lines per cell to determine dynamic row height ──
@@ -669,10 +668,12 @@ export default function Reports({
           if (
             col.key === "store" ||
             col.key === "issue" ||
-            col.key === "name"
+            col.key === "name" ||
+            col.key === "brandModel" ||
+            col.key === "serialNo"
           ) {
             cellLines[col.key] = doc.splitTextToSize(rawVal, col.w - 3);
-            // Cap at 3 lines max to prevent runaway rows
+            // Cap at 3 lines max
             if (cellLines[col.key].length > 3) {
               cellLines[col.key] = cellLines[col.key].slice(0, 3);
               const last = cellLines[col.key][2];
@@ -743,12 +744,12 @@ export default function Reports({
               { align: "center" },
             );
             doc.setFont("helvetica", "normal");
-          } else if (col.key === "priority") {
-            const priKey = (rowData.priority ?? "").toLowerCase();
-            const [pr, pg, pb] = priorityColorMap[priKey] ?? [100, 116, 139];
-            doc.setTextColor(pr, pg, pb);
-            doc.setFont("helvetica", "bold");
-            doc.text(lines[0], x + 1.5, curY + rowH / 2 + 1.2);
+          } else if (col.key === "serialNo") {
+            doc.setTextColor(30, 41, 59);
+            doc.setFont("helvetica", "normal");
+            lines.forEach((line, li) => {
+              doc.text(line, x + 1.5, textStartY + li * lineH);
+            });
             doc.setFont("helvetica", "normal");
           } else if (col.key === "ticketId") {
             doc.setTextColor(...hex2rgb("#4f46e5"));
@@ -848,11 +849,10 @@ export default function Reports({
                 <button
                   key={period}
                   onClick={() => setTimeFilter(period)}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all uppercase ${
-                    timeFilter === period
-                      ? "bg-white text-indigo-600 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all uppercase ${timeFilter === period
+                    ? "bg-white text-indigo-600 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                    }`}
                 >
                   {period === "all" ? "All Time" : period}
                 </button>
@@ -1245,11 +1245,10 @@ export default function Reports({
                   className="flex items-center gap-4 p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-100"
                 >
                   <div
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-sm ${
-                      idx === 0
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-slate-100 text-slate-600"
-                    }`}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-sm ${idx === 0
+                      ? "bg-yellow-100 text-yellow-700"
+                      : "bg-slate-100 text-slate-600"
+                      }`}
                   >
                     #{idx + 1}
                   </div>
@@ -1266,9 +1265,8 @@ export default function Reports({
                       <div
                         className="bg-indigo-500 h-1.5 rounded-full"
                         style={{
-                          width: `${
-                            (tech.count / (analytics.totalTickets || 1)) * 100
-                          }%`,
+                          width: `${(tech.count / (analytics.totalTickets || 1)) * 100
+                            }%`,
                         }}
                       ></div>
                     </div>
