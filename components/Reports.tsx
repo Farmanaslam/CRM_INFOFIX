@@ -609,7 +609,13 @@ export default function Reports({
       drawTableHeader();
 
       // ── DRAW ROWS ────────────────────────────────────────────
-      filteredData.forEach((ticket, idx) => {
+      const sortedForPDF = [...filteredData].sort((a, b) => {
+        const extractNum = (id: string) => parseInt(id.replace(/\D+/g, "") || "0", 10);
+        const aNum = extractNum(a.ticketId ?? a.id ?? "");
+        const bNum = extractNum(b.ticketId ?? b.id ?? "");
+        return bNum - aNum;
+      });
+      sortedForPDF.forEach((ticket, idx) => {
         // Resolve assignee name
         const assignee = (() => {
           try {
