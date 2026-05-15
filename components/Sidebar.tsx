@@ -325,7 +325,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           >
             <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-2xl overflow-hidden shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-transform hover:scale-105 active:scale-95">
               <img
-                src="/icons/icon-192.png"
+                src="/icons/icon-192-v1.png"
                 alt="Infofix"
                 className="w-full h-full object-cover"
               />
@@ -359,8 +359,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <MapPin
                   size={16}
                   className={`text-indigo-400 ${!showLabels
-                      ? ""
-                      : "absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                    ? ""
+                    : "absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
                     }`}
                 />
                 {showLabels && (
@@ -496,8 +496,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                             setCurrentView(child.id as View);
                           }}
                           className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] font-bold transition-all ${currentView === child.id
-                              ? "text-white bg-indigo-600"
-                              : "text-slate-400 hover:text-white hover:bg-white/5"
+                            ? "text-white bg-indigo-600"
+                            : "text-slate-400 hover:text-white hover:bg-white/5"
                             }`}
                         >
                           <child.icon size={14} />
@@ -521,8 +521,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                           setIsMobileOpen(false);
                         }}
                         className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-[12px] font-bold transition-all ${currentView === child.id
-                            ? "text-white bg-white/5 shadow-inner"
-                            : "text-slate-500 hover:text-slate-300 hover:bg-white/[0.02]"
+                          ? "text-white bg-white/5 shadow-inner"
+                          : "text-slate-500 hover:text-slate-300 hover:bg-white/[0.02]"
                           }`}
                       >
                         <child.icon
@@ -569,8 +569,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               <div className="flex items-center gap-3 overflow-hidden">
                 <div
                   className={`relative w-10 h-10 rounded-xl flex shrink-0 items-center justify-center text-white font-black text-sm shadow-xl ${currentUser.role === "CUSTOMER"
-                      ? "bg-gradient-to-br from-emerald-500 to-teal-600"
-                      : "bg-gradient-to-br from-indigo-500 to-purple-600"
+                    ? "bg-gradient-to-br from-emerald-500 to-teal-600"
+                    : "bg-gradient-to-br from-indigo-500 to-purple-600"
                     }`}
                 >
                   {currentUser.photo ? (
