@@ -454,6 +454,7 @@ export default function LaptopReports({
     },
   });
   const [showHistory, setShowHistory] = useState(false);
+  const [laptopNoError, setLaptopNoError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterTech, setFilterTech] = useState(isTechnician ? technicianName : "All");
@@ -661,6 +662,7 @@ export default function LaptopReports({
 
   const handleSaveReport = async () => {
     if (!currentReport.deviceInfo.laptopNo) return alert("Laptop No is required");
+    if (laptopNoError) return alert("Cannot save: " + laptopNoError);
     const reportId = currentReport.id || `report-${Date.now()}`;
     const original = reports.find((r) => r.id === reportId);
     let reportToSave: Report;
@@ -1468,8 +1470,26 @@ export default function LaptopReports({
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Laptop No / Serial</label>
               <div className="flex items-center gap-3">
                 <Layout className="text-indigo-400" size={20} />
-                <input value={currentReport.deviceInfo.laptopNo} onChange={(e) => setCurrentReport({ ...currentReport, deviceInfo: { ...currentReport.deviceInfo, laptopNo: e.target.value } })} className="bg-transparent w-full font-bold text-slate-700 outline-none text-lg" placeholder="Enter ID..." />
-              </div>
+                <div className="w-full relative">
+                  <input
+                    value={currentReport.deviceInfo.laptopNo}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const duplicate = reports.find(
+                        (r) => r.deviceInfo.laptopNo.trim().toLowerCase() === val.trim().toLowerCase() && r.id !== currentReport.id
+                      );
+                      setLaptopNoError(duplicate ? `Already exists (${duplicate.deviceInfo.technicianName || "Unknown"}, ${new Date(duplicate.date).toLocaleDateString("en-GB")})` : null);
+                      setCurrentReport({ ...currentReport, deviceInfo: { ...currentReport.deviceInfo, laptopNo: val } });
+                    }}
+                    className={`bg-transparent w-full font-bold text-slate-700 outline-none text-lg ${laptopNoError ? "text-red-600" : ""}`}
+                    placeholder="Enter ID..."
+                  />
+                  {laptopNoError && (
+                    <div className="absolute left-0 top-full mt-1 z-50 bg-red-600 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-lg whitespace-nowrap flex items-center gap-2">
+                      <AlertTriangle size={12} /> {laptopNoError}
+                    </div>
+                  )}
+                </div>              </div>
             </div>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 focus-within:ring-2 ring-indigo-100 transition-all">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Device Model / Brand</label>
@@ -1591,7 +1611,7 @@ export default function LaptopReports({
 
           <div className="space-y-4">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Technician Notes</label>
-            <textarea value={currentReport.notes} onChange={(e) => setCurrentReport({ ...currentReport, notes: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-indigo-100 outline-none resize-none" rows={4} placeholder="Additional observations..." />
+            <textarea value={currentReport.notes} onChange={(e) => setCurrentReport({ ...currentReport, notes: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-indigo-100 outline-none resize-none" rows={4} placeholder="Add recheck date & technician name..." />
           </div>
 
           <div className="hidden print-visible pt-8 flex justify-between">
