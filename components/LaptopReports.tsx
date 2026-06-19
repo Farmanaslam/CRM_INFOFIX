@@ -896,8 +896,18 @@ export default function LaptopReports({
   const loadReport = (report: Report) => {
     lastEditedReportIdRef.current = report.id;
     if (isTechnician && report.deviceInfo.technicianName !== technicianName) {
-      alert("You can only view your own reports");
-      return;
+      let currentStoreId: string | undefined = currentUser?.storeId;
+      if (!currentStoreId && settings?.teamMembers) {
+        const techMember = settings.teamMembers.find(m => m.name === technicianName && m.role === "TECHNICIAN");
+        currentStoreId = techMember?.storeId;
+      }
+      const sameStoreTechNames = currentStoreId
+        ? (settings?.teamMembers?.filter(m => m.role === "TECHNICIAN" && m.storeId === currentStoreId).map(m => m.name) ?? [])
+        : [];
+      if (!sameStoreTechNames.includes(report.deviceInfo.technicianName)) {
+        alert("You can only edit reports from your store");
+        return;
+      }
     }
     // Save current scroll position before switching
     scrollPositionRef.current = window.scrollY;
@@ -909,8 +919,18 @@ export default function LaptopReports({
   const deleteReport = async (id: string) => {
     const reportToDelete = reports.find((r) => r.id === id);
     if (isTechnician && reportToDelete?.deviceInfo.technicianName !== technicianName) {
-      alert("You can only delete your own reports");
-      return;
+      let currentStoreId: string | undefined = currentUser?.storeId;
+      if (!currentStoreId && settings?.teamMembers) {
+        const techMember = settings.teamMembers.find(m => m.name === technicianName && m.role === "TECHNICIAN");
+        currentStoreId = techMember?.storeId;
+      }
+      const sameStoreTechNames = currentStoreId
+        ? (settings?.teamMembers?.filter(m => m.role === "TECHNICIAN" && m.storeId === currentStoreId).map(m => m.name) ?? [])
+        : [];
+      if (!sameStoreTechNames.includes(reportToDelete?.deviceInfo.technicianName ?? "")) {
+        alert("You can only delete reports from your store");
+        return;
+      }
     }
     if (!confirm("Delete this report?")) return;
     const success = await deleteReportFromSupabase(id);
