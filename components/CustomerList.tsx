@@ -342,7 +342,7 @@ const CustomerFormModal: React.FC<{
 //<CustomerListProps>
 const CustomerList: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
-
+  const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -384,6 +384,8 @@ const CustomerList: React.FC = () => {
   }, []);
 
   const fetchCustomers = async () => {
+    setIsLoading(true);
+
     const { data, error } = await supabase
       .from("customers")
       .select("*")
@@ -391,6 +393,7 @@ const CustomerList: React.FC = () => {
 
     if (error) {
       console.error("Failed to fetch customers:", error);
+      setIsLoading(false);
       return;
     }
 
@@ -407,6 +410,8 @@ const CustomerList: React.FC = () => {
         updated_at: c.updated_at,
       })),
     );
+
+    setIsLoading(false);
   };
 
   return (
@@ -457,7 +462,15 @@ const CustomerList: React.FC = () => {
 
       {/* Content */}
       <div className="flex-1 pb-20">
-        {filteredCustomers.length > 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-slate-200">
+            <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+
+            <p className="mt-4 text-slate-600 font-medium">
+              Loading customers...
+            </p>
+          </div>
+        ) : filteredCustomers.length > 0 ? (
           viewMode === "grid" ? (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {filteredCustomers.map((customer) => (
