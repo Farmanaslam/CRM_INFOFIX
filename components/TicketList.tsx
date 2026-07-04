@@ -19,6 +19,7 @@ import {
   Monitor,
   X,
   Calendar,
+  UserCog,
 } from "lucide-react";
 import {
   Ticket,
@@ -265,8 +266,14 @@ const DeleteConfirmationModal: React.FC<{
 // NEW
 const parseTicketDateFromHistory = (ticket: Ticket): Date | null => {
   // Use timestamp — locale-independent, always correct
-  if (ticket.history && Array.isArray(ticket.history) && ticket.history.length > 0) {
-    const creationEntry = ticket.history.find((h: any) => h.action === "Ticket Created");
+  if (
+    ticket.history &&
+    Array.isArray(ticket.history) &&
+    ticket.history.length > 0
+  ) {
+    const creationEntry = ticket.history.find(
+      (h: any) => h.action === "Ticket Created",
+    );
     if (creationEntry?.timestamp) {
       const d = new Date(creationEntry.timestamp);
       if (!isNaN(d.getTime())) return d;
@@ -436,12 +443,27 @@ const TicketList: React.FC<TicketListProps> = ({
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterAssignee, filterStore, filterStatus, filterPriority, filterDevice, filterStartDate, filterEndDate]);
+  }, [
+    searchTerm,
+    filterAssignee,
+    filterStore,
+    filterStatus,
+    filterPriority,
+    filterDevice,
+    filterStartDate,
+    filterEndDate,
+  ]);
   const scrollToTop = () => {
-    ticketsTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    ticketsTopRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   };
   const totalPages = Math.ceil(filteredTickets.length / PAGE_SIZE);
-  const pagedTickets = filteredTickets.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pagedTickets = filteredTickets.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
   const handleEdit = (ticket: Ticket) => {
     setEditingTicket(ticket);
     setIsModalOpen(true);
@@ -520,6 +542,11 @@ const TicketList: React.FC<TicketListProps> = ({
     return techs;
   }, [teamMembers, selectedZoneId]);
 
+  const getTechName = (assignedToId?: string) => {
+    const tech = teamMembers.find((m) => m.id === assignedToId);
+    return tech ? tech.name : "No Technician";
+  };
+
   return (
     <div className="relative h-full min-h-[calc(100vh-140px)] flex flex-col">
       {/* Header Actions */}
@@ -543,20 +570,22 @@ const TicketList: React.FC<TicketListProps> = ({
           <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm shrink-0">
             <button
               onClick={() => setViewMode("grid")}
-              className={`p-2 rounded-lg transition-colors ${viewMode === "grid"
-                ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                : "text-slate-400 hover:text-slate-600"
-                }`}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === "grid"
+                  ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                  : "text-slate-400 hover:text-slate-600"
+              }`}
               title="Grid View"
             >
               <LayoutGrid size={20} />
             </button>
             <button
               onClick={() => setViewMode("list")}
-              className={`p-2 rounded-lg transition-colors ${viewMode === "list"
-                ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                : "text-slate-400 hover:text-slate-600"
-                }`}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === "list"
+                  ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                  : "text-slate-400 hover:text-slate-600"
+              }`}
               title="List View"
             >
               <ListIcon size={20} />
@@ -743,10 +772,11 @@ const TicketList: React.FC<TicketListProps> = ({
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center ${ticket.priority === "High"
-                          ? "bg-red-100 text-red-600"
-                          : "bg-indigo-100 text-indigo-600"
-                          }`}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          ticket.priority === "High"
+                            ? "bg-red-100 text-red-600"
+                            : "bg-indigo-100 text-indigo-600"
+                        }`}
                       >
                         {ticket.deviceType === "Laptop" ? (
                           <Laptop size={20} />
@@ -775,16 +805,17 @@ const TicketList: React.FC<TicketListProps> = ({
 
                   <div className="flex items-center justify-between mb-4">
                     <span
-                      className={`px-2 py-1 text-xs rounded font-bold uppercase tracking-wider ${ticket.status === "New"
-                        ? "bg-blue-100 text-blue-700"
-                        : ticket.status === "Resolved"
-                          ? "bg-green-100 text-green-700"
-                          : ticket.status === "Rejected"
-                            ? "bg-red-100 text-red-700"
-                            : ticket.status === "On Hold"
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-slate-100 text-slate-600"
-                        }`}
+                      className={`px-2 py-1 text-xs rounded font-bold uppercase tracking-wider ${
+                        ticket.status === "New"
+                          ? "bg-blue-100 text-blue-700"
+                          : ticket.status === "Resolved"
+                            ? "bg-green-100 text-green-700"
+                            : ticket.status === "Rejected"
+                              ? "bg-red-100 text-red-700"
+                              : ticket.status === "On Hold"
+                                ? "bg-orange-100 text-orange-700"
+                                : "bg-slate-100 text-slate-600"
+                      }`}
                     >
                       {ticket.status}
                     </span>
@@ -804,8 +835,8 @@ const TicketList: React.FC<TicketListProps> = ({
                       </div>
                     </div>
                   </div>
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                    <span>
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 text-xs text-slate-400">
+                    <span className="shrink-0">
                       {(() => {
                         const ticketDate = parseTicketDateFromHistory(ticket);
                         if (ticketDate) {
@@ -822,11 +853,23 @@ const TicketList: React.FC<TicketListProps> = ({
                         return ticket.date;
                       })()}
                     </span>
-                    {ticket.warranty && (
-                      <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
-                        <AlertTriangle size={10} /> Warranty
+
+                    <div className="flex flex-col items-end gap-1 min-w-0 max-w-[60%]">
+                      <span
+                        className="flex items-center gap-1 truncate font-semibold text-slate-500"
+                        title={getTechName(ticket.assignedToId)}
+                      >
+                        <UserCog size={12} className="shrink-0" />
+                        <span className="truncate">
+                          {getTechName(ticket.assignedToId)}
+                        </span>
                       </span>
-                    )}
+                      {ticket.warranty && (
+                        <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded shrink-0">
+                          <AlertTriangle size={10} /> Warranty
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -899,28 +942,30 @@ const TicketList: React.FC<TicketListProps> = ({
                         </td>
                         <td className="px-6 py-4">
                           <span
-                            className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold uppercase ${ticket.status === "New"
-                              ? "bg-blue-100 text-blue-700"
-                              : ticket.status === "Resolved"
-                                ? "bg-green-100 text-green-700"
-                                : ticket.status === "Rejected"
-                                  ? "bg-red-100 text-red-700"
-                                  : ticket.status === "On Hold"
-                                    ? "bg-orange-100 text-orange-700"
-                                    : "bg-slate-100 text-slate-600"
-                              }`}
+                            className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold uppercase ${
+                              ticket.status === "New"
+                                ? "bg-blue-100 text-blue-700"
+                                : ticket.status === "Resolved"
+                                  ? "bg-green-100 text-green-700"
+                                  : ticket.status === "Rejected"
+                                    ? "bg-red-100 text-red-700"
+                                    : ticket.status === "On Hold"
+                                      ? "bg-orange-100 text-orange-700"
+                                      : "bg-slate-100 text-slate-600"
+                            }`}
                           >
                             {ticket.status}
                           </span>
                         </td>
                         <td className="px-6 py-4">
                           <span
-                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${ticket.priority === "High"
-                              ? "bg-red-50 text-red-700 border-red-100"
-                              : ticket.priority === "Medium"
-                                ? "bg-yellow-50 text-yellow-700 border-yellow-100"
-                                : "bg-green-50 text-green-700 border-green-100"
-                              }`}
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                              ticket.priority === "High"
+                                ? "bg-red-50 text-red-700 border-red-100"
+                                : ticket.priority === "Medium"
+                                  ? "bg-yellow-50 text-yellow-700 border-yellow-100"
+                                  : "bg-green-50 text-green-700 border-green-100"
+                            }`}
                           >
                             {ticket.priority === "High" && (
                               <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
@@ -966,7 +1011,6 @@ const TicketList: React.FC<TicketListProps> = ({
                 </table>
               </div>
             </div>
-
           )
         ) : (
           <div className="text-center py-20 text-slate-500 bg-white rounded-xl border border-slate-200 border-dashed">
@@ -986,28 +1030,67 @@ const TicketList: React.FC<TicketListProps> = ({
       {totalPages > 1 && (
         <div className="flex flex-wrap items-center justify-center gap-2 py-4 bg-white rounded-xl border border-slate-200 shadow-sm">
           <span className="text-xs text-slate-400 font-medium mr-2">
-            Page {currentPage} of {totalPages} ({filteredTickets.length} tickets)
+            Page {currentPage} of {totalPages} ({filteredTickets.length}{" "}
+            tickets)
           </span>
-          <button onClick={() => { setCurrentPage((p) => Math.max(1, p - 1)); scrollToTop(); }} disabled={currentPage === 1} className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm">← Prev</button>
+          <button
+            onClick={() => {
+              setCurrentPage((p) => Math.max(1, p - 1));
+              scrollToTop();
+            }}
+            disabled={currentPage === 1}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+          >
+            ← Prev
+          </button>
           {(() => {
             const pages: (number | string)[] = [];
-            if (totalPages <= 7) { for (let i = 1; i <= totalPages; i++) pages.push(i); }
-            else {
+            if (totalPages <= 7) {
+              for (let i = 1; i <= totalPages; i++) pages.push(i);
+            } else {
               pages.push(1);
               if (currentPage > 3) pages.push("...");
-              for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) pages.push(i);
+              for (
+                let i = Math.max(2, currentPage - 1);
+                i <= Math.min(totalPages - 1, currentPage + 1);
+                i++
+              )
+                pages.push(i);
               if (currentPage < totalPages - 2) pages.push("...");
               pages.push(totalPages);
             }
             return pages.map((page, idx) =>
               page === "..." ? (
-                <span key={`e-${idx}`} className="w-9 h-9 flex items-center justify-center text-slate-400 font-bold text-sm">…</span>
+                <span
+                  key={`e-${idx}`}
+                  className="w-9 h-9 flex items-center justify-center text-slate-400 font-bold text-sm"
+                >
+                  …
+                </span>
               ) : (
-                <button key={page} onClick={() => { setCurrentPage(page as number); scrollToTop(); }} className={`w-9 h-9 rounded-xl text-sm font-bold transition-all ${currentPage === page ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"}`}>{page}</button>
-              )
+                <button
+                  key={page}
+                  onClick={() => {
+                    setCurrentPage(page as number);
+                    scrollToTop();
+                  }}
+                  className={`w-9 h-9 rounded-xl text-sm font-bold transition-all ${currentPage === page ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                >
+                  {page}
+                </button>
+              ),
             );
           })()}
-          <button onClick={() => { setCurrentPage((p) => Math.min(totalPages, p + 1)); scrollToTop(); }} disabled={currentPage === totalPages} className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm">Next →</button>
+          <button
+            onClick={() => {
+              setCurrentPage((p) => Math.min(totalPages, p + 1));
+              scrollToTop();
+            }}
+            disabled={currentPage === totalPages}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+          >
+            Next →
+          </button>
         </div>
       )}
 
