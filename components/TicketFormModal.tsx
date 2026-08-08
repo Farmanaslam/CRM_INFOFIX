@@ -717,53 +717,48 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({
         }
       }
 
-      const { data: lastTicket, error: lastErr } = await supabase
-        .from("tickets")
-        .select("id")
-        .like("id", "TKT-IF-%")
-        .order("id", { ascending: false })
-        .limit(1)
-        .single();
+      let finalTicketId = editingTicket?.id;
 
-      if (lastErr && lastErr.code !== "PGRST116") throw lastErr;
-
-      let nextNumber = 1;
-      if (lastTicket?.id) {
-        const match = lastTicket.id.match(/TKT-IF-(\d+)/);
-        if (match) nextNumber = parseInt(match[1], 10) + 1;
-      }
-
-      // Check if this ID already exists and find next available
-      let finalNextNumber = nextNumber;
-      let attempts = 0;
-      const maxAttempts = 100;
-
-      while (attempts < maxAttempts) {
-        const candidateId = `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`;
-
-        const { data: existingTicket } = await supabase
+      if (!editingTicket) {
+        const { data: allTickets, error: lastErr } = await supabase
           .from("tickets")
           .select("id")
-          .eq("id", candidateId)
-          .maybeSingle();
+          .like("id", "TKT-IF-%");
 
-        // If this ID doesn't exist, we found our ticket ID
-        if (!existingTicket) {
-          break;
+        if (lastErr) throw lastErr;
+
+        let nextNumber = 1;
+        if (allTickets && allTickets.length > 0) {
+          const nums = allTickets
+            .map((t) => {
+              const m = t.id.match(/TKT-IF-(\d+)/);
+              return m ? parseInt(m[1], 10) : 0;
+            })
+            .filter((n) => !isNaN(n));
+          if (nums.length > 0) nextNumber = Math.max(...nums) + 1;
         }
 
-        // ID exists, try next number
-        finalNextNumber++;
-        attempts++;
+        let finalNextNumber = nextNumber;
+        let attempts = 0;
+        while (attempts < 100) {
+          const candidateId = `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`;
+          const { data: existingTicket } = await supabase
+            .from("tickets")
+            .select("id")
+            .eq("id", candidateId)
+            .maybeSingle();
+          if (!existingTicket) {
+            finalTicketId = candidateId;
+            break;
+          }
+          finalNextNumber++;
+          attempts++;
+        }
+        if (!finalTicketId)
+          throw new Error(
+            "Unable to generate unique ticket ID. Please try again.",
+          );
       }
-
-      if (attempts >= maxAttempts) {
-        throw new Error(
-          "Unable to generate unique ticket ID. Please try again.",
-        );
-      }
-
-      const finalTicketId = `TKT-IF-${finalNextNumber.toString().padStart(3, "0")}`;
 
       if (editingTicket) {
         const historyLogs: TicketHistory[] = [];
@@ -911,14 +906,14 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
             created_at: safeDateToISO(formData.createdDate),
             resolved_at: formData.resolvedAt
               ? (() => {
-                try {
-                  const date = new Date(formData.resolvedAt);
-                  if (isNaN(date.getTime())) return null;
-                  return date.toISOString();
-                } catch {
-                  return null;
-                }
-              })()
+                  try {
+                    const date = new Date(formData.resolvedAt);
+                    if (isNaN(date.getTime())) return null;
+                    return date.toISOString();
+                  } catch {
+                    return null;
+                  }
+                })()
               : null,
             history: JSON.stringify(updatedHistory),
             hold_reason: formData.holdReason || null,
@@ -937,31 +932,31 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
           prev.map((t) =>
             t.id === editingTicket.id
               ? {
-                ...t,
-                customer_id: customerId,
-                issueDescription: formData.issueDescription,
-                status: formData.status,
-                priority: formData.priority,
-                assignedToId: formData.assignedToId || "",
-                deviceType: formData.deviceType,
-                brand: formData.brand,
-                model: formData.model,
-                deviceDescription: formData.deviceDescription,
-                store: formData.store,
-                estimatedAmount: parseFloat(formData.estimatedAmount || "0"),
-                warranty: formData.warranty === "Yes",
-                billNumber: formData.billNumber || "",
-                scheduledDate: formData.scheduledDate || "",
-                date: safeDateToISO(formData.createdDate),
-                resolvedAt: formData.resolvedAt,
-                history: updatedHistory,
-                serial: formData.serial || "",
-                jobId: formData.jobId || "",
-                holdReason: formData.holdReason || "",
-                rejectionReasonStaff: formData.rejectionReasonStaff || "",
-                rejectionReasonCustomer:
-                  formData.rejectionReasonCustomer || "",
-              }
+                  ...t,
+                  customer_id: customerId,
+                  issueDescription: formData.issueDescription,
+                  status: formData.status,
+                  priority: formData.priority,
+                  assignedToId: formData.assignedToId || "",
+                  deviceType: formData.deviceType,
+                  brand: formData.brand,
+                  model: formData.model,
+                  deviceDescription: formData.deviceDescription,
+                  store: formData.store,
+                  estimatedAmount: parseFloat(formData.estimatedAmount || "0"),
+                  warranty: formData.warranty === "Yes",
+                  billNumber: formData.billNumber || "",
+                  scheduledDate: formData.scheduledDate || "",
+                  date: safeDateToISO(formData.createdDate),
+                  resolvedAt: formData.resolvedAt,
+                  history: updatedHistory,
+                  serial: formData.serial || "",
+                  jobId: formData.jobId || "",
+                  holdReason: formData.holdReason || "",
+                  rejectionReasonStaff: formData.rejectionReasonStaff || "",
+                  rejectionReasonCustomer:
+                    formData.rejectionReasonCustomer || "",
+                }
               : t,
           ),
         );
@@ -1030,14 +1025,14 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
               created_at: safeDateToISO(formData.createdDate),
               resolved_at: formData.resolvedAt
                 ? (() => {
-                  try {
-                    const date = new Date(formData.resolvedAt);
-                    if (isNaN(date.getTime())) return null;
-                    return date.toISOString();
-                  } catch {
-                    return null;
-                  }
-                })()
+                    try {
+                      const date = new Date(formData.resolvedAt);
+                      if (isNaN(date.getTime())) return null;
+                      return date.toISOString();
+                    } catch {
+                      return null;
+                    }
+                  })()
                 : null,
               history: JSON.stringify(initialHistory),
               hold_reason: formData.holdReason || null,
@@ -1224,10 +1219,11 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
         <div className="px-8 py-6 border-b border-slate-200 flex items-center justify-between shrink-0 bg-white">
           <div className="flex items-center gap-4">
             <div
-              className={`p-3 rounded-2xl ${editingTicket
+              className={`p-3 rounded-2xl ${
+                editingTicket
                   ? "bg-amber-500 text-white"
                   : "bg-indigo-600 text-white"
-                }`}
+              }`}
             >
               <Zap size={24} />
             </div>
@@ -1248,19 +1244,21 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
               <div className="flex bg-slate-100 p-1 rounded-xl mr-4">
                 <button
                   onClick={() => setActiveTab("details")}
-                  className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${activeTab === "details"
+                  className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    activeTab === "details"
                       ? "bg-white shadow-sm text-slate-800"
                       : "text-slate-500"
-                    }`}
+                  }`}
                 >
                   Details
                 </button>
                 <button
                   onClick={() => setActiveTab("history")}
-                  className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${activeTab === "history"
+                  className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    activeTab === "history"
                       ? "bg-white shadow-sm text-slate-800"
                       : "text-slate-500"
-                    }`}
+                  }`}
                 >
                   History
                 </button>
@@ -1362,10 +1360,11 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                           onClick={() =>
                             setFormData({ ...formData, deviceType: d.name })
                           }
-                          className={`p-4 rounded-3xl border-2 transition-all flex flex-col items-center gap-2 ${formData.deviceType === d.name
+                          className={`p-4 rounded-3xl border-2 transition-all flex flex-col items-center gap-2 ${
+                            formData.deviceType === d.name
                               ? "bg-indigo-600 border-indigo-600 text-white shadow-xl"
                               : "bg-white border-slate-100 text-slate-400"
-                            }`}
+                          }`}
                         >
                           {React.createElement(deviceIcons[d.name] || Zap, {
                             size: 22,
@@ -1644,7 +1643,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                             className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none cursor-pointer text-slate-700"
                           >
                             {settings.ticketStatuses &&
-                              settings.ticketStatuses.length > 0 ? (
+                            settings.ticketStatuses.length > 0 ? (
                               settings.ticketStatuses.map((status) => (
                                 <option key={status.id} value={status.name}>
                                   {status.name}
@@ -1683,7 +1682,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                           className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold text-slate-700 focus:bg-white outline-none"
                         >
                           {settings.priorities &&
-                            settings.priorities.length > 0 ? (
+                          settings.priorities.length > 0 ? (
                             settings.priorities.map((priority) => (
                               <option key={priority.id} value={priority.name}>
                                 {priority.name}
@@ -1879,10 +1878,11 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                               assignedToId: e.target.value,
                             })
                           }
-                          className={`w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none text-slate-700 ${currentUser.role === "TECHNICIAN"
+                          className={`w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:bg-white outline-none appearance-none text-slate-700 ${
+                            currentUser.role === "TECHNICIAN"
                               ? "cursor-pointer opacity-70"
                               : "cursor-pointer"
-                            }`}
+                          }`}
                         >
                           <option value="">-- Unassigned --</option>
                           {(() => {
@@ -1940,7 +1940,8 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                       <div key={idx} className="relative pl-6">
                         {/* Dot */}
                         <div
-                          className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-sm z-10 ${entry.action.includes("Resolved")
+                          className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-sm z-10 ${
+                            entry.action.includes("Resolved")
                               ? "bg-emerald-500"
                               : entry.action.includes("Hold")
                                 ? "bg-orange-500"
@@ -1949,7 +1950,7 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                                   : entry.action.includes("Transfer")
                                     ? "bg-purple-500"
                                     : "bg-slate-300"
-                            }`}
+                          }`}
                         ></div>
 
                         <div
@@ -1978,10 +1979,10 @@ Customer Reason: ${formData.rejectionReasonCustomer || "N/A"}`,
                     ))}
                 {(!editingTicket?.history ||
                   editingTicket.history.length === 0) && (
-                    <div className="text-center py-10 text-slate-400 text-sm">
-                      No history records found.
-                    </div>
-                  )}
+                  <div className="text-center py-10 text-slate-400 text-sm">
+                    No history records found.
+                  </div>
+                )}
               </div>
             </div>
           )}
