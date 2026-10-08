@@ -562,18 +562,31 @@ function App() {
     setIsLoadingTickets(true);
 
     try {
-      const { data, error } = await supabase
-        .from("tickets")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const PAGE = 1000;
+let data: any[] = [];
+let from = 0;
 
-      if (error) {
-        console.error("❌ Ticket fetch error:", error);
-        setSyncStatus("error");
-        return;
-      }
+while (true) {
+  const { data: chunk, error } = await supabase
+    .from("tickets")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, from + PAGE - 1);
 
-      const mapped: Ticket[] = data.map((t) => ({
+  if (error) {
+    console.error("❌ Ticket fetch error:", error);
+    setSyncStatus("error");
+    return;
+  }
+  if (!chunk || chunk.length === 0) break;
+
+  data = data.concat(chunk);
+  if (chunk.length < PAGE) break;
+  from += PAGE;
+}
+
+const mapped: Ticket[] = data.map((t) => ({
         id: t.id,
         ticketId: t.id,
         customerId: t.customer_id,
@@ -606,21 +619,20 @@ function App() {
         zoneId: t.zone_id ?? "",
         rejectionReasonStaff: t.rejection_reason_staff || undefined,
         rejectionReasonCustomer: t.rejection_reason_customer || undefined,
-        history: (() => {
-          try {
-            if (!t.history) return [];
-            if (typeof t.history === "string") {
-              const trimmed = t.history.trim();
-              if (trimmed === "" || trimmed === "null") return [];
-              return JSON.parse(trimmed);
-            }
-            if (Array.isArray(t.history)) return t.history;
-            return [];
-          } catch (e) {
-            console.warn(`Failed to parse history for ticket ${t.id}:`, e);
-            return [];
-          }
-        })(),
+    history: (() => {
+  let h: any = t.history;
+  try {
+    while (typeof h === "string") {
+      const s = h.trim();
+      if (!s || s === "null") return [];
+      h = JSON.parse(s);
+    }
+  } catch (e) {
+    console.warn(`History parse failed for ${t.id}`, e);
+    return [];
+  }
+  return Array.isArray(h) ? h : [];
+})(),
         resolvedAt: t.resolved_at
           ? new Date(t.resolved_at).toLocaleDateString()
           : undefined,

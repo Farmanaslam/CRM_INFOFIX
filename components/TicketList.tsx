@@ -47,7 +47,6 @@ interface TicketListProps {
   zones: OperationalZone[];
   stores: Store[];
   pushNotification: (
-    // 🔥 ADD THIS
     notif: Omit<AppNotification, "id" | "timestamp" | "userId" | "readBy">,
     forceUser?: AppUser,
   ) => void;
@@ -440,7 +439,6 @@ const TicketList: React.FC<TicketListProps> = ({
     filterStartDate,
     filterEndDate,
   ]);
-
   React.useEffect(() => {
     setCurrentPage(1);
   }, [
